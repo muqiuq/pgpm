@@ -4,6 +4,8 @@ using PGPM.Audit;
 using PGPM.Auth;
 using PGPM.Data;
 using PGPM.Hosting;
+using PGPM.Mcp;
+using PGPM.Persons.DirectorySync;
 using PGPM.Sync;
 
 namespace PGPM;
@@ -30,7 +32,7 @@ public partial class Program
         // The build writes the OpenAPI document by starting the host without a database (GetDocument.Insider).
         var documentBuild = Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
 
-        // Each feature registers itself (docs/03 §3.1). Later phases add AddFiles, AddPgpmMcp, …
+        // Each feature registers itself (docs/03 §3.1). Later phases add AddFiles, …
         builder.Services.AddPgpmData(builder.Configuration);
         builder.Services.AddPgpmApi();
         builder.Services.AddPgpmOpenApi();
@@ -38,6 +40,8 @@ public partial class Program
         builder.Services.AddAudit();
         builder.Services.AddPgpmHosting(builder.Configuration);
         builder.Services.AddSync(builder.Configuration);
+        builder.Services.AddPgpmMcp(builder.Configuration);
+        builder.Services.AddDirectorySync(builder.Configuration);
 
         // First: every other hosted service starts on a migrated database. The live hub is no background task: it runs in
         // the tests too.
@@ -51,6 +55,8 @@ public partial class Program
         if (!documentBuild && builder.Configuration.GetValue("BackgroundTasks:Enabled", true))
         {
             builder.Services.AddSyncTasks();
+            builder.Services.AddMcpTasks();
+            builder.Services.AddDirectoryTasks();
         }
 
         // Console only: in a container that is `docker compose logs`, rotated by the log driver.
@@ -71,7 +77,8 @@ public partial class Program
         app.UseRouting();
         app.UsePlainNotFound();            // no endpoint: empty 404 (never the fallback policy's 401)
         app.UseRateLimiter();              // the login endpoints
-        // Phase 6: app.UseMcpOriginCheck(). A browser's cookie never authenticates an MCP call.
+        app.UseMcpOriginCheck();           // /mcp from another site's page: 403 (DNS rebinding)
+        // A browser's cookie never authenticates an MCP call; /mcp's policy names the token scheme only.
         app.UseWhen(c => !HostingSetup.IsMcpPath(c.Request.Path), b => b.UseAuthentication());
         app.UseAuthorization();            // deny by default: the fallback policy wants a signed-in user
         app.UseSessionGates();             // a temporary password, a required 2FA setup, the day's code: first
@@ -87,7 +94,7 @@ public partial class Program
             .ExcludeFromDescription();
 
         app.MapControllers();              // /api/v1/**
-        // Phase 6: app.MapPgpmMcp();       // /mcp
+        app.MapPgpmMcp();                  // /mcp, while Mcp:Enabled
         app.MapSpaFallback();              // deep links get index.html; unknown /api paths a ProblemDetails 404
 
         return app;

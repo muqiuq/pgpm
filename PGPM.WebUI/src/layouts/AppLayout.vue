@@ -102,7 +102,7 @@ async function signOut() {
   await router.replace({ name: 'sign-in' })
 }
 
-// The signed-in user: name and initial, Account, Security (own MCP tokens from phase 6), Install app, Sign out.
+// The signed-in user: name and initial, Account, Security (with one's own MCP tokens), Install app, Sign out.
 const displayName = computed(() => session.user?.displayName ?? '')
 const initial = computed(() => (displayName.value.trim()[0] ?? '?').toUpperCase())
 const userMenu = ref<InstanceType<typeof Menu> | null>(null)

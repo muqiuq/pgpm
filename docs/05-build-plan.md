@@ -199,6 +199,12 @@ change; maps work offline.
 create ideas with ratings, record a gate decision and add an item to a map, and
 the changes appear live in the browser.
 
+**Status (pulled forward after phase 2):** the directory sync, the token model, the
+server, the admin and account pages are built (doc 03 §7.4, §8.3); the tools work
+on notes (`search_items`, `get_item`, `create_note`, `update_item`,
+`search_persons`, `list_config`). Phases 3–5 add their tools as specs (doc 03 §7.4
+"Adding a tool"); the dev-tenant check (P1) is still by hand.
+
 ### Phase 7 – Hardening and release 1.0
 
 **Scope**

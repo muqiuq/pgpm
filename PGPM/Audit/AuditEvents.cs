@@ -61,6 +61,21 @@ public static class AuditEvents
     // The Trash.
     public const string TrashRestored = "trash.restored";
     public const string TrashPurged = "trash.purged";
+
+    // MCP (docs/03 §7): the tokens, and what a token's tools change (actor mcp, actor_ref token:{id}:rw).
+    public const string McpTokenOn = "mcp.token_on";
+    public const string McpTokenOff = "mcp.token_off";
+    public const string McpTokenRegenerated = "mcp.token_regenerated";
+    public const string McpTokenExpired = "mcp.token_expired";
+    public const string McpTokenBlocked = "mcp.token_blocked";
+    public const string McpTokenOffByAdmin = "mcp.token_off_by_admin";
+    public const string McpTokensRevoked = "mcp.tokens_revoked";
+    public const string McpItemCreated = "mcp.item_created";
+    public const string McpItemUpdated = "mcp.item_updated";
+
+    // The directory sync (docs/03 §8).
+    public const string DirectorySyncRequested = "directory.sync_requested";
+    public const string DirectorySyncFailed = "directory.sync_failed";
 }
 
 /// <summary>The types of subject an entry can be about (<c>audit_log.subject_type</c>).</summary>
@@ -70,6 +85,7 @@ public static class AuditSubjects
     public const string Group = "group";
     public const string Person = "person";
     public const string Item = "item";
+    public const string McpToken = "mcp_token";
 }
 
 /// <summary>The colour of an event's tag.</summary>
@@ -113,6 +129,11 @@ public static class AuditCatalog
             AuditEvents.GroupMembersChanged, AuditEvents.GroupDeleted, AuditEvents.MembershipAdded, AuditEvents.MembershipRemoved);
         Add(AuditSubjects.Person, AuditEvents.PersonCreated, AuditEvents.PersonLinked);
         Add(AuditSubjects.Item, AuditEvents.ItemSharesChanged, AuditEvents.ItemOwnerChanged, AuditEvents.TrashRestored, AuditEvents.TrashPurged);
+        Add(AuditSubjects.McpToken, AuditEvents.McpTokenOn, AuditEvents.McpTokenOff, AuditEvents.McpTokenRegenerated, AuditEvents.McpTokenExpired,
+            AuditEvents.McpTokenBlocked, AuditEvents.McpTokenOffByAdmin);
+        Add(null, AuditEvents.McpTokensRevoked);
+        Add(AuditSubjects.Item, AuditEvents.McpItemCreated, AuditEvents.McpItemUpdated);
+        Add(null, AuditEvents.DirectorySyncRequested, AuditEvents.DirectorySyncFailed);
     }
 
     public static IReadOnlyList<AuditEventInfo> All => Entries;
@@ -139,8 +160,8 @@ public static class AuditCatalog
     }
 
     private static AuditTone Tone(string e) =>
-        Regex.IsMatch(e, "failed|locked_out|refused") ? AuditTone.Danger
-        : Regex.IsMatch(e, "deleted|reset|revoked|disabled|unlinked|removed") ? AuditTone.Warn
+        Regex.IsMatch(e, "failed|locked_out|refused|blocked") ? AuditTone.Danger
+        : Regex.IsMatch(e, "deleted|reset|revoked|disabled|unlinked|removed|expired|off_by_admin") ? AuditTone.Warn
         : Regex.IsMatch(e, "succeeded|enabled|created|provisioned|linked|added") ? AuditTone.Success
         : AuditTone.Neutral;
 }
