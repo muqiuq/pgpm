@@ -837,7 +837,8 @@ PLM `public/sw.js` behaviours, implemented as `PGPM.WebUI/src/sw.ts` with
   rules (`src/pwa/swRules.ts`) apply to every route. Install must fail if the shell can't
   be cached (PLM `CRITICAL` rule – Workbox precache does this by default).
   The lazy editor chunks (Crepe, Monaco incl. its workers, Mermaid) are part of
-  the precache so Markdown editing works offline; `maximumFileSizeToCacheInBytes`
+  the precache so Markdown editing works offline, plus Monaco's icon font
+  (`codicon-*.ttf`, ttf only); `maximumFileSizeToCacheInBytes`
   raised to 10 MB (Monaco's chunk exceeds Workbox's 2 MB default).
 - **Navigation**: network raced against 4 s (`PAGE_ANSWER_MS`); timeout or 5xx →
   cached `index.html` (PLM `navigate()`, L348). Late/5xx bodies are cancelled.
@@ -1637,7 +1638,26 @@ whole, renamed `pnmt` → `pgpm`, adapted as listed.
 | Tests: `MarkdownEditor.test.ts`, `MarkdownEditor.fallback.test.ts`, `VisualEditor.test.ts`, `crepeSetup.test.ts`, `renderMarkdown.test.ts`, `mermaid.test.ts`, `useUpload.test.ts`, `lineDiff.test.ts`, `EditingPage.test.ts`, `roundTrip.fixture.ts` (Markdown that must survive Crepe unchanged) | | copied with the components |
 
 Also from PNMTD: `stores/preferences.ts` `editorModes` (`{page, field}`, per
-browser), `composables/useMedia.ts`, `composables/useNotify.ts`.
+browser), `composables/useMedia.ts`, `composables/useNotify.ts`,
+`composables/useCopy.ts`, `components/DiffView.vue`.
+
+What the components take from the app around them is in
+`components/markdown/services.ts`, given with Vue's provide/inject
+(`provideMarkdownServices({ fileSink, resolveFileUrl, drafts })`), so the
+editor knows nothing of the sync or IndexedDB:
+
+| Service | Contract | Default (nothing provided) | Provided by |
+|---|---|---|---|
+| `FileSink` (`fileSinkKey`) | `store(file, kind: 'image' \| 'attachment', onProgress?) → Promise<{id, url, name, contentType, size, width?, height?} \| null>`; gets the file after `useUpload` steps 1–3; null = declined (it told the user), throw = the editor shows the error | files refused with a notice | phase 3: the offline file pipeline (§18.4) |
+| `FileUrlResolver` (`fileUrlResolverKey`) | `(url, { localOnly? }) → Promise<string \| null>`: `/api/v1/files/…` → blob: URL / the URL / null (*Not available offline*); `localOnly` for compact texts; also Crepe's image block (`proxyDomURL`) | the URL itself | phase 3: local blob store |
+| `DraftStore` (`draftStoreKey`) | `read(key)` (sync or async), `write(key, {revision, base, text, savedAt})`, `remove(key)`; keys `<table>:<id>:<field>` | `localStorage` `pgpm.draft.<key>` (PNMTD) | phase 2: IndexedDB `drafts` + mirror |
+
+The editor's `save` event carries `{ markdown, base, revision, overwrite }`
+(`base` = the patch's `old`); further events `take-theirs` (conflict) and
+`restored` (a draft was restored, for §11.11's "changed by X since you
+started"). *Link to an item…* is offered in the Markdown modes' bar too. A dev
+route `/dev/markdown` (development builds only) shows editor and renderer side
+by side.
 
 ### 18.2 Where it is used
 
@@ -1720,3 +1740,11 @@ offline. Unreferenced `embedded` files are deleted after 30 days (data model §6
   (§11.1), so editing, previews and diagrams work offline (spike S4, doc 05).
 - Phones: Monaco is not used (textarea fallback, as in PNMTD).
 - The CSP stays `'self'`: workers are bundled, Mermaid fetches no fonts or icons.
+  PGPM's `img-src` has no `data:` (PNMTD's has), so the placeholder of a pasted
+  `data:` image while it uploads is a blob: URL; the built CSS has no `data:`
+  URLs (`assetsInlineLimit: 0`).
+- Sizes (minified, as PNMTD's): Monaco 3,230 kB + its worker 304 kB + codicon
+  font 153 kB, Crepe 679 kB, Mermaid core 85 kB plus lazily loaded diagram types
+  (ELK layout 1,499 kB, KaTeX 259 kB, cytoscape 442 kB …). With every chunk,
+  the precache grows to about 268 entries / 12 MB.
+  `build.chunkSizeWarningLimit` is 3,300 kB so that Monaco's chunk doesn't warn.
