@@ -36,7 +36,7 @@ describe('the field widgets (docs/03 §12.7)', () => {
     const buttons = w.findAll('button')
     expect(buttons.map((b) => b.text())).toEqual(['0', '1', '2', '3', '4', '5', 'n/a'])
     expect(buttons[0]!.attributes('title')).toBe('does not apply')
-    expect(buttons[5]!.attributes('aria-label')).toBe('Infra: fully applies')
+    expect(buttons[5]!.attributes('aria-label')).toBe('Infra: fully applies, 5')
     await buttons[4]!.trigger('click')
     expect(w.emitted('update:modelValue')!.at(-1)).toEqual([4])
     await w.setProps({ modelValue: 4 })
@@ -92,7 +92,7 @@ describe('the field widgets (docs/03 §12.7)', () => {
       attachTo: document.body,
     })
     mounted.push(w)
-    await w.get('button[aria-label="Edit Estimated business value"]').trigger('click')
+    await w.get('button[aria-label^="Edit Estimated business value"]').trigger('click')
     const input = w.get('input')
     await input.setValue('-5')
     await w.get('button[aria-label="Save Estimated business value"]').trigger('click')
@@ -115,7 +115,7 @@ describe('the field widgets (docs/03 §12.7)', () => {
     const save = vi.fn(async () => {})
     const rating = mountWithUi(FieldEditor, { props: { field: f('feas_infra'), value: 3, save } })
     expect(rating.get('[aria-label="Statement 2: 3"]').attributes('aria-pressed')).toBe('true')
-    await rating.get('[aria-label="Statement 2: fully applies"]').trigger('click')
+    await rating.get('[aria-label^="Statement 2: fully applies,"]').trigger('click')
     await flushPromises()
     expect(save).toHaveBeenLastCalledWith(5)
 

@@ -61,12 +61,11 @@ async function page(browser: import('@playwright/test').Browser, who: TestUser, 
   return { page: p, seen }
 }
 
-/** A rating's button: `<label>: <value>`, or the value's label where it has one (0 and 5 here). */
+/** A rating's button: `<label>: <value>`, or `<label>: <the value's label>, <value>` where it has one (0 and 5 here). */
 const rate = (p: Page, label: string, value: number) => {
-  const named = value === 5 ? '|fully applies' : value === 0 ? '|does not apply' : ''
-  return p
-    .getByRole('group', { name: label })
-    .getByRole('button', { name: new RegExp(`^${label}: (${value}${named})$`) })
+  const named = value === 5 ? 'fully applies' : value === 0 ? 'does not apply' : ''
+  const name = named ? `${label}: ${named}, ${value}` : `${label}: ${value}`
+  return p.getByRole('group', { name: label }).getByRole('button', { name, exact: true })
 }
 
 test.beforeEach(async ({ baseURL }) => {

@@ -57,7 +57,10 @@ are shared with groups, and sync live between everyone connected.
 - MCP at `/mcp` (Streamable HTTP) with personal read and write tokens: capped rights, rate limits, strikes and a full
   call log.
 - Writes go through the same validation and access checks as the browser's, and appear live.
-- The tools are listed under *Administration → MCP → Tools*.
+- 21 tools: search and read items, persons, maps (matrix quadrants included) and the configuration; create notes,
+  ideas, leads and projects from their templates, update them, place them on maps, manage milestones, gates and their
+  Definition of Done, link items, assign persons and convert to a project. They are listed under
+  *Administration → MCP → Tools*.
 
 **Operations**
 - One hardened container (non-root, read-only) and PostgreSQL 18.

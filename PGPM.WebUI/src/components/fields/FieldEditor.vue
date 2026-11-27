@@ -288,7 +288,9 @@ function editMarkdown() {
           @click="editingTime = false"
         />
       </template>
-      <button v-else type="button" class="shown" :aria-label="`Edit ${field.label}`" @click="beginTime">
+      <!-- named by its content (the shown value is part of the name, WCAG 2.5.3) -->
+      <button v-else type="button" class="shown" @click="beginTime">
+        <span class="sr-only">Edit {{ field.label }}: </span>
         <FieldValue :field="field" :value="value" :overdue="overdue" />
         <i class="pi pi-pencil" aria-hidden="true" />
       </button>

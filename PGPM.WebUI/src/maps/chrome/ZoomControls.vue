@@ -54,7 +54,7 @@ const emit = defineEmits<{
       v-tooltip.top="'Zoom to 100 %'"
       type="button"
       class="level"
-      aria-label="Zoom level, click for 100 %"
+      :aria-label="`Zoom level ${Math.round(zoom * 100)} %, click for 100 %`"
       @click="emit('reset')"
     >
       {{ Math.round(zoom * 100) }} %

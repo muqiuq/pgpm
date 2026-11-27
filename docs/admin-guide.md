@@ -62,7 +62,8 @@ installation and the secure cookies need it. The proxy must:
 | Forward `Host`, `X-Forwarded-For`, `X-Forwarded-Proto`; keep `Origin` | redirect URIs, audit addresses, the live channel's and MCP's origin check |
 | Forward every path unchanged | the app, `/api/`, `/mcp`, `/signin-oidc`, `/healthz` are all at the root |
 
-Set `PublicUrl` to exactly the address users open and `Proxy=docker` (a proxy on this host) or the proxy's address, so
+Set `PublicUrl` to exactly the address users open. `.env` comes with `Proxy=docker` (a proxy on this host); for a proxy
+elsewhere, set its address or network instead, so
 the client addresses in the audit log and the login rate limit are the real ones. Caddy and nginx examples:
 [deploy/README.md → Behind a reverse proxy](../deploy/README.md#behind-a-reverse-proxy).
 
@@ -164,7 +165,7 @@ ASP.NET configuration: `appsettings.json` in the image, overridden by environmen
 | Key | Default | Meaning |
 |---|---|---|
 | `PublicUrl` | – | the address users open: redirect URI base, the live channel's and MCP's origin, links in MCP results |
-| `Proxy` | – (no forwarded headers trusted) | trusted proxies, comma-separated: `docker` (172.16.0.0/12), addresses, networks. A bad entry stops the start |
+| `Proxy` | – (none trusted); `.env.example`: `docker` | trusted proxies, comma-separated: `docker` (172.16.0.0/12), addresses, networks. A bad entry stops the start |
 | `TZ` (environment only) | UTC | IANA zone for wall-clock rules (`Auth:ResetHour`); an unknown zone is UTC |
 | `Database:Host` / `Port` / `Name` / `Username` / `Password` | `localhost` / 5432 / `pgpm` / `pgpm` / – | the database (compose sets them) |
 | `Database:ConnectionString` | – | a full Npgsql connection string instead of the parts |
@@ -371,8 +372,13 @@ as the browser's, appear live, and carry the source *mcp* in History and the aud
   warnings (no `Proxy`, plain-HTTP `PublicUrl`, no recent backup, admins without 2FA, a files folder the app can't
   write).
 - **`GET /api/v1/info`**: the release (`{"name":"PGPM","version":"1.0.0"}`), anonymous.
-- **Administration → System** (*System: View*): the instance as PGPM sees it – sync clients and live connections,
-  storage and the background tasks' last runs.
+- **Administration → System** (*System: View*): the instance as PGPM sees it – release and uptime; database size,
+  stored file bytes and free disk; the sync head and the tombstone horizon; live connections; the background tasks
+  (last run, result, *overdue* when a task missed its interval); the Microsoft directory and MCP state; and every
+  device with its user, app, last seen, how far behind it is, pending changes, open conflicts and whether it is live.
+  *Reset…* on a device makes it push what it has, wipe its local data and load everything again (at once when it is
+  live, else at its next sync); the audit log records it as `system.client_reset`. Use it for a device that is stuck
+  or far behind.
 - **Logs**: `docker compose logs -f pgpm` (console, rotated by Docker: 3 × 10 MB). The **audit log**
   (*Administration → Audit log*) has sign-ins, refusals and every administrative change.
 

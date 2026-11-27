@@ -162,7 +162,10 @@ describe('Administration → Sections & Fields (docs/01 §6)', () => {
     await until(() => names(wrapper).length === 3, 'the sections')
     expect(names(wrapper)).toEqual(['Use case profile', 'Feasibility', 'Review board decision'])
     expect(wrapper.text()).toContain('Fields of Use case profile')
-    await wrapper.get('[aria-label="Fields of Feasibility"]').trigger('click')
+    await wrapper
+      .findAll('button.pick')
+      .find((b) => b.text().startsWith('Fields of Feasibility'))!
+      .trigger('click')
     await until(() => wrapper.findAll('[data-testid^="field-"]').length === 3, 'the fields')
     expect(wrapper.get('[data-testid="field-feasibility_index"]').text()).toContain('Score (computed)')
 

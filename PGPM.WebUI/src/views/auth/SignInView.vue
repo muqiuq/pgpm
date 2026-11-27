@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { passwordInputProps } from '@/components/passwordInput'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
@@ -133,7 +134,7 @@ async function submit() {
               :feedback="false"
               toggle-mask
               fluid
-              :input-props="{ autocomplete: 'current-password' }"
+              :input-props="passwordInputProps('current-password')"
             />
           </div>
           <Button

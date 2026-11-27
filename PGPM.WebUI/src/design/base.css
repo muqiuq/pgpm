@@ -114,6 +114,11 @@ a:hover {
   text-decoration: underline;
 }
 
+/* A link in running text is underlined: colour alone doesn't set it apart (WCAG 1.4.1, axe link-in-text-block). */
+p a:not(.p-button) {
+  text-decoration: underline;
+}
+
 h1,
 h2,
 h3 {

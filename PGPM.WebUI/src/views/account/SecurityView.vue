@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { passwordInputProps } from '@/components/passwordInput'
 import { useQuery } from '@tanstack/vue-query'
 import Button from 'primevue/button'
 import InputOtp from 'primevue/inputotp'
@@ -114,7 +115,7 @@ async function revokeSessions() {
                 toggle-mask
                 fluid
                 :invalid="!!errors.password"
-                :input-props="{ autocomplete: 'current-password' }"
+                :input-props="passwordInputProps('current-password')"
               />
               <small v-if="errors.password" class="field-error">{{ errors.password }}</small>
             </div>

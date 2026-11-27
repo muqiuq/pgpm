@@ -255,13 +255,9 @@ async function confirmDelete() {
                 @click="moveSection(s, 1)"
               />
             </span>
-            <button
-              type="button"
-              class="pick"
-              :aria-pressed="s.id === selectedId"
-              :aria-label="`Fields of ${s.name}`"
-              @click="selectedId = s.id"
-            >
+            <button type="button" class="pick" :aria-pressed="s.id === selectedId" @click="selectedId = s.id">
+              <!-- named by its content: what it shows is part of its name (WCAG 2.5.3) -->
+              <span class="sr-only">Fields of </span>
               <span class="name strong ellipsis">{{ s.name }}</span>
               <small class="muted ellipsis">
                 {{ listText(s.appliesTo)

@@ -132,7 +132,8 @@ PWA installation and the secure cookies need it. The proxy must:
 In `.env`: `PublicUrl` is exactly the address users open (scheme and host, no path), and `Proxy` names the proxy whose
 forwarded headers are trusted – `Proxy=docker` for a proxy on this host reaching the published port (the app sees
 Docker's bridge, 172.16.0.0/12), or the proxy's address or network. With the proxy on this host, keep
-`PGPM_BIND_ADDRESS=127.0.0.1`. `./info.sh` warns when `Proxy` is missing.
+`PGPM_BIND_ADDRESS=127.0.0.1`. `./init.sh` writes `Proxy=docker` (from `.env.example`); `./info.sh` warns when `Proxy`
+is missing.
 
 **Caddy** (WebSockets and the forwarded headers are passed as they are; certificates are automatic):
 

@@ -2032,8 +2032,14 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
   (orange-500 was 2.8:1), highlighted code comments surface-600 (was under 4.5:1 on the code background). PrimeVue's
   Dialog returns the focus to its opener itself. `e2e/a11y.spec.ts` runs axe-core (`@axe-core/playwright` 4.14.0,
   MPL-2.0, dev only) with the WCAG 2.1 A/AA tags on sign-in, the lists, the *New idea* dialog, an idea's tabs, the maps
-  list, a map with its side panel and library and the admin pages (not *System*), in light and dark, plus the lists, the
+  list, a map with its side panel and library and the admin pages (*System* included), in light and dark, plus the lists, the
   navigation overlay, an idea and a map at 390 × 844 (also: nothing scrolls sideways).
+  Label in name (WCAG 2.5.3, axe `label-content-name-mismatch`): a button that shows text has that text in its name –
+  an inline field's *Edit Business unit: Finance* (only a dash shown: *Edit Business unit*), a rating's
+  *Reach: nobody, 0* (axe drops parentheses), the section and template pickers named by their content with a hidden *Fields of* / *Open*
+  prefix. PrimeVue's `Password` without feedback still writes `aria-expanded`/`aria-haspopup` on the input (not
+  allowed there): every password field passes `passwordInputProps()` (`components/passwordInput.ts`), which removes
+  them. Links in running text (`p a`) are underlined, not set apart by colour alone (WCAG 1.4.1).
 - **Phone (< 600 px).** The app bar's search is an icon that opens the global search in the bar (`GlobalSearch`
   `autofocus`, `done` folds it); the maps list is a list of two-line rows with a small preview; the map page has
   icon-only header buttons, `100dvh` (the browser's bars don't hide the zoom controls) and padding like every page; the

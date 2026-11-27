@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { passwordInputProps } from '@/components/passwordInput'
 import Button from 'primevue/button'
 import Password from 'primevue/password'
 import { computed, ref } from 'vue'
@@ -79,7 +80,7 @@ async function submit() {
         toggle-mask
         fluid
         :invalid="!!errors.currentPassword"
-        :input-props="{ autocomplete: 'current-password' }"
+        :input-props="passwordInputProps('current-password')"
       />
       <small v-if="errors.currentPassword" class="field-error">{{ errors.currentPassword }}</small>
     </div>
@@ -92,7 +93,7 @@ async function submit() {
         toggle-mask
         fluid
         :invalid="!!errors.newPassword"
-        :input-props="{ autocomplete: 'new-password', 'aria-describedby': 'new-password-hint' }"
+        :input-props="passwordInputProps('new-password', { 'aria-describedby': 'new-password-hint' })"
       />
       <small v-if="errors.newPassword" class="field-error">{{ errors.newPassword }}</small>
       <small v-else id="new-password-hint" class="field-hint">{{
@@ -108,7 +109,7 @@ async function submit() {
         toggle-mask
         fluid
         :invalid="!!errors.repeat"
-        :input-props="{ autocomplete: 'new-password' }"
+        :input-props="passwordInputProps('new-password')"
       />
       <small v-if="errors.repeat" class="field-error">{{ errors.repeat }}</small>
     </div>

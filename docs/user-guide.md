@@ -537,9 +537,11 @@ Changing your password or 2FA, or **Sign out everywhere else**, switches both to
 3 refused calls within 24 hours. The card shows each token's state, expiry and last use. Every call is logged.
 
 **What an assistant can do.** Your assistant lists the tools your token may use, each with a description; admins see
-the whole catalogue under *Administration → MCP → Tools*. With the read token an assistant searches and reads items and
-persons and lists the configuration; with the write token it also creates and
-updates items within your rights – the write token is capped: it never deletes, shares, changes owners or administers.
+the whole catalogue under *Administration → MCP → Tools*. With the read token an assistant searches and reads items, persons
+and maps (a matrix with its quadrants) and lists the configuration. With the write token it also creates notes, ideas,
+leads and projects (a project from its template, with milestones and gates), updates them, places items on maps, adds
+and updates milestones, ticks Definition-of-Done items, records gate decisions, links items, assigns persons and
+converts an idea or a lead to a project – all within your rights – the write token is capped: it never deletes, shares, changes owners or administers.
 Fields you may not see are neither returned nor accepted. Ask the assistant for things like "find my notes about the customer
 workshop" or "create a note with the learnings of this workshop, shared with Members".
 

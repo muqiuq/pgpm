@@ -151,7 +151,9 @@ const open = (t: ProjectTemplateRow) => router.push({ name: 'template', params: 
           <span class="badge" :style="{ background: t.color ?? 'var(--pgpm-none)' }" aria-hidden="true">
             <i :class="t.icon ? `pi ${t.icon}` : 'pi pi-briefcase'" />
           </span>
-          <button type="button" class="pick" :aria-label="`Open ${t.name}`" @click="open(t)">
+          <!-- named by its content: what it shows is part of its name (WCAG 2.5.3) -->
+          <button type="button" class="pick" @click="open(t)">
+            <span class="sr-only">Open </span>
             <span class="name strong ellipsis">{{ t.name }}</span>
             <small class="muted ellipsis">{{ summary(t) }}</small>
             <small v-if="t.description" class="muted ellipsis">{{ t.description }}</small>

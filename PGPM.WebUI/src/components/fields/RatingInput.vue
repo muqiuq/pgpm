@@ -27,6 +27,8 @@ function pick(value: number | 'na') {
 }
 
 const title = (v: number) => scale.value.labels[String(v)] ?? String(v)
+/** "Reach: nobody, 0": the visible digit is part of the name (WCAG 2.5.3 label in name; axe ignores parentheses). */
+const name = (v: number) => (title(v) === String(v) ? `${props.label}: ${v}` : `${props.label}: ${title(v)}, ${v}`)
 </script>
 
 <template>
@@ -38,7 +40,7 @@ const title = (v: number) => scale.value.labels[String(v)] ?? String(v)
       class="value"
       :class="{ on: model === v, below: typeof model === 'number' && v < model }"
       :aria-pressed="model === v"
-      :aria-label="`${label}: ${title(v)}`"
+      :aria-label="name(v)"
       :title="title(v)"
       :disabled="disabled"
       @click="pick(v)"
@@ -51,7 +53,7 @@ const title = (v: number) => scale.value.labels[String(v)] ?? String(v)
       class="value na"
       :class="{ on: model === 'na' }"
       :aria-pressed="model === 'na'"
-      :aria-label="`${label}: not applicable`"
+      :aria-label="`${label}: not applicable, n/a`"
       title="Not applicable"
       :disabled="disabled"
       @click="pick('na')"

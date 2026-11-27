@@ -4,10 +4,9 @@ import { createTeam, signInAs, signInAsAdmin, type Team } from './helpers'
 
 /**
  * Accessibility (docs/05 §4, docs/03 §12.10): axe-core's WCAG 2.1 A and AA rules on the main pages – sign-in, the item
- * lists, an item's page and its create dialog, the maps list, a map with its side panel and library, the admin pages –
+ * lists, an item's page and its create dialog, the maps list, a map with its side panel and library, the admin pages (System included) –
  * in the light and the dark theme, and the lists, an item and a map at a phone's width. A finding names the rule, its
  * impact and the first elements it hit. Contrast included: the status colours and badges are checked in both themes.
- * (The System page is left to its own track.)
  */
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
@@ -142,6 +141,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
         '/admin/packages',
         '/admin/microsoft',
         '/admin/audit-log',
+        '/admin/system',
         '/account',
         '/account/security',
       ]) {

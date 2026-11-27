@@ -105,16 +105,16 @@ describe('the sections of an item (docs/01 §6.2, docs/03 §12.7)', () => {
     const feas = () => w.find('[data-testid="section-sec-feas"]')
     await until(() => feas().exists() && feas().text().includes('incomplete'), 'the incomplete index')
 
-    await feas().get('[aria-label="Statement 1: fully applies"]').trigger('click')
+    await feas().get('[aria-label^="Statement 1: fully applies,"]').trigger('click')
     await until(() => feas().text().includes('58 / 65'), 'the index')
-    expect(feas().get('[aria-label="Statement 1: fully applies"]').attributes('aria-pressed')).toBe('true')
+    expect(feas().get('[aria-label^="Statement 1: fully applies,"]').attributes('aria-pressed')).toBe('true')
     expect((await fieldValuesOf(db, item.id)).find((v) => v.fieldId === 'f-feas_data_access')?.value).toBe(5)
 
     // n/a: rescaled to 65 – raw 53 of 60 → 57.4 → 57.
-    await feas().get('[aria-label="Statement 1: not applicable"]').trigger('click')
+    await feas().get('[aria-label^="Statement 1: not applicable,"]').trigger('click')
     await until(() => feas().text().includes('57 / 65'), 'the rescaled index')
     // A click on the chosen value clears it: incomplete again.
-    await feas().get('[aria-label="Statement 1: not applicable"]').trigger('click')
+    await feas().get('[aria-label^="Statement 1: not applicable,"]').trigger('click')
     await until(() => feas().text().includes('incomplete'), 'incomplete again')
   })
 
@@ -143,6 +143,6 @@ describe('the sections of an item (docs/01 §6.2, docs/03 §12.7)', () => {
     await until(() => titles(read).length === 3, 'the read-only sections')
     expect(read.findAll('button').some((b) => b.text() === 'Add section')).toBe(false)
     expect(read.find('[aria-label^="More actions for"]').exists()).toBe(false)
-    expect(read.get('[aria-label="Statement 1: fully applies"]').attributes('disabled')).toBeDefined()
+    expect(read.get('[aria-label^="Statement 1: fully applies,"]').attributes('disabled')).toBeDefined()
   })
 })

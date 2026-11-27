@@ -144,7 +144,10 @@ describe('an item’s page (docs/01 §4.4)', () => {
 
   const button = (name: string) =>
     [...document.body.querySelectorAll('button')].find(
-      (b) => b.getAttribute('aria-label') === name || b.textContent?.trim() === name,
+      (b) =>
+        b.getAttribute('aria-label') === name ||
+        b.getAttribute('aria-label')?.startsWith(`${name}: `) ||
+        b.textContent?.trim() === name,
     )
 
   it('shows a lead with its fixed fields, status with overdue, persons, and offers the conversion', async () => {
@@ -172,7 +175,7 @@ describe('an item’s page (docs/01 §4.4)', () => {
     expect(button('Convert to project')).toBeUndefined()
     expect(button('Edit description')).toBeUndefined()
     expect(button('Assign person')).toBeUndefined()
-    expect(document.body.querySelector('button[aria-label="Edit Title"]')).toBeNull()
+    expect(document.body.querySelector('button[aria-label^="Edit Title"]')).toBeNull()
   })
 
   it('lists links both ways on the Links tab, an unreadable target as restricted', async () => {

@@ -75,6 +75,15 @@ const display = computed(() => {
   return props.format ? props.format(shown.value) : String(shown.value)
 })
 
+/**
+ * The button's name: "Edit Business unit: Finance". What it shows is part of its name (WCAG 2.5.3 label in name, axe
+ * `label-content-name-mismatch`), unless that is only the dash of an empty value.
+ */
+const editName = computed(() => {
+  const text = display.value === '' ? props.placeholder : display.value
+  return /[\p{L}\p{N}]/u.test(text) ? `Edit ${props.label}: ${text}` : `Edit ${props.label}`
+})
+
 const saveHint = computed(() => (props.type === 'textarea' ? 'Save (Ctrl+Enter)' : 'Save (Enter)'))
 
 async function begin() {
@@ -271,7 +280,7 @@ function onKey(event: KeyboardEvent) {
         choice: type === 'enum' || type === 'bool',
       }"
       :disabled="readonly"
-      :aria-label="readonly ? undefined : `Edit ${label}`"
+      :aria-label="readonly ? undefined : editName"
       @click="begin"
     >
       <span class="text">{{ display === '' ? placeholder : display }}</span>
