@@ -108,7 +108,8 @@ pgpm/
 │   ├── Cli/                  `pgpm users|groups|db …` (no web host)
 │   ├── Config/               statuses, sections, fields, templates
 │   ├── Data/                 DbContext, Migrations/, CustomMigrations/
-│   ├── Directory/            Graph client + directory sync task
+│   ├── Directory/            Graph client + directory sync task (phase 6; namespace not `PGPM.Directory`, see §15 #23)
+│   ├── Persons/              persons (`PGPM.Persons`): the user ↔ person link, manual persons
 │   ├── Files/                FileStore, uploads, cleanup tasks
 │   ├── Hosting/              middleware, security headers, static SPA
 │   ├── Items/                notes, ideas, leads, projects, milestones
@@ -255,10 +256,22 @@ field diffs into `audit_log`. PGPM uses:
   actions;
 - `SyncStampInterceptor` (new) assigning `seq`/`rev`/`updated_*` (§11.5).
 
+As PNMTD: one entry per write request (`AuditFilter` opens an `AuditScope` around every action with `[Audit]`; the
+interceptor adds the entry to the request's first `SaveChanges`, so it commits with the change); services name the
+event they record (`AuditLog.Record`), and refusals are recorded by `AuditDeniedHandler` (outcome `denied`, at most 60
+a minute per user). PGPM's shape (docs/02 §12, §15 #25): events are dotted lower case (`auth.login_succeeded`,
+`user.provisioned`, `membership.added`, `group.rights_changed` – `AuditEvents`, labelled by `AuditCatalog`); the
+actor is `user`, `entra` (a Microsoft sign-in's provisioning and app-role memberships), `system` with `actor_ref`
+`cli` or `seed`, or `mcp` (phase 6); PNMTD's extra columns (username, outcome, target name, request, browser,
+changes) live in the `detail` jsonb.
+
 ### 3.5 Tests [PNMTD]
 
 - `TestApp : WebApplicationFactory<Program>` with a fake `TestSignIn` scheme
-  driven by headers (`ClientWithRights("Projects:Create,Maps:Create")`).
+  driven by headers (`Client(TestUsers.Member)`, `ClientWithRights("Projects:Create,Maps:Create")`); the cookie
+  scheme forwards a request with the header to it (`ForwardDefaultSelector`), so one app serves header clients and
+  real cookie sessions (`Browser`, PNMTD's) alike. The test users (admin, a Members and a Viewers member, one without
+  groups) are seeded once per run.
 - **Endpoint audit test** (`PNMTD.Tests/Hosting/EndpointAuditTests.cs`): an
   allowlist of anonymous endpoints and a matrix of every v1 endpoint's required
   right – a new endpoint fails the tests until it is added. Copy as-is.
@@ -297,10 +310,11 @@ chars without look-alikes. Temporary passwords valid 7 days, must be changed.
 
 - Data-Protection key ring persisted to `/var/lib/pgpm/keys`, application name `PGPM`.
 - Claims (`SessionClaims.Create`): user id, name, `pgpm:display_name`,
-  `pgpm:stamp`, `pgpm:signed_in`, **new** `pgpm:auth_method` (`password` \| `microsoft`).
+  `pgpm:stamp`, `pgpm:signed_in`, `pgpm:totp_at`, **new** `pgpm:auth_method` (`password` \| `microsoft`).
 - Rights are **not** in the cookie: `SessionCache.ValidateAsync` loads stamp,
-  active flag and rights per request through `IMemoryCache` (1 min TTL), rejects
-  on stamp mismatch, adds `pgpm:admin` / `pgpm:right` claims.
+  active flag, rights and group ids per request through `IMemoryCache` (1 min TTL), rejects
+  on stamp mismatch, inactive user or the end of `Auth:LoginDays` (401 `login_expired`), adds `pgpm:admin` /
+  `pgpm:right` / **new** `pgpm:group` claims (`User.GroupIds()` – the sharing checks of phase 2 read them).
   `SessionCache.Forget(userId)` on group/right changes.
 - `last_seen_at` written at most every 5 minutes (also by sync requests – keeps
   the MCP read token alive while the user works offline-first).
@@ -319,8 +333,9 @@ chars without look-alikes. Temporary passwords valid 7 days, must be changed.
 - Login rate limit: fixed window, 10/min/IP (`[EnableRateLimiting("login")]`).
 - Lockout: 5 failures → 5, 10, 20, 40, max 60 minutes (`AuthService.LockoutFor`).
 - Optional **[GGITSV]**: `Auth:LocalLoginNetworks` (CIDR list) – local password
-  login only from these networks; Microsoft SSO from anywhere. Startup check:
-  refuse a config where nobody can sign in.
+  login only from these networks (else 403 `local_login_not_allowed`, audit `auth.login_refused`); Microsoft SSO
+  from anywhere. Startup check: refuse a config where nobody can sign in (`none` without `Entra:Enabled`), and SSO
+  switched on without its tenant, client id or secret.
 
 ### 4.4 TOTP
 
@@ -328,20 +343,23 @@ RFC 6238, SHA1, 6 digits, 30 s, ±1 step (`PNMTD.Lib/Security/TotpService.cs`),
 replay protection via `totp_last_used_step`, secret encrypted with Data
 Protection (`PGPM.Totp.v1`), policy `Auth:TotpPolicy = Optional |
 RequiredForAdmins | Required` (applies to local accounts only). QR rendered
-client-side (`qrcode`).
+client-side (`qrcode`) on a `<canvas>` – PNMTD's `data:` image is not allowed by PGPM's CSP (§15 #24). An account
+without a password (Microsoft only) has no PGPM TOTP: setup answers 409 `password_not_set`.
 
 ### 4.5 Endpoints
 
 | Endpoint | Notes |
 |---|---|
-| `POST /api/v1/auth/login` | `{next:"done"\|"totp"}`; for `totp` a 5-min `pgpm.2fa` cookie (path `/api/v1/auth`) |
+| `POST /api/v1/auth/login` | `{next:"done"\|"totp", me}` (`me` as `/auth/me` when done); for `totp` a 5-min `pgpm.2fa` cookie (path `/api/v1/auth`); 401 `invalid_credentials`, 429 `locked_out`, 403 `local_login_not_allowed` |
 | `POST /api/v1/auth/login/totp`, `POST /auth/totp/daily`, `POST /auth/logout` | |
-| `GET /api/v1/auth/me` | current user, `rights: {Area: Level}`, session flags, issues XSRF cookie; **cached in IndexedDB `meta`** for offline start |
-| `GET /api/v1/auth/options` | `{microsoft: bool, local: bool}` **[GGITSV]** |
+| `GET /api/v1/auth/me` | `{user: {id, username, displayName, email, isAdmin, rights: {Area: Level}, groupIds, personId, isTotpEnabled, hasPassword, hasMicrosoftAccount}, flags, session: {totpDue, signedInUntil, authMethod}}`, issues XSRF cookie; kept for an offline start (phase 1: `localStorage` `pgpm.session` with the rights catalogue; phase 2 moves it into IndexedDB `meta`, §15 #22) |
+| `GET /api/v1/auth/options` | `{microsoft: bool, local: bool}` **[GGITSV]** – `local` is whether `Auth:LocalLoginNetworks` allows the caller's address |
 | `GET /api/v1/auth/sso/microsoft?returnTo=` | SSO start **[GGITSV]** |
 | `/api/v1/account/{password, sessions/revoke, totp/*, access, mcp/*}` | own account |
 | `/api/v1/users`, `/{id}/reset-password`, `/{id}/reset-totp`, `/{id}/unlock`, `/{id}/access`, `/{id}/microsoft-account` | admin only (`[RequireAdmin]`) |
-| `/api/v1/groups`, `/{id}/members`, `/{id}/rights`, `GET /api/v1/rights` (catalogue) | admin only |
+| `/api/v1/groups`, `/{id}`, `PUT /{id}/members`, `PUT /{id}/rights` | admin only; `PUT /{id}` without `rights` leaves them |
+| `GET /api/v1/rights` | the catalogue (areas, levels in order, what each allows), every signed-in user |
+| `GET /api/v1/audit`, `GET /api/v1/audit/events` | *Audit log: View*; paged, newest first; filters `event`, `prefix` (`auth`, `user`, …), `actor`, `outcome`, `userId` (by or about), `subjectId`, `from`/`to`, `search` |
 
 ### 4.6 Bootstrap and recovery
 
@@ -351,15 +369,17 @@ client-side (`qrcode`).
   `must_change_password = true`.
 - `GuardLastAdminAsync`: 409 `last_admin` when deleting/demoting/deactivating the
   last active admin.
-- CLI: `pgpm users list|add|reset-password|reset-totp|unlock`, wrapped by
-  `deploy/*.sh`.
+- CLI: `pgpm users list|add|reset-password|reset-totp|unlock|set-admin`, `pgpm groups list`, wrapped by
+  `deploy/{add-user,list-users,reset-password,reset-totp}.sh` (`docker compose exec pgpm pgpm …`).
+- `start.sh` writes `Auth__InitialAdmin__Username=admin` and a generated password into `dev.env` and prints both.
 
 ### 4.7 Groups
 
 `groups`, `group_rights (group_id, area, level)`, `user_groups` (data model §3).
 `GroupService`: CRUD, `SetMembersAsync`, `AccessAsync` (effective rights + which
-group grants them). Seed groups via migration with fixed GUIDs: **Members** and
-**Viewers** (§6.2).
+group grants them). Seed groups with fixed GUIDs (`GroupEntity.MembersId`, `ViewersId`): **Members** and
+**Viewers** (§6.2), by the custom migration `SeedGroups` once per database (key_values marker `seed.groups`, so a
+group an admin deleted stays deleted; phase 4's `core` package takes them over).
 
 ---
 
@@ -447,7 +467,10 @@ transaction:
    delegated token, `me?$select=userPrincipalName,mail`) → `microsoft_user_name`,
    `directory_read_at`. Failure is logged and never blocks sign-in.
 8. `last_login_at` updated, session issued, redirect to `returnTo` or
-   `/sign-in?ssoError=deactivated|account-conflict`.
+   `/sign-in?ssoError=deactivated|account-conflict|no-account|cancelled|failed` (`no-account`: unknown account while
+   `Entra:AutoProvision` is off). A manual person the user had becomes the account's Microsoft person when the
+   directory has none yet (it keeps its assignments); otherwise the directory person is linked and the manual one
+   let go (stays, without a user).
 
 Logout: `POST /api/v1/auth/logout` ends the PGPM session only – **no Entra
 single sign-out** (document it in the UI).
@@ -1421,7 +1444,8 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | `Auth:SessionDays` | 7 | PNMTD |
 | `Auth:LoginDays` / `Auth:TotpDays` / `Auth:ResetHour` | 30 / 1 / 4 | PNMTD |
 | `Auth:TotpPolicy` | `Optional` | PNMTD |
-| `Auth:LocalLoginNetworks` | (all) | GGITSV |
+| `Auth:LocalLoginNetworks` | (all) – `all`, `none` (needs `Entra:Enabled`), or networks/addresses `10.0.0.0/8, 192.168.1.20` | GGITSV |
+| `Auth:LoginRateLimit:PermitLimit` / `Auth:TotpIssuer` | 10 / `PGPM` | PNMTD |
 | `Entra:Enabled` / `TenantId` / `ClientId` / `ClientSecret` | off | GGITSV |
 | `Entra:AutoProvision` | true | GGITSV |
 | `Entra:DefaultGroupId` | – | NEW |
@@ -1464,6 +1488,14 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | 19 | `TreatWarningsAsErrors` on, no `NoWarn` list; `.editorconfig` after GGITSV/PLM (PNMTD has none), style rules as suggestions | new code base without legacy warnings |
 | 20 | JSON options via `AddJsonOptions`/`ConfigureHttpJsonOptions` for all controllers (PNMTD restricts its formatters to `/api` because of the frozen sensor API) | PGPM has no legacy API |
 | 21 | Anonymous `GET /api/v1/info` (name, version) instead of PNMTD's `/api/v1/system/info` behind sign-in | the shell shows the version before any sign-in, offline-first |
+| 22 | Phase 1 keeps the last `/auth/me` and the rights catalogue in `localStorage` (`pgpm.session`), not yet in IndexedDB `meta` | Dexie arrives with the sync core (phase 2), which moves it and wipes it with the local data |
+| 23 | Persons code in `PGPM/Persons/` (namespace `PGPM.Persons`); the phase-6 directory sync must not use the namespace `PGPM.Directory` | `PGPM.Directory` hides `System.IO.Directory` in every `PGPM.*` file |
+| 24 | TOTP QR code drawn on a `<canvas>` (PNMTD: `QRCode.toDataURL` into an `<img>`) | PGPM's CSP allows no `data:` images |
+| 25 | `audit_log` with docs/02 §12's columns and dotted lower-case events; PNMTD's other columns (username, category, outcome, target name, subjects, request, browser, changes) in the `detail` jsonb | the data model's columns; one family prefix filters the page |
+| 26 | `TestSignIn` is forwarded to by the cookie scheme for requests with its header (PNMTD: the default scheme, a second app with `testSignIn: false` for cookie tests) | one app per test class for both kinds of client |
+| 27 | Seed groups by a custom migration with a `key_values` marker (doc: "via migration") | a deleted seed group stays deleted; phase 4's packages take the seeds over |
+| 28 | `ssoError=no-account` for an unknown account while `Entra:AutoProvision` is off (GGITSV knows only failed, cancelled, deactivated, account-conflict) | GGITSV always provisions |
+| 29 | Graph `/me` reads `userPrincipalName,mail` only (GGITSV also the on-premises names) | PGPM stores only `microsoft_user_name` |
 
 ## 16. Score evaluation [NEW]
 

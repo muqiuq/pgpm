@@ -1,23 +1,140 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { appApi, type AppInfo } from '@/api/app'
-import type { Right } from '@/api/rights'
+import { authApi, type MeResponse, type RightsAreaItem } from '@/api/auth'
+import { ApiError } from '@/api/client'
+import { holds, meets, setCatalogue, type Area, type Level, type Right } from '@/api/rights'
+import { requestPersistence } from '@/pwa/storage'
+
+/** Where the last `/auth/me` and the rights catalogue are kept for an offline start (docs/03 §4.5). */
+export const sessionCacheKey = 'pgpm.session'
+
+interface Cached {
+  me: MeResponse
+  catalogue: RightsAreaItem[]
+}
+
+function readCache(): Cached | null {
+  try {
+    const raw = localStorage.getItem(sessionCacheKey)
+    const value = raw ? (JSON.parse(raw) as Cached) : null
+    return value?.me?.user ? value : null
+  } catch {
+    return null
+  }
+}
+
+function writeCache(value: Cached | null) {
+  try {
+    if (value) localStorage.setItem(sessionCacheKey, JSON.stringify(value))
+    else localStorage.removeItem(sessionCacheKey)
+  } catch {
+    // Storage full or off: the session works without its offline copy.
+  }
+}
 
 /**
- * Who is signed in and what the server is.
+ * Who is signed in, with what rights, flags and session (PNMTD, docs/03 §4.5, §6.1), and what the server is.
  *
- * Phase 0 has no sign-in: `user` stays null, every right is allowed, so every menu entry and page shows. Phase 1 loads
- * the user, flags and rights from /auth/me (cached for offline use, docs/03 §6.1), adds can()/allows() on them
- * (rights.ts holds/meets), logout, and PNMTD's sessionHandling (401 → login).
+ * Offline-first: the last `/auth/me` (and the rights catalogue) is kept in localStorage, so the app opens signed in
+ * without the network and checks the session in the background; without a copy the first navigation waits for
+ * `/auth/me`. A 401 ends the session (sessionHandling.ts sends the user to the sign-in). Phase 2 moves the copy into
+ * IndexedDB's `meta` and wipes the local data on logout and on a change of user.
  */
 export const useSession = defineStore('session', () => {
+  const cached = readCache()
+  if (cached) setCatalogue(cached.catalogue)
   const info = ref<AppInfo | null>(null)
-  const user = ref<null>(null)
+  const me = ref<MeResponse | null>(cached?.me ?? null)
+  const catalogue = ref<RightsAreaItem[]>(cached?.catalogue ?? [])
   const loaded = ref(false)
+  /** The server could not be reached at the last check: the session is the offline copy. */
+  const offline = ref(false)
 
-  /** A route's, a drawer entry's or a button's right. Phase 0: all of them. */
-  function allows(_right: Right): boolean {
-    return true
+  const user = computed(() => me.value?.user ?? null)
+  const flags = computed(() => me.value?.flags ?? null)
+  const times = computed(() => me.value?.session ?? null)
+  const isAdmin = computed(() => user.value?.isAdmin ?? false)
+  const personId = computed(() => user.value?.personId ?? null)
+  const groupIds = computed(() => user.value?.groupIds ?? [])
+
+  /** This level in this area, or more, from the rights `/auth/me` returned. */
+  function can(area: Area, level: Level): boolean {
+    return (
+      user.value !== null && holds(user.value.isAdmin, user.value.rights as Partial<Record<Area, Level>>, area, level)
+    )
+  }
+
+  /** A route's, a drawer entry's or a button's right. */
+  function allows(right: Right): boolean {
+    return meets(right, isAdmin.value, can)
+  }
+
+  function persist() {
+    writeCache(me.value ? { me: me.value, catalogue: catalogue.value } : null)
+  }
+
+  /** A new answer of `/auth/me` (or the login's), or null: signed out. */
+  function set(next: MeResponse | null) {
+    me.value = next
+    loaded.value = true
+    persist()
+  }
+
+  async function loadCatalogue() {
+    try {
+      catalogue.value = await authApi.rights()
+      setCatalogue(catalogue.value)
+      persist()
+    } catch {
+      // Held up by a gate (a password to change) or offline: the next load fetches it.
+    }
+  }
+
+  /** Whether a gate holds the session up (a password to change, a 2FA setup): then only the sign-in screens work. */
+  const gated = (next: MeResponse) =>
+    next.flags.mustChangePassword || next.flags.totpSetupRequired || next.session.totpDue
+
+  /** A complete sign-in: the session, the catalogue, and the browser asked to keep this origin's data. */
+  async function signedIn(next: MeResponse) {
+    set(next)
+    void requestPersistence()
+    if (!gated(next)) await loadCatalogue()
+  }
+
+  /** `/auth/me` now: the user, or signed out (401); offline, the copy stays. */
+  async function refresh() {
+    try {
+      const next = await authApi.me()
+      offline.value = false
+      // Back from a Microsoft sign-in (a full navigation): the first session of this page asks to keep the data too.
+      if (!me.value) void requestPersistence()
+      set(next)
+      if (!gated(next)) await loadCatalogue()
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) {
+        offline.value = false
+        set(null)
+      } else {
+        offline.value = true
+        loaded.value = true
+      }
+    }
+  }
+
+  /**
+   * Once per page load, unless forced. With an offline copy it answers at once and checks in the background (a
+   * hanging network never blocks a navigation); without one it waits for the server.
+   */
+  async function load(force = false) {
+    if (!info.value && !loaded.value) void loadInfo()
+    if (loaded.value && !force) return
+    if (!force && me.value) {
+      loaded.value = true
+      void refresh()
+      return
+    }
+    await refresh()
   }
 
   /** The server's name and version, in the background: offline the shell opens without them. */
@@ -29,12 +146,35 @@ export const useSession = defineStore('session', () => {
     }
   }
 
-  /** Once per page load; never blocks a navigation (offline, the network may hang). */
-  function load() {
-    if (loaded.value) return
-    loaded.value = true
-    void loadInfo()
+  /** Ends this PGPM session only: a Microsoft session at Entra stays (no single sign-out, docs/03 §5.3). */
+  async function logout() {
+    try {
+      await authApi.logout()
+    } catch {
+      // Signed out on the server already, or unreachable: the session ends here either way.
+    }
+    set(null)
   }
 
-  return { info, user, loaded, allows, load, loadInfo }
+  return {
+    info,
+    me,
+    user,
+    flags,
+    times,
+    catalogue,
+    loaded,
+    offline,
+    isAdmin,
+    personId,
+    groupIds,
+    can,
+    allows,
+    set,
+    signedIn,
+    refresh,
+    load,
+    loadInfo,
+    logout,
+  }
 })

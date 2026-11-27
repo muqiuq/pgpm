@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteComponent, type RouteRecordRaw } from 'vue-router'
 import type { Right } from '@/api/rights'
 import { navigation } from '@/layouts/navigation'
 import { useSession } from '@/stores/session'
@@ -6,7 +6,7 @@ import { decide } from './guard'
 
 declare module 'vue-router' {
   interface RouteMeta {
-    /** AuthLayout (a centred card) for the sign-in screens (phase 1); AppLayout otherwise. */
+    /** AuthLayout (a centred card) for the sign-in screens; AppLayout otherwise. */
     layout?: 'auth'
     /** No sign-in needed (the sign-in screens). */
     public?: boolean
@@ -24,6 +24,13 @@ declare module 'vue-router' {
 
 const placeholder = () => import('@/views/PlaceholderView.vue')
 
+/** The menu entries that are pages already; the others show their placeholder. */
+const views: Record<string, () => Promise<RouteComponent>> = {
+  users: () => import('@/views/admin/UsersView.vue'),
+  groups: () => import('@/views/admin/GroupsView.vue'),
+  'audit-log': () => import('@/views/admin/AuditLogView.vue'),
+}
+
 /** Each menu entry's placeholder until its phase replaces the component (docs/05 §3). */
 const pages: Record<string, { phase: number; summary: string }> = {
   maps: { phase: 5, summary: 'Canvas and matrix maps of ideas, projects, milestones and shapes, with templates.' },
@@ -33,15 +40,12 @@ const pages: Record<string, { phase: number; summary: string }> = {
   notes: { phase: 2, summary: 'Quick capture and learnings – the first data to sync offline and live.' },
   trash: { phase: 2, summary: 'Deleted items and maps, restorable until an admin purges them.' },
   persons: { phase: 3, summary: 'The people directory: Microsoft Entra users and manual externals.' },
-  users: { phase: 1, summary: 'Local and Microsoft accounts, 2FA, lockout and sessions.' },
-  groups: { phase: 1, summary: 'Groups, their members and their rights.' },
   'admin-mcp': { phase: 6, summary: 'MCP tokens of all users and the MCP log.' },
   statuses: { phase: 3, summary: 'Statuses per item type: open, active or closed, and how long an item may stay.' },
   sections: { phase: 4, summary: 'Sections and fields of ideas and projects: ratings, scores, selects and more.' },
   templates: { phase: 4, summary: 'Project templates: statuses, sections, defaults, milestones and gates.' },
   packages: { phase: 4, summary: 'Import and export configuration packages such as the innovation method.' },
   microsoft: { phase: 6, summary: 'Microsoft SSO and the directory sync: settings, last result, Run now.' },
-  'audit-log': { phase: 1, summary: 'Who changed what in the administration, and every sign-in.' },
   system: { phase: 7, summary: 'Sync clients, live connections, storage and versions.' },
 }
 
@@ -50,7 +54,7 @@ const menuRoutes: RouteRecordRaw[] = navigation.flatMap((group) =>
   group.items.map((item) => ({
     path: item.to,
     name: item.name,
-    component: placeholder,
+    component: views[item.name] ?? placeholder,
     meta: {
       title: item.label,
       icon: item.icon,
@@ -65,10 +69,48 @@ export const routes: RouteRecordRaw[] = [
   { path: '/', redirect: { name: 'maps' } },
   ...menuRoutes,
   {
+    path: '/admin/groups/:id',
+    name: 'group',
+    component: () => import('@/views/admin/GroupView.vue'),
+    props: true,
+    meta: { title: 'Group', right: 'admin', icon: 'pi pi-sitemap' },
+  },
+  // The sign-in screens (AuthLayout): public, or – for what a session must do first – signed in.
+  {
+    path: '/sign-in',
+    name: 'sign-in',
+    component: () => import('@/views/auth/SignInView.vue'),
+    meta: { title: 'Sign in', layout: 'auth', public: true },
+  },
+  {
+    path: '/sign-in/2fa',
+    name: 'sign-in-2fa',
+    component: () => import('@/views/auth/SignInTotpView.vue'),
+    meta: { title: 'Sign in', layout: 'auth', public: true },
+  },
+  {
+    path: '/change-password',
+    name: 'change-password',
+    component: () => import('@/views/auth/ChangePasswordView.vue'),
+    meta: { title: 'New password', layout: 'auth' },
+  },
+  {
+    path: '/account/setup-2fa',
+    name: 'setup-2fa',
+    component: () => import('@/views/account/SetupTotpView.vue'),
+    meta: { title: 'Two-factor authentication', layout: 'auth' },
+  },
+  {
     path: '/account',
     name: 'account',
-    component: placeholder,
-    meta: { title: 'Account', icon: 'pi pi-user', phase: 1, summary: 'Your password, 2FA, sessions and MCP tokens.' },
+    component: () => import('@/views/account/AccountView.vue'),
+    meta: { title: 'Account', icon: 'pi pi-user' },
+  },
+  {
+    path: '/account/security',
+    name: 'security',
+    component: () => import('@/views/account/SecurityView.vue'),
+    meta: { title: 'Security', icon: 'pi pi-shield' },
   },
   {
     path: '/:pathMatch(.*)*',
@@ -84,12 +126,13 @@ export const router = createRouter({
   scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const session = useSession()
-  session.load()
+  // With the offline copy of /auth/me this answers at once; only a first visit waits for the server.
+  await session.load()
   return decide(
     { name: to.name, fullPath: to.fullPath, public: to.meta.public, right: to.meta.right },
-    { signedIn: session.user !== null, allows: session.allows },
+    { signedIn: session.user !== null, flags: session.flags, allows: session.allows },
   )
 })
 

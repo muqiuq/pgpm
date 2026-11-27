@@ -1,5 +1,6 @@
 using System.Reflection;
 using PGPM.Api;
+using PGPM.Audit;
 using PGPM.Auth;
 using PGPM.Data;
 using PGPM.Hosting;
@@ -28,11 +29,12 @@ public partial class Program
         // The build writes the OpenAPI document by starting the host without a database (GetDocument.Insider).
         var documentBuild = Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
 
-        // Each feature registers itself (docs/03 §3.1). Later phases add AddAudit, AddSync, AddFiles, AddPgpmMcp, …
+        // Each feature registers itself (docs/03 §3.1). Later phases add AddSync, AddFiles, AddPgpmMcp, …
         builder.Services.AddPgpmData(builder.Configuration);
         builder.Services.AddPgpmApi();
         builder.Services.AddPgpmOpenApi();
         builder.Services.AddPgpmAuth(builder.Configuration);
+        builder.Services.AddAudit();
         builder.Services.AddPgpmHosting(builder.Configuration);
 
         // First: every other hosted service starts on a migrated database.
@@ -51,6 +53,7 @@ public partial class Program
         builder.Logging.AddDebug();
 
         var app = builder.Build();
+        app.UsePgpmAuthSchemes();          // the Microsoft scheme only while Entra:Enabled
 
         // The order matters (docs/03 §3.1). First the client's real address and scheme (Proxy setting). There is no HTTPS
         // redirect: TLS ends at the reverse proxy.
@@ -61,11 +64,11 @@ public partial class Program
         app.UseSpaFiles();                 // the web UI's files, anonymous (the shell holds no data)
         app.UseRouting();
         app.UsePlainNotFound();            // no endpoint: empty 404 (never the fallback policy's 401)
-        app.UseRateLimiter();              // phase 1: the login endpoints
+        app.UseRateLimiter();              // the login endpoints
         // Phase 6: app.UseMcpOriginCheck(). A browser's cookie never authenticates an MCP call.
         app.UseWhen(c => !HostingSetup.IsMcpPath(c.Request.Path), b => b.UseAuthentication());
         app.UseAuthorization();            // deny by default: the fallback policy wants a signed-in user
-        // Phase 1: app.UseSessionGates() (a temporary password must be changed first).
+        app.UseSessionGates();             // a temporary password, a required 2FA setup, the day's code: first
 
         // The container's health check: 200 while the database answers, 503 when it does not. Nothing else, so it may be
         // reachable from anywhere.

@@ -5,6 +5,7 @@ import ConfirmDialog from 'primevue/confirmdialog'
 import { useToast } from 'primevue/usetoast'
 import { watch } from 'vue'
 import { useRoute } from 'vue-router'
+import DailyTotpDialog from '@/components/auth/DailyTotpDialog.vue'
 import AppLayout from '@/layouts/AppLayout.vue'
 import AuthLayout from '@/layouts/AuthLayout.vue'
 import { applyUpdate, waitingWorker } from '@/pwa/register'
@@ -40,6 +41,7 @@ watch(waitingWorker, (worker) => {
     </template>
   </Toast>
   <ConfirmDialog />
+  <DailyTotpDialog />
 </template>
 
 <style scoped>

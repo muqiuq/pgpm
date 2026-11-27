@@ -2,7 +2,7 @@
 import LogoMark from '@/components/LogoMark.vue'
 import { useSession } from '@/stores/session'
 
-/** The sign-in screens (phase 1, PNMTD and GGITSV's Microsoft button): a centred card with the logo. */
+/** The sign-in screens (PNMTD, with GGITSV's Microsoft button): a centred card with the logo. */
 const session = useSession()
 </script>
 

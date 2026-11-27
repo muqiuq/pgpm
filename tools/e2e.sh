@@ -52,11 +52,14 @@ echo "Starting ${NAME} on port ${PORT}…"
 ./start.sh >"$log" 2>&1 || { cat "$log" >&2; exit 1; }
 rm -f "$log"
 
+# The first admin's password, which start.sh generated into the stack's settings: the first test signs in with it.
+admin_password="$(sed -n 's/^Auth__InitialAdmin__Password=//p' "$ENV_FILE" | tail -1)"
+
 # node_modules (with @playwright/test) are those of tools/npm.sh: installed if the lock changed.
 tools/npm.sh exec -- playwright --version >/dev/null
 
 rm -rf PGPM.WebUI/test-results
 "$ENGINE" run --rm --network "container:${NAME}" --ipc=host \
   -v "$PWD/PGPM.WebUI:/web" -v "${WEB_MODULES_VOLUME}:/web/node_modules" -w /web \
-  -e "E2E_BASE_URL=http://localhost:8080" -e CI=1 \
+  -e "E2E_BASE_URL=http://localhost:8080" -e CI=1 -e "E2E_ADMIN_PASSWORD=${admin_password}" \
   "$PLAYWRIGHT_IMAGE" node_modules/.bin/playwright test "$@"

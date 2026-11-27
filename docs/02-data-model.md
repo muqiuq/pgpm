@@ -105,7 +105,9 @@ erDiagram
 
 Identity tables are server-only except `groups` (names, for the share picker)
 and the user ↔ person link (via `persons.user_id`). The client receives the
-current user from `GET /api/v1/auth/me`.
+current user from `GET /api/v1/auth/me`. Phase 1 creates `users`, `groups`, `user_groups`, `group_rights`,
+`persons` and `audit_log` without the synced-row columns; phase 2 adds them to `groups` and `persons`
+(`ISyncedEntity`).
 
 ### `users` (PNMTD `UserEntity` + GGITSV Microsoft link)
 
@@ -159,9 +161,9 @@ The current user's group ids are part of `/auth/me`.
 
 | Column | Type | Notes |
 |---|---|---|
-| `group_id` | uuid → groups | PK part |
-| `area` | text | PK part; catalogue in doc 03 §6.2 |
-| `level` | text | ordered per area; higher includes lower |
+| `group_id` | uuid → groups | PK part, cascade |
+| `area` | text | PK part; catalogue in doc 03 §6.2; lower-case with a CHECK (`notes`, …, `auditlog`, `system`) |
+| `level` | text | ordered per area; higher includes lower; `create` \| `edit` \| `use` \| `view` \| `manage` (CHECK) |
 
 Rights are capabilities (create, configure, administer). **Visibility is decided
 by shares** (§4).
@@ -255,8 +257,8 @@ Same columns with `map_id` instead of `item_id`.
 | `is_active` | bool | `false` when disabled or removed from the directory |
 | `directory_synced_at` | timestamptz null | |
 | `notes` | text null | editable by *Persons: Edit* |
-| `user_id` | uuid null → users | unique where not null |
-| + synced-row columns | | |
+| `user_id` | uuid null → users | unique where not null; set null when the user is deleted |
+| + synced-row columns | | (phase 2) |
 
 All users receive all persons. Directory fields of `microsoft` persons are
 written only by the directory job; patches on them are rejected.
@@ -805,9 +807,14 @@ Map element moves are logged compactly and pruned after 90 days.
 Security and administration events: sign-in, SSO provisioning, Microsoft
 account linked/unlinked, membership (source `entra`/`ui`), rights, users,
 MCP tokens, configuration changes, sharing changes, restore/purge, denied
-requests. Columns: `id`, `at`, `event`, `actor` (`user` \| `mcp` \| `system` \|
-`entra`), `actor_user_id`, `actor_ref`, `subject_type`, `subject_id`, `detail`
-jsonb, `ip`, `correlation_id`.
+requests. Columns: `id` (uuid v7), `at`, `event` (dotted lower case: `auth.login_failed`, `user.provisioned`),
+`actor` (`user` \| `mcp` \| `system` \| `entra`; the CLI and the seeds are `system` with `actor_ref` `cli` /
+`seed`), `actor_user_id`, `actor_ref`, `subject_type` (`user` \| `group` \| `person`, …), `subject_id`, `detail`
+jsonb, `ip`, `correlation_id`. No foreign keys: an entry outlives its user. `detail` holds what PNMTD has columns
+for: `{username, subjectName, summary, outcome: succeeded|failed|denied, error ("409 last_admin"), request
+("PUT /api/v1/users/{id:guid}"), userAgent, changes: [{object, field, old, new, kind, summary}], changesLeftOut}` –
+secrets only as `kind: "secret"`, never a value. Indexes (`at`), (`subject_id`, `at`), (`actor_user_id`, `at`),
+(`event`).
 
 ## 13. User settings
 

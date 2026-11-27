@@ -55,7 +55,7 @@ export function readCookie(name: string): string | null {
 
 const unsafe = (method: string) => !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())
 
-/** Unsafe calls echo the XSRF-TOKEN cookie (issued by /auth/me and the login, phase 1) in X-XSRF-TOKEN. */
+/** Unsafe calls echo the XSRF-TOKEN cookie (issued by /auth/me and the login) in X-XSRF-TOKEN. */
 export const csrf: Middleware = {
   onRequest({ request }) {
     if (unsafe(request.method)) {
@@ -80,8 +80,8 @@ type Listener = (error: ApiError, path: string) => void
 const listeners = new Set<Listener>()
 
 /**
- * Called for every failed call, before the caller sees it. Phase 1: the session store sends a 401 to the login and a
- * 403 must_change_password / totp_setup_required to the matching screen (PNMTD's sessionHandling.ts).
+ * Called for every failed call, before the caller sees it: sessionHandling.ts sends a 401 to the sign-in and a
+ * 403 must_change_password / totp_setup_required to the matching screen.
  */
 export function onApiError(listener: Listener): () => void {
   listeners.add(listener)

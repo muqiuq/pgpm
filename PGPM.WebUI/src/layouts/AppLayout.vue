@@ -77,18 +77,26 @@ async function install() {
   }
 }
 
-// Phase 1 fills in the signed-in user, the security page (own MCP tokens) and Sign out.
+async function signOut() {
+  await session.logout()
+  await router.replace({ name: 'sign-in' })
+}
+
+// The signed-in user: name and initial, Account, Security (own MCP tokens from phase 6), Install app, Sign out.
+const displayName = computed(() => session.user?.displayName ?? '')
+const initial = computed(() => (displayName.value.trim()[0] ?? '?').toUpperCase())
 const userMenu = ref<InstanceType<typeof Menu> | null>(null)
 const userItems = computed<MenuItem[]>(() => [
   {
-    label: 'Not signed in (phase 1)',
+    label: session.user ? `${displayName.value} (${session.user.username})` : 'Not signed in',
     items: [
       { label: 'Account', icon: 'pi pi-user', command: () => router.push({ name: 'account' }) },
+      { label: 'Security', icon: 'pi pi-shield', command: () => router.push({ name: 'security' }) },
       ...(installStatus.value === 'standalone' || installStatus.value === 'installed'
         ? []
         : [{ label: 'Install app', icon: 'pi pi-download', command: install }]),
       { separator: true },
-      { label: 'Sign out', icon: 'pi pi-sign-out', disabled: true },
+      { label: 'Sign out', icon: 'pi pi-sign-out', command: signOut },
     ],
   },
 ])
@@ -168,10 +176,11 @@ const userItems = computed<MenuItem[]>(() => [
             class="user-button"
             aria-haspopup="true"
             aria-controls="user-menu"
-            aria-label="User menu"
+            :aria-label="`User menu of ${displayName}`"
+            data-testid="user-menu"
             @click="(e: Event) => userMenu?.toggle(e)"
           >
-            <span class="avatar" aria-hidden="true"><i class="pi pi-user" /></span>
+            <span class="avatar" aria-hidden="true">{{ initial }}</span>
             <i class="pi pi-angle-down" aria-hidden="true" />
           </Button>
           <Menu id="user-menu" ref="userMenu" :model="userItems" popup />

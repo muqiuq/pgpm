@@ -39,6 +39,12 @@ public static class ApiSetup
         services.AddProblemDetails(o => o.CustomizeProblemDetails = context =>
         {
             var status = context.ProblemDetails.Status ?? context.HttpContext.Response.StatusCode;
+            // A session whose 30 days ended (Auth:LoginDays): the sign-in page says why.
+            if (status == StatusCodes.Status401Unauthorized && context.HttpContext.Items.ContainsKey(Auth.SessionRules.LoginExpiredItem))
+            {
+                context.ProblemDetails.Detail ??= "Your sign-in has expired. Sign in again.";
+                context.ProblemDetails.Extensions.TryAdd("code", Auth.SessionRules.LoginExpiredCode);
+            }
             context.ProblemDetails.Extensions.TryAdd("code", ApiErrorCodes.ForStatus(status));
         });
 

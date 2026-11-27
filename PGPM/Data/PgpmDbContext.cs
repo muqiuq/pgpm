@@ -1,6 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using PGPM.Audit;
+using PGPM.Auth;
+using PGPM.Auth.Rights;
+using PGPM.Persons;
 using PGPM.Lib.Helper;
 
 namespace PGPM.Data;
@@ -21,9 +26,24 @@ public class PgpmDbContext(DbContextOptions<PgpmDbContext> options) : DbContext(
 {
     public DbSet<KeyValueEntity> KeyValues => Set<KeyValueEntity>();
 
-    /// <summary>The one place the provider is chosen, for the app, the CLI, the design-time factory and the tests.</summary>
+    public DbSet<UserEntity> Users => Set<UserEntity>();
+
+    public DbSet<GroupEntity> Groups => Set<GroupEntity>();
+
+    public DbSet<UserGroupEntity> UserGroups => Set<UserGroupEntity>();
+
+    public DbSet<GroupRightEntity> GroupRights => Set<GroupRightEntity>();
+
+    public DbSet<PersonEntity> Persons => Set<PersonEntity>();
+
+    public DbSet<AuditLogEntity> AuditLog => Set<AuditLogEntity>();
+
+    /// <summary>
+    /// The one place the provider is chosen, for the app, the CLI, the design-time factory and the tests; with the audit's
+    /// change interceptor, which only acts inside a write request's audit scope.
+    /// </summary>
     public static DbContextOptionsBuilder Configure(DbContextOptionsBuilder options, string connectionString) =>
-        options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention();
+        options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention().AddInterceptors(AuditChangesInterceptor.Instance);
 
     public static PgpmDbContext Create(string connectionString) =>
         new(((DbContextOptionsBuilder<PgpmDbContext>)Configure(new DbContextOptionsBuilder<PgpmDbContext>(), connectionString)).Options);
@@ -43,8 +63,77 @@ public class PgpmDbContext(DbContextOptions<PgpmDbContext> options) : DbContext(
             e.HasKey(k => k.Key);
         });
 
+        // Identity (docs/02 §3). Phase 2 adds the synced-row columns to groups and persons.
+        modelBuilder.Entity<UserEntity>(e =>
+        {
+            e.ToTable("users");
+            e.HasIndex(u => u.NormalizedUsername).IsUnique();
+            e.HasIndex(u => new { u.MicrosoftTenantId, u.MicrosoftObjectId }).IsUnique()
+                .HasFilter("microsoft_object_id IS NOT NULL");
+            e.Property(u => u.AccessEpoch).HasDefaultValue(1);
+            e.Ignore(u => u.HasMicrosoftAccount);
+        });
+        modelBuilder.Entity<GroupEntity>(e =>
+        {
+            e.ToTable("groups");
+            e.HasIndex(g => g.NormalizedName).IsUnique();
+            e.HasIndex(g => g.EntraAppRole).IsUnique().HasFilter("entra_app_role IS NOT NULL");
+            e.Property(g => g.Description).HasMaxLength(500);
+        });
+        modelBuilder.Entity<UserGroupEntity>(e =>
+        {
+            e.ToTable("user_groups");
+            e.HasKey(m => new { m.UserId, m.GroupId });
+            e.HasOne(m => m.User).WithMany(u => u.Groups).HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(m => m.Group).WithMany(g => g.Members).HasForeignKey(m => m.GroupId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(m => m.GroupId);
+        });
+        modelBuilder.Entity<GroupRightEntity>(e =>
+        {
+            e.ToTable("group_rights", t =>
+            {
+                EnumCheck<Area>(t, "group_rights", "area");
+                EnumCheck(t, "group_rights", "level", Enum.GetValues<Level>().Where(l => l != Level.None));
+            });
+            e.HasKey(r => new { r.GroupId, r.Area });
+            e.HasOne(r => r.Group).WithMany(g => g.Rights).HasForeignKey(r => r.GroupId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Persons (docs/02 §5), minimal: every user has one.
+        modelBuilder.Entity<PersonEntity>(e =>
+        {
+            e.ToTable("persons", t =>
+            {
+                EnumCheck<PersonSource>(t, "persons", "source");
+                t.HasCheckConstraint("ck_persons_user_type", "user_type IS NULL OR user_type IN ('Member', 'Guest')");
+            });
+            e.HasIndex(p => new { p.EntraTenantId, p.EntraObjectId }).IsUnique().HasFilter("entra_object_id IS NOT NULL");
+            e.HasIndex(p => p.Email);
+            e.HasIndex(p => p.UserId).IsUnique().HasFilter("user_id IS NOT NULL");
+            e.HasOne<UserEntity>().WithMany().HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // The audit log (docs/02 §12): no foreign keys, an entry outlives its user.
+        modelBuilder.Entity<AuditLogEntity>(e =>
+        {
+            e.ToTable("audit_log", t => EnumCheck<AuditActor>(t, "audit_log", "actor"));
+            e.Property(a => a.Detail).HasColumnType("jsonb");
+            e.HasIndex(a => a.At);
+            e.HasIndex(a => new { a.SubjectId, a.At });
+            e.HasIndex(a => new { a.ActorUserId, a.At });
+            e.HasIndex(a => a.Event);
+        });
+
         EnumsAsLowerCaseText(modelBuilder);
         base.OnModelCreating(modelBuilder);
+    }
+
+    /// <summary>The CHECK constraint of an enum's lower-case text column (docs/02-data-model.md §1): <c>ck_&lt;table&gt;_&lt;column&gt;</c>.</summary>
+    internal static void EnumCheck<TEnum>(TableBuilder table, string tableName, string column, IEnumerable<TEnum>? values = null)
+        where TEnum : struct, Enum
+    {
+        var allowed = (values ?? Enum.GetValues<TEnum>()).Select(v => $"'{v.ToString().ToLowerInvariant()}'");
+        table.HasCheckConstraint($"ck_{tableName}_{column}", $"{column} IN ({string.Join(", ", allowed)})");
     }
 
     /// <summary>Every enum property without a conversion of its own becomes lower-case text (docs/02-data-model.md §1).</summary>

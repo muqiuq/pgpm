@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Small helpers without ASP.NET or EF Core: the clock and ids now, PasswordHasher and TotpService in phase 1
+  <!-- Small helpers without ASP.NET or EF Core: the clock, ids, PasswordHasher, TotpService
        (docs/03 §2.3). -->
   <PropertyGroup>
     <RootNamespace>PGPM.Lib</RootNamespace>

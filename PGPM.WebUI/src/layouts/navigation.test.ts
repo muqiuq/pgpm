@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest'
-import { holds, meets, type Area, type Level, type Right } from '@/api/rights'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { holds, meets, setCatalogue, type Area, type Level, type Right } from '@/api/rights'
 import { routes } from '@/router'
+import { catalogue } from '@/test/catalogue'
 import { navigation, visibleNavigation } from './navigation'
 
 describe('the menu (docs/01 §3)', () => {
+  beforeAll(() => setCatalogue(catalogue))
+
   const names = (groups: ReturnType<typeof visibleNavigation>) => groups.flatMap((g) => g.items.map((i) => i.name))
   /** A user without the admin flag holding exactly these levels. */
   const holding = (rights: Partial<Record<Area, Level>>) => (r: Right) =>
@@ -54,12 +57,14 @@ describe('the menu (docs/01 §3)', () => {
     expect(names(visibleNavigation(holding({ Mcp: 'Manage' })))).toContain('admin-mcp')
   })
 
-  it('has a route for every entry, with its name, path and right', () => {
+  it('has a route for every entry, with its name, path and right – a page, or the placeholder of its phase', () => {
+    const built = ['users', 'groups', 'audit-log']
     for (const item of navigation.flatMap((g) => g.items)) {
       const route = routes.find((r) => r.name === item.name)
       expect(route?.path, item.name).toBe(item.to)
       expect(route?.meta?.right, item.name).toEqual(item.right)
-      expect(route?.meta?.phase, item.name).toBeGreaterThan(0)
+      if (built.includes(item.name)) expect(route?.meta?.phase, item.name).toBeUndefined()
+      else expect(route?.meta?.phase, item.name).toBeGreaterThan(1)
     }
   })
 })

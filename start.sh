@@ -14,8 +14,9 @@
 #   ENGINE=docker ./start.sh       Docker instead of Podman
 #
 # Settings come from dev.env (gitignored, 0600, deploy/.env format: PublicUrl=…, TZ=…, Entra__ClientId=…), or the file
-# ENV_FILE names (tools/e2e.sh). The first run creates it with a generated database password and a password for the
-# first admin (admin, Auth__InitialAdmin__Password – read from phase 1 on, while the database has no users).
+# ENV_FILE names (tools/e2e.sh). The first run creates it with a generated database password and the first admin
+# (Auth__InitialAdmin__Username=admin and a generated Auth__InitialAdmin__Password, read while the database has no
+# users: the first sign-in changes the password). The sign-in is printed at the end.
 # ./stop.sh stops everything again.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -70,10 +71,15 @@ if [[ -z "$(setting PGPM_DB_PASSWORD)" ]]; then
   add_setting PGPM_DB_PASSWORD "$(random_secret)"
 fi
 db_password="$(setting PGPM_DB_PASSWORD)"
-# Read by the server while the database has no users (phase 1), as deploy/.env's.
+# Read by the server while the database has no users, as deploy/.env's.
+if [[ -z "$(setting Auth__InitialAdmin__Username)" ]]; then
+  add_setting Auth__InitialAdmin__Username admin
+fi
 if [[ -z "$(setting Auth__InitialAdmin__Password)" ]]; then
   add_setting Auth__InitialAdmin__Password "$(random_secret)"
 fi
+admin_username="$(setting Auth__InitialAdmin__Username)"
+admin_password="$(setting Auth__InitialAdmin__Password)"
 
 # Something else publishing a port would stop the app at the very end: said here, before the build.
 ports=("$PORT")
@@ -196,7 +202,8 @@ if [[ "$WEB" == dev ]]; then
   echo "Vite (HMR):  http://localhost:${WEB_PORT}/  (edits of PGPM.WebUI are live)"
 fi
 echo "API:         http://localhost:${PORT}/api/v1/  (document: PGPM.WebUI/src/api/openapi.json)"
-echo "Sign-in:     from phase 1 – admin, with Auth__InitialAdmin__Password from ${ENV_FILE}"
+echo "Sign-in:     ${admin_username} / ${admin_password}  (the first admin, from ${ENV_FILE}: valid until the first"
+echo "             sign-in changes it; with existing users the database's passwords count)"
 echo "Database:    ${DB_NAME} (volume ${PG_VOLUME}); psql: ${ENGINE} exec -it ${DB_NAME} psql -U pgpm"
 echo "Files:       ${FILES_DIR} (attachments)"
 echo "Logs:        ${ENGINE} logs -f ${NAME}"

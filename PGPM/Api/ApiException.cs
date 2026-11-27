@@ -27,12 +27,16 @@ public sealed class ApiException(int status, string code, string detail, IDictio
     public static ApiException Forbidden(string detail) => new(StatusCodes.Status403Forbidden, ApiErrorCodes.Forbidden, detail);
 
     /// <summary>
-    /// 403 <c>missing_right</c> with the area and level (docs/03 §6.1), for a right only a service can tell. Phase 1 types
-    /// the area and level with the rights catalogue's enums.
+    /// 403 <c>missing_right</c> with the area and level (docs/03 §6.1), for a right only a service can tell – as the
+    /// attributes' refusal says it (<see cref="Auth.Rights.MissingRightResultHandler"/>).
     /// </summary>
-    public static ApiException MissingRight(string area, string level) =>
-        new(StatusCodes.Status403Forbidden, ApiErrorCodes.MissingRight, $"You need {area}: {level}.",
-            extensions: new Dictionary<string, object?> { ["area"] = area, ["level"] = level });
+    public static ApiException MissingRight(Auth.Rights.Area area, Auth.Rights.Level level) =>
+        new(StatusCodes.Status403Forbidden, ApiErrorCodes.MissingRight, $"You need {Auth.Rights.RightsCatalog.Of(area).Label}: {level}.",
+            extensions: new Dictionary<string, object?> { ["area"] = area.ToString(), ["level"] = level.ToString() });
+
+    /// <summary>401 <c>unauthorized</c>.</summary>
+    public static ApiException Unauthorized(string detail = "Not signed in.") =>
+        new(StatusCodes.Status401Unauthorized, ApiErrorCodes.Unauthorized, detail);
 
     /// <summary>400 <c>validation_failed</c> without a field.</summary>
     public static ApiException BadRequest(string detail) => new(StatusCodes.Status400BadRequest, ApiErrorCodes.ValidationFailed, detail);

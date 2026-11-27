@@ -14,6 +14,7 @@ import 'primeicons/primeicons.css'
 import './design/base.css'
 import { PgpmPreset, darkClass } from './design/preset'
 import { queryClient } from './api/queries'
+import { installSessionHandling } from './composables/sessionHandling'
 import { registerServiceWorker } from './pwa/register'
 import App from './App.vue'
 import { router } from './router'
@@ -29,6 +30,7 @@ app.use(PrimeVue, {
 app.use(ToastService)
 app.use(ConfirmationService)
 app.directive('tooltip', Tooltip)
+installSessionHandling(router)
 app.mount('#app')
 
 void registerServiceWorker()

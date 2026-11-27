@@ -1,29 +1,19 @@
 import { expect, test, type Page } from '@playwright/test'
+import { problems, signInAsAdmin } from './helpers'
 
 /**
  * The walking skeleton (docs/05 §3 phase 0): the shell with the PGPM menu, installable as a PWA, and opening offline once
- * the service worker has cached it.
+ * the service worker has cached it – signed in as the admin (phase 1), whose session the app keeps for offline starts.
  */
-
-/** Script errors, CSP violations and Vue's warnings while a test runs: collected from the start, asserted at the end. */
-function problems(page: Page): string[] {
-  const seen: string[] = []
-  page.on('pageerror', (error) => seen.push(`pageerror: ${error.message}`))
-  page.on('console', (message) => {
-    const text = message.text()
-    if (message.type() === 'error' || /\[Vue warn\]|Content Security Policy/.test(text)) {
-      // Offline, the info call fails by design: the shell opens without the version.
-      if (/Failed to load resource: net::ERR_INTERNET_DISCONNECTED/.test(text)) return
-      seen.push(`${message.type()}: ${text}`)
-    }
-  })
-  return seen
-}
 
 /** Waits until a service worker controls the page (the first one claims it: src/sw.ts). */
 async function controlled(page: Page) {
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 30_000 })
 }
+
+test.beforeEach(async ({ page }) => {
+  await signInAsAdmin(page)
+})
 
 test('the shell shows the PGPM menu, folded administration and the placeholders', async ({ page }) => {
   const seen = problems(page)
@@ -135,6 +125,7 @@ test('the shell opens offline after the first load', async ({ page, context }) =
     await expect(page.getByTestId('sync-indicator')).toHaveText('Offline')
     await page.goto('/admin/audit-log')
     await expect(page.getByRole('heading', { level: 1, name: 'Audit log' })).toBeVisible()
+    await expect(page.getByTestId('user-menu')).toBeVisible()
     await page.getByRole('link', { name: 'Notes', exact: true }).click()
     await expect(page.getByText('Coming in phase 2')).toBeVisible()
   } finally {

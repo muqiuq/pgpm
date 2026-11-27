@@ -17,7 +17,7 @@ afterEach(() => {
   document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
 })
 
-/** The middleware on its own: no unsafe v1 endpoint exists before phase 1. */
+/** The middleware on its own, without a server. */
 async function throughCsrf(method: string): Promise<Request> {
   const request = new Request('http://localhost/api/v1/info', { method })
   const out = await csrf.onRequest!({ request } as Parameters<NonNullable<typeof csrf.onRequest>>[0])

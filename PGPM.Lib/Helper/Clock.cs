@@ -19,6 +19,18 @@ public static class Clock
     /// <summary>The wall-clock time in <see cref="TimeZone"/> (Kind Unspecified).</summary>
     public static DateTime ToLocal(DateTime instant) => TimeZoneInfo.ConvertTimeFromUtc(AsUtc(instant), TimeZone);
 
+    /// <summary>A wall-clock time in <see cref="TimeZone"/> as a UTC instant. A time that a DST switch skips is taken an
+    /// hour later.</summary>
+    public static DateTime ToUtc(DateTime local)
+    {
+        var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        if (TimeZone.IsInvalidTime(unspecified))
+        {
+            unspecified = unspecified.AddHours(1);
+        }
+        return TimeZoneInfo.ConvertTimeToUtc(unspecified, TimeZone);
+    }
+
     /// <summary>Unspecified is taken as UTC; Local (the process's zone) is converted.</summary>
     public static DateTime AsUtc(DateTime value) => value.Kind switch
     {

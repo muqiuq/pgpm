@@ -51,16 +51,30 @@ public static class DatabaseMigrator
 }
 
 /// <summary>
-/// Registered before every other hosted service, so they start on a migrated database. Phase 1 seeds the first admin
-/// here (Auth:InitialAdmin:*), PNMTD's UserAccounts.SeedAsync.
+/// Registered before every other hosted service, so they start on a migrated database. Then the first admin while there
+/// is no user (Auth:InitialAdmin:*, PNMTD's UserAccounts.SeedAsync): a generated password is logged once.
 /// </summary>
-public sealed class DatabaseMigrationService(IDbContextFactory<PgpmDbContext> factory, ILogger<DatabaseMigrationService> logger)
-    : IHostedService
+public sealed class DatabaseMigrationService(IDbContextFactory<PgpmDbContext> factory, IConfiguration configuration,
+    ILogger<DatabaseMigrationService> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         DatabaseMigrator.Migrate(db, logger);
+        var (admin, generated) = await new Auth.UserAccounts(db).SeedAsync(configuration, cancellationToken);
+        if (admin is not null)
+        {
+            if (generated is not null)
+            {
+                logger.LogWarning("Created the first admin {Username} with the password {Password} – shown only now; it must be changed at the "
+                    + "first sign-in. Set Auth__InitialAdmin__Password to choose it.", admin.Username, generated);
+            }
+            else
+            {
+                logger.LogInformation("Created the first admin {Username} with Auth:InitialAdmin:Password; it must be changed at the first sign-in.",
+                    admin.Username);
+            }
+        }
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

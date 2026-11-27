@@ -8,7 +8,8 @@ namespace PGPM.Tests;
 
 /// <summary>
 /// Once per test run: a fresh PostgreSQL database (pgpm_test) on the server PGPM_TEST_DB names, by default the one
-/// tools/test-db.sh starts, migrated before any app starts; a stand-in for the UI build; and the settings the tests need.
+/// tools/test-db.sh starts, migrated before any app starts, with the test users (<see cref="TestUsers"/>); a stand-in for
+/// the UI build; and the settings the tests need.
 /// </summary>
 [TestClass]
 public static class TestDefaults
@@ -43,6 +44,8 @@ public static class TestDefaults
         Configuration = new ConfigurationBuilder().AddEnvironmentVariables().Build();
         using var db = PgpmDbContext.Create(DatabaseSettings.ConnectionString(Configuration));
         DatabaseMigrator.Migrate(db, NullLogger.Instance);
+        // Before any app starts: with users in the table, no app seeds an initial admin.
+        TestUsers.Seed(db);
     }
 
     private static string CreateWebRoot(string scratch)
