@@ -12,10 +12,12 @@
 #             registry's signatures, the API types against openapi.json, vue-tsc, ESLint, Prettier, Vitest, the build
 #   contract  PGPM.Contract.Tests against the image from the working tree (tools/contract.sh)
 #   e2e       the browser tests (Playwright) against the image, incl. the offline shell (tools/e2e.sh)
-#   shell     bash -n and shellcheck (in a container) over every script
+#   shell     bash -n and shellcheck (in a container) over every script, and the configuration packages
+#             (tools/check-packages.py: the schema, references, scores, defaults)
 #
-# dotnet runs with the .NET SDK on this machine; node never does: the web group copies PGPM.WebUI into a node
-# container (the repository stays read-only), with npm's cache in a volume. Podman by default, ENGINE=docker for Docker.
+# dotnet and python3 (standard library only) run on this machine; node never does: the web group copies PGPM.WebUI into
+# a node container (the repository stays read-only), with npm's cache in a volume. Podman by default, ENGINE=docker for
+# Docker.
 # Each step's output goes to a log under .tmpcheck/, shown only when it fails.
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
@@ -169,6 +171,7 @@ group_shell() {
   step "bash -n" bash -c 'for f in "$@"; do bash -n "$f" || exit 1; done' _ "${scripts[@]}"
   step "shellcheck" "$ENGINE" run --rm -v "$PWD:/w:ro" -w /w docker.io/koalaman/shellcheck:stable \
     --severity=warning --external-sources "${scripts[@]}"
+  step "packages (tools/check-packages.py)" python3 -I tools/check-packages.py
 }
 
 for group in "${selected[@]}"; do
