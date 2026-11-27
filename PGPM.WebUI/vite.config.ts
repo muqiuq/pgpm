@@ -27,11 +27,24 @@ const manifest = {
     { src: '/pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
   ],
-  // Phase 3 turns these into "New note" and "New idea".
+  // The installed app's jump list: `?new=1` opens the list's create dialog (src/views/items/createRequest.ts); an open
+  // window is focused and handed the URL (launch_handler, src/pwa/launch.ts).
   shortcuts: [
+    {
+      name: 'New note',
+      short_name: 'Note',
+      description: 'Write down a note',
+      url: '/notes?new=1',
+      icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
+    },
+    {
+      name: 'New idea',
+      short_name: 'Idea',
+      description: 'Capture an idea',
+      url: '/ideas?new=1',
+      icons: [{ src: '/pwa-192.png', sizes: '192x192', type: 'image/png' }],
+    },
     { name: 'Maps', url: '/maps' },
-    { name: 'Ideas', url: '/ideas' },
-    { name: 'Notes', url: '/notes' },
   ],
 }
 

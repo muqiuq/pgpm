@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
-import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
 import { computed, ref } from 'vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -17,6 +15,7 @@ import { toMapRow } from '@/maps/mapRows'
 import { matrixCandidates } from '@/maps/matrixItems'
 import type { ItemRow as MapItemRow } from '@/maps/types'
 import { KIND_ICONS, KIND_LABELS, quadrantsOf, type FieldDefinitionRecord } from './mapList'
+import MapPickerDialog from './MapPickerDialog.vue'
 
 /**
  * An item's *Maps* tab (doc 01 §4.4, §12.4): the canvas maps it is placed on – how often – and the matrix maps that
@@ -101,14 +100,6 @@ const rows = computed(() => {
 
 // --- Add to map… ---
 const adding = ref(false)
-const query = ref('')
-const targets = computed(() => {
-  const q = query.value.trim().toLowerCase()
-  return maps.value.value
-    .filter((m) => m.kind === 'canvas' && !m.isTemplate && (m.access === 'edit' || m.access === 'manage'))
-    .filter((m) => !q || m.name.toLowerCase().includes(q))
-    .sort((a, b) => a.name.localeCompare(b.name))
-})
 async function addTo(map: MapRecord) {
   try {
     await repo.transaction((tx) => addCardToMap(tx, map.id, props.item.id))
@@ -131,7 +122,7 @@ const info = computed(() => itemTypes[props.item.type])
         severity="secondary"
         outlined
         :disabled="item.deleted"
-        @click="((query = ''), (adding = true))"
+        @click="adding = true"
       />
     </div>
     <EmptyState
@@ -153,29 +144,12 @@ const info = computed(() => itemTypes[props.item.type])
         <span class="muted">{{ row.text }}</span>
       </li>
     </ul>
-    <Dialog v-model:visible="adding" header="Add to map" modal :style="{ width: 'min(30rem, 100vw)' }">
-      <InputText
-        v-model="query"
-        placeholder="Search maps…"
-        size="small"
-        class="search"
-        aria-label="Search maps"
-        autofocus
-      />
-      <ul class="choices">
-        <li v-for="m in targets" :key="m.id">
-          <button type="button" @click="addTo(m)">
-            <i :class="KIND_ICONS[m.kind]" aria-hidden="true" />
-            <span class="label">{{ m.name }}</span>
-            <span v-if="placements.value.value.get(m.id)" class="muted small">
-              on it · {{ placements.value.value.get(m.id) }}×
-            </span>
-          </button>
-        </li>
-        <li v-if="!targets.length" class="muted">No canvas map you can edit.</li>
-      </ul>
-      <small class="muted">The card goes in the middle of the map; matrix maps place their items themselves.</small>
-    </Dialog>
+    <MapPickerDialog
+      v-model:visible="adding"
+      :placements="placements.value.value"
+      hint="The card goes in the middle of the map; matrix maps place their items themselves."
+      @pick="addTo"
+    />
   </section>
 </template>
 
@@ -210,44 +184,5 @@ const info = computed(() => itemTypes[props.item.type])
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.search {
-  width: 100%;
-}
-
-.choices {
-  list-style: none;
-  margin: var(--pgpm-space-2) 0;
-  padding: 0;
-  max-height: 50vh;
-  overflow-y: auto;
-}
-
-.choices button {
-  display: flex;
-  align-items: center;
-  gap: var(--pgpm-space-2);
-  width: 100%;
-  padding: 6px 4px;
-  border: 0;
-  background: none;
-  color: var(--pgpm-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  border-radius: var(--p-border-radius-sm);
-}
-
-.choices button:hover {
-  background: var(--p-content-hover-background);
-}
-
-.label {
-  flex: 1;
-}
-
-.small {
-  font-size: 0.857rem;
 }
 </style>

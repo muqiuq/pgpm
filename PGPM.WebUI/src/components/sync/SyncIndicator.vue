@@ -14,7 +14,8 @@ const label = computed(
   () =>
     ({
       live: 'Live',
-      syncing: 'Syncing',
+      // The first sync after signing in copies everything once (docs/03 §12.6): it says so.
+      syncing: sync.firstSync ? 'First sync' : 'Syncing',
       online: 'Online',
       offline: 'Offline',
       starting: 'Connecting',

@@ -94,11 +94,18 @@ export const usePreferences = defineStore('preferences', () => {
     return theme.value === 'dark' || (theme.value === 'system' && systemDark.value)
   }
 
-  function apply() {
-    document.documentElement.classList.toggle(darkClass, isDark())
+  // Printing is always light (dark text on paper, docs/03 §12.10): the dark class is off from beforeprint to afterprint.
+  const printing = ref(false)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeprint', () => (printing.value = true))
+    window.addEventListener('afterprint', () => (printing.value = false))
   }
 
-  watch([theme, systemDark], apply, { immediate: true })
+  function apply() {
+    document.documentElement.classList.toggle(darkClass, isDark() && !printing.value)
+  }
+
+  watch([theme, systemDark, printing], apply, { immediate: true, flush: 'sync' })
   watch(
     [theme, drawerCollapsed, navFolds, tableWidths, editorModes],
     () =>

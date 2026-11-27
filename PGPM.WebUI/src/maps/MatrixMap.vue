@@ -18,10 +18,15 @@ import type { LayerRow } from './types'
  * Free elements and layers go on top, with the canvas' tools and components (MapCanvas with the cards as a virtual
  * layer); the quadrant is a badge on every card and a filter.
  */
-const props = withDefaults(defineProps<{ source: MapDataSource; focus?: string | null; readonly?: boolean }>(), {
-  focus: null,
-  readonly: false,
-})
+const props = withDefaults(
+  defineProps<{
+    source: MapDataSource
+    focus?: string | null
+    readonly?: boolean
+    templateNames?: ReadonlyMap<string, string> | null
+  }>(),
+  { focus: null, readonly: false, templateNames: null },
+)
 const emit = defineEmits<{
   openItem: [itemId: string]
   requestImage: [request: ImageRequest]
@@ -68,6 +73,7 @@ defineExpose({ canvas, scene })
     :tools="MATRIX_TOOLS"
     :virtual="virtual"
     :quadrants="quadrants"
+    :template-names="templateNames"
     :world="scene?.layout.world ?? null"
     animated
     @open-item="(id) => emit('openItem', id)"

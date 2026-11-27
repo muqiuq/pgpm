@@ -113,13 +113,14 @@ const s = () => props.map.settings ?? {}
       </label>
     </div>
     <div v-if="badgeFields.length" class="field">
-      <label for="map-badges">Badges on cards</label>
+      <label id="map-badges-label" for="map-badges">Badges on cards</label>
       <MultiSelect
         :model-value="s().cardBadges ?? []"
         :options="badgeFields"
         option-label="label"
         option-value="value"
         input-id="map-badges"
+        aria-labelledby="map-badges-label"
         size="small"
         display="chip"
         filter

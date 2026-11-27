@@ -19,10 +19,26 @@ export const useSyncStore = defineStore('sync', () => {
     async () => (await localDb().conflicts.toArray()).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     [] as ConflictEntry[],
   )
+  // When this device last synced (meta `lastSyncAt`): never means the first sync after signing in is still running.
+  const lastSynced = useLive(() => localDb().getMeta<string | null>('lastSyncAt', null), null as string | null)
   onWipe('after', () => {
     pending.refresh()
     conflictList.refresh()
+    lastSynced.refresh()
   })
+  /**
+   * The first sync after signing in hasn't finished (docs/03 §12.6): the statuses, templates, sections and groups may
+   * not be on the device yet, so creating waits and the lists say why they are empty. Only while the engine runs (a
+   * stopped one – signed out, the tests – never syncs).
+   */
+  const firstSync = computed(
+    () =>
+      lastSynced.loaded.value &&
+      !lastSynced.value.value &&
+      !status.lastSyncAt &&
+      status.connection !== 'stopped' &&
+      status.connection !== 'signed-out',
+  )
 
   const state = computed<SyncState>(() => {
     if (status.syncing) return 'syncing'
@@ -56,6 +72,7 @@ export const useSyncStore = defineStore('sync', () => {
     pendingCount: computed(() => pending.value.value),
     conflicts: computed(() => conflictList.value.value),
     conflictCount: computed(() => conflictList.value.value.length),
+    firstSync,
     dialogOpen,
     dialogTab,
     openDialog,

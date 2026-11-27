@@ -229,10 +229,11 @@ function setLabel(n: number, text: string) {
           }}</small>
         </div>
         <div class="field">
-          <label for="fd-type">Type</label>
+          <label id="fd-type-label" for="fd-type">Type</label>
           <Select
             v-model="type"
             input-id="fd-type"
+            aria-labelledby="fd-type-label"
             :options="typeOptions"
             option-label="label"
             option-value="value"
@@ -242,10 +243,11 @@ function setLabel(n: number, text: string) {
           <small v-if="errors.type" class="field-error">{{ errors.type }}</small>
         </div>
         <div class="field">
-          <label for="fd-section">Section</label>
+          <label id="fd-section-label" for="fd-section">Section</label>
           <Select
             v-model="section"
             input-id="fd-section"
+            aria-labelledby="fd-section-label"
             :options="sectionOptions"
             option-label="label"
             option-value="value"
@@ -377,7 +379,7 @@ function setLabel(n: number, text: string) {
       </fieldset>
 
       <div v-if="hasDefault" class="field">
-        <label for="fd-default">Default value</label>
+        <label id="fd-default-label" for="fd-default">Default value</label>
         <FieldValueInput v-model="defaultValue" :field="draft" input-id="fd-default" :invalid="!!errors.defaultValue" />
         <small v-if="errors.defaultValue" class="field-error">{{ errors.defaultValue }}</small>
         <small v-else class="field-hint">Filled in when the section is added to an item.</small>

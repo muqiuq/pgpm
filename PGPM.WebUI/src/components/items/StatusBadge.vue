@@ -21,7 +21,14 @@ defineProps<{ status?: StatusRow | null; overdue?: string | null }>()
       <span class="name">{{ status.name }}</span>
     </span>
     <span v-else-if="!overdue" class="muted">–</span>
-    <span v-if="overdue" v-tooltip.top="overdue" class="overdue" :aria-label="`Overdue: ${overdue}`" tabindex="0">
+    <span
+      v-if="overdue"
+      v-tooltip.top="overdue"
+      role="img"
+      class="overdue"
+      :aria-label="`Overdue: ${overdue}`"
+      tabindex="0"
+    >
       <i class="pi pi-clock" aria-hidden="true" /> Overdue
     </span>
   </span>

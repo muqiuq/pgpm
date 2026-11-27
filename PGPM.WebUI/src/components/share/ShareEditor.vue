@@ -34,12 +34,13 @@ function set(groupId: string, access: Access | null) {
     <p v-if="!props.groups.length" class="muted">No groups yet: only you (and admins) will see it.</p>
     <ul v-else>
       <li v-for="group in props.groups" :key="group.id">
-        <label :for="`${idPrefix}-${group.id}`" class="name">
+        <label :id="`${idPrefix}-${group.id}-label`" :for="`${idPrefix}-${group.id}`" class="name">
           <span>{{ group.name }}</span>
           <small v-if="group.description" class="muted ellipsis">{{ group.description }}</small>
         </label>
         <Select
           :input-id="`${idPrefix}-${group.id}`"
+          :aria-labelledby="`${idPrefix}-${group.id}-label`"
           :model-value="accessOf.get(group.id) ?? null"
           :options="levels"
           option-label="label"

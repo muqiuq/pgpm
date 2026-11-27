@@ -150,10 +150,11 @@ const statusOptions = () => [
           />
           <div v-if="m.kind === 'gate'" class="form-grid">
             <div class="field">
-              <label :for="`ms-go-${i}`">On <strong>go</strong> suggest</label>
+              <label :id="`ms-go-${i}-label`" :for="`ms-go-${i}`">On <strong>go</strong> suggest</label>
               <Select
                 :model-value="m.onGoStatusId"
                 :input-id="`ms-go-${i}`"
+                :aria-labelledby="`ms-go-${i}-label`"
                 :options="statusOptions()"
                 option-label="label"
                 option-value="value"
@@ -167,10 +168,11 @@ const statusOptions = () => [
               }}</small>
             </div>
             <div class="field">
-              <label :for="`ms-nogo-${i}`">On <strong>no-go</strong> suggest</label>
+              <label :id="`ms-nogo-${i}-label`" :for="`ms-nogo-${i}`">On <strong>no-go</strong> suggest</label>
               <Select
                 :model-value="m.onNoGoStatusId"
                 :input-id="`ms-nogo-${i}`"
+                :aria-labelledby="`ms-nogo-${i}-label`"
                 :options="statusOptions()"
                 option-label="label"
                 option-value="value"

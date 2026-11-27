@@ -108,7 +108,7 @@ const opacities = [1, 0.85, 0.7, 0.5, 0.3].map((v) => ({ label: `${Math.round(v 
     </div>
     <div v-if="keys.has('arrowStart')" class="row">
       <div class="field">
-        <label for="style-start">Start</label>
+        <label id="style-start-label" for="style-start">Start</label>
         <Select
           :model-value="value('arrowStart') ?? null"
           :options="heads"
@@ -116,12 +116,13 @@ const opacities = [1, 0.85, 0.7, 0.5, 0.3].map((v) => ({ label: `${Math.round(v 
           option-value="value"
           size="small"
           input-id="style-start"
+          aria-labelledby="style-start-label"
           :disabled="disabled"
           @update:model-value="(v: string) => set('arrowStart', v)"
         />
       </div>
       <div class="field">
-        <label for="style-end">End</label>
+        <label id="style-end-label" for="style-end">End</label>
         <Select
           :model-value="value('arrowEnd') ?? null"
           :options="heads"
@@ -129,6 +130,7 @@ const opacities = [1, 0.85, 0.7, 0.5, 0.3].map((v) => ({ label: `${Math.round(v 
           option-value="value"
           size="small"
           input-id="style-end"
+          aria-labelledby="style-end-label"
           :disabled="disabled"
           @update:model-value="(v: string) => set('arrowEnd', v)"
         />
@@ -214,7 +216,7 @@ const opacities = [1, 0.85, 0.7, 0.5, 0.3].map((v) => ({ label: `${Math.round(v 
         aria-label="Alignment"
         @update:model-value="(v: string) => set('align', v)"
       >
-        <template #option="{ option }"><i :class="option.icon" :aria-label="option.label" /></template>
+        <template #option="{ option }"><i role="img" :class="option.icon" :aria-label="option.label" /></template>
       </SelectButton>
     </div>
     <div v-if="keys.has('radius') || keys.has('opacity')" class="row">
@@ -233,7 +235,7 @@ const opacities = [1, 0.85, 0.7, 0.5, 0.3].map((v) => ({ label: `${Math.round(v 
         />
       </div>
       <div v-if="keys.has('opacity')" class="field">
-        <label for="style-opacity">Opacity</label>
+        <label id="style-opacity-label" for="style-opacity">Opacity</label>
         <Select
           :model-value="value('opacity') ?? null"
           :options="opacities"
@@ -241,6 +243,7 @@ const opacities = [1, 0.85, 0.7, 0.5, 0.3].map((v) => ({ label: `${Math.round(v 
           option-value="value"
           size="small"
           input-id="style-opacity"
+          aria-labelledby="style-opacity-label"
           :disabled="disabled"
           @update:model-value="(v: number) => set('opacity', v)"
         />

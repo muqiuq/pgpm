@@ -2,7 +2,7 @@
 # Every check, in one command (docs/03 §2.4, docs/05 §5; adapted from PNMTD's).
 #
 #   ./run-tests.sh                  everything
-#   ./run-tests.sh --only web       one group: dotnet, web, contract, e2e, shell (several: --only dotnet,web)
+#   ./run-tests.sh --only web       one group: dotnet, web, contract, e2e, deploy, shell (several: --only dotnet,web)
 #   ./run-tests.sh --list           what it would run
 #
 # Groups:
@@ -12,6 +12,8 @@
 #             registry's signatures, the API types against openapi.json, vue-tsc, ESLint, Prettier, Vitest, the build
 #   contract  PGPM.Contract.Tests against the image from the working tree (tools/contract.sh)
 #   e2e       the browser tests (Playwright) against the image, incl. the offline shell (tools/e2e.sh)
+#   deploy    deploy/ for real (tools/deploy-test.sh): the image built, init, up, sign-in, the user scripts, a note and a
+#             file, backup, restore into a fresh stack, update, info, down — docker with compose (on a Mac: on Podman)
 #   shell     bash -n and shellcheck (in a container) over every script, and the configuration packages
 #             (tools/check-packages.py: the schema, references, scores, defaults)
 #
@@ -24,7 +26,7 @@ cd "$(dirname "$0")" || exit 1
 
 ENGINE="${ENGINE:-podman}"
 # dotnet first: its build writes the OpenAPI document the web group checks the UI's types against.
-ALL_GROUPS=(dotnet web contract e2e shell)
+ALL_GROUPS=(dotnet web contract e2e deploy shell)
 NODE_IMAGE="${NODE_IMAGE:-docker.io/library/node:24-slim}"
 NPM_CACHE="${NPM_CACHE:-pgpm-npm-cache}"
 WEB_HOLDER="pgpm-test-web-$$"
@@ -163,6 +165,15 @@ group_e2e() {
   step "browser tests (Playwright) against the image" env ENGINE="$ENGINE" tools/e2e.sh
 }
 
+# The image under IMAGE (pgpm:dev, as ./start.sh builds it), then deploy/ against it with a compose project and port of
+# its own (DEPLOY_TEST_PROJECT, DEPLOY_TEST_PORT: pgpm-deploytest, 7390).
+group_deploy() {
+  echo "deploy"
+  local image="${IMAGE:-pgpm:dev}"
+  step "image from the working tree (${image})" "$ENGINE" build -q -t "$image" -f Dockerfile .
+  step "init, up, users, note and file, backup, restore, update" env IMAGE="$image" tools/deploy-test.sh
+}
+
 group_shell() {
   echo "shell"
   local scripts=(start.sh stop.sh run-tests.sh tools/*.sh)
@@ -177,7 +188,7 @@ group_shell() {
 
 for group in "${selected[@]}"; do
   case "$group" in
-    dotnet|web|contract|e2e|shell) "group_$group" ;;
+    dotnet|web|contract|e2e|deploy|shell) "group_$group" ;;
     *) echo "unknown group: $group (${ALL_GROUPS[*]})" >&2; exit 2 ;;
   esac
 done

@@ -11,6 +11,7 @@ import FilterBar from '@/components/FilterBar.vue'
 import ColumnChooser from '@/components/items/ColumnChooser.vue'
 import SavedViewMenu from '@/components/items/SavedViewMenu.vue'
 import ListTable from '@/components/ListTable.vue'
+import FirstSyncNotice from '@/components/sync/FirstSyncNotice.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { useLocalTable, type ViewState } from '@/composables/useLocalTable'
 import { useNow } from '@/composables/useNow'
@@ -31,6 +32,7 @@ import {
 } from '@/local/rows'
 import { useLive } from '@/local/useLive'
 import { useSession } from '@/stores/session'
+import { useSyncStore } from '@/stores/sync'
 import { formatDay, groupBy } from '@/views/items/itemList'
 import {
   cleanGateFilters,
@@ -61,6 +63,7 @@ type Gate = Stored<MilestoneRow>
 const route = useRoute()
 const router = useRouter()
 const session = useSession()
+const sync = useSyncStore()
 const groups = useGroups()
 const persons = usePersons()
 const users = useUserPersons()
@@ -235,10 +238,11 @@ const decidedOn = (m: Gate) => {
       <Popover ref="filtersPanel">
         <div class="form further" role="dialog" aria-label="More filters">
           <div class="field">
-            <label for="gate-templates">Template</label>
+            <label id="gate-templates-label" for="gate-templates">Template</label>
             <MultiSelect
               :model-value="filters.templateIds ?? []"
               input-id="gate-templates"
+              aria-labelledby="gate-templates-label"
               :options="templateChoices"
               option-label="label"
               option-value="value"
@@ -248,10 +252,11 @@ const decidedOn = (m: Gate) => {
             />
           </div>
           <div class="field">
-            <label for="gate-groups">Shared with</label>
+            <label id="gate-groups-label" for="gate-groups">Shared with</label>
             <MultiSelect
               :model-value="filters.groupIds ?? []"
               input-id="gate-groups"
+              aria-labelledby="gate-groups-label"
               :options="groupChoices"
               option-label="label"
               option-value="value"
@@ -268,7 +273,8 @@ const decidedOn = (m: Gate) => {
         <ColumnChooser v-model="columns" :columns="gateColumns" :defaults="defaultGateColumns" />
       </template>
     </FilterBar>
-    <ListTable :table="table" what="gates" fixed @select="open">
+    <ListTable :table="table" what="gates" fixed row-links @select="open">
+      <template v-if="sync.firstSync" #empty><FirstSyncNotice /></template>
       <Column
         v-for="col in shownColumns"
         :key="col.id"
@@ -294,6 +300,7 @@ const decidedOn = (m: Gate) => {
             <i
               v-if="data._local?.pending"
               v-tooltip.top="'Not synced yet'"
+              role="img"
               class="pi pi-cloud-upload muted"
               aria-label="Not synced yet"
             />

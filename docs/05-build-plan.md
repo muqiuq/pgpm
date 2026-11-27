@@ -3,6 +3,21 @@
 > Status: v1.0 (2026-11-27)
 > Specification: [01-functional-overview.md](01-functional-overview.md) · [02-data-model.md](02-data-model.md) · [03-implementation-reference.md](03-implementation-reference.md) · [04-innovation-methodology.md](04-innovation-methodology.md)
 
+## Status (2026-11-27)
+
+| Phase | State |
+|---|---|
+| 0 Bootstrap | done |
+| 1 Identity and rights | done |
+| 2 Sync core | done, integrated (client and server aligned, e2e and contract tests) |
+| 3 Items, lists, detail pages | done, integrated |
+| 4 Configuration and method | done (server and client; packages `core`, `innovation-ai`) |
+| 5 Maps | done (canvas, matrix, templates, wired to the local database) |
+| 6 Directory and MCP | done, pulled forward after phase 2 (the dev-tenant check, P1, is by hand) |
+| 7 Hardening and release 1.0 | in progress in three tracks: H1 MCP tools, System page, security review, performance, e2e robustness · H2 client polish and accessibility · H3 deploy scripts (`init`, `backup`, `restore`, `update`, `info`), the `deploy` test group, CI with caches and the image release on tags, README, [admin guide](admin-guide.md), [user guide](user-guide.md), [release notes](release-notes-1.0.md), version 1.0.0 |
+
+Open before production: P2 (host, domain, TLS, proxy) and P3 (image name, registry and its secrets).
+
 ## 1. Approach
 
 - **Walking skeleton first, sync core second.** Every feature in PGPM is

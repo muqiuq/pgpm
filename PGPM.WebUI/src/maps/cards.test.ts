@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cssColor, dodProgress, itemColor, itemKey, milestoneOverdue, milestoneTone } from './cards'
-import { commandFor } from './keyboard'
+import { commandFor, isControl, isControlKey } from './keyboard'
 import { C1, IDEA, PROJECT, setup, uid } from './testFixtures'
 
 describe('card models', () => {
@@ -99,11 +99,19 @@ describe('keyboard', () => {
     expect(key('[', { ctrlKey: true, shiftKey: true })).toBe('toBack')
     expect(key('f')).toBe('fit')
     expect(key('Escape')).toBe('escape')
+    expect(key('Enter')).toBe('enter')
+    expect(key('F6')).toBe('panel')
     expect(key('x')).toBeNull()
   })
 
-  it('leaves keys typed into a field alone', () => {
+  it('leaves keys typed into a field alone, and a focused control its own keys', () => {
     const input = document.createElement('input')
     expect(commandFor({ key: 'Delete', target: input })).toBeNull()
+    const button = document.createElement('button')
+    expect(commandFor({ key: 'Enter', target: button })).toBeNull()
+    expect(commandFor({ key: ' ', target: button })).toBeNull()
+    expect(isControl(button) && isControlKey({ key: 'ArrowDown' })).toBe(true)
+    // The map's own shortcuts still work from a toolbar button.
+    expect(commandFor({ key: 'z', ctrlKey: true, target: button })).toBe('undo')
   })
 })

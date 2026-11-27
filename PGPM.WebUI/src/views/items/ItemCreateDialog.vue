@@ -9,6 +9,7 @@ import { useRouter } from 'vue-router'
 import type { ShareSpec } from '@/api/sync'
 import TemplatePicker from '@/components/items/TemplatePicker.vue'
 import ShareEditor from '@/components/share/ShareEditor.vue'
+import FirstSyncNotice from '@/components/sync/FirstSyncNotice.vue'
 import { useNotify } from '@/composables/useNotify'
 import { itemTypes } from '@/domain/itemTypes'
 import { useTemplates } from '@/local/catalogue'
@@ -24,6 +25,7 @@ import {
   templateStatus,
 } from '@/local/templates'
 import { useSession } from '@/stores/session'
+import { useSyncStore } from '@/stores/sync'
 
 /**
  * *New note / idea / lead / project* (docs/01 §4.4, §10.2): a title, the status (ideas, leads, projects: the type's
@@ -31,7 +33,8 @@ import { useSession } from '@/stores/session'
  * pick a template (or *Blank project*): its allowed statuses and default status, its default shares and – for its
  * milestones – the start date (today). Created locally in one outbox batch – the item, its shares, its sections and
  * field defaults (ideas: the sections *default for ideas*), a template's milestones and gates – so it works offline; then
- * the item's page opens.
+ * the item's page opens. Until the first sync after signing in has brought the configuration, it says so and waits
+ * (the statuses, sections and templates decide what the item gets).
  */
 const props = defineProps<{ type: ItemType }>()
 const visible = defineModel<boolean>('visible', { default: false })
@@ -41,6 +44,7 @@ const notify = useNotify()
 const groups = useGroups()
 const statuses = useStatuses()
 const { templates } = useTemplates()
+const sync = useSyncStore()
 
 const info = computed(() => itemTypes[props.type])
 const title = ref('')
@@ -72,7 +76,10 @@ const preselected = computed(() => {
   if (props.type === 'project') return templateStatus(statuses.all.value, template.value)?.id ?? null
   return defaultStatus(statuses.all.value, props.type)?.id ?? null
 })
-const noStatus = computed(() => info.value.hasStatus && statuses.loaded.value && !options.value.length)
+const preparing = computed(() => sync.firstSync)
+const noStatus = computed(
+  () => !preparing.value && info.value.hasStatus && statuses.loaded.value && !options.value.length,
+)
 const hasMilestones = computed(() => !!template.value?.milestones.length)
 
 watch(
@@ -100,7 +107,7 @@ watch(preselected, (next, before) => {
 
 async function create() {
   error.value = titleError(title.value)
-  if (error.value) return
+  if (error.value || preparing.value) return
   if (info.value.hasStatus && !statusId.value) return
   saving.value = true
   try {
@@ -127,6 +134,7 @@ async function create() {
 <template>
   <Dialog v-model:visible="visible" :header="`New ${info.label}`" modal :style="{ width: 'min(30rem, 100vw)' }">
     <form :id="formId" class="form" novalidate @submit.prevent="create">
+      <FirstSyncNotice v-if="preparing" compact />
       <div class="field">
         <label :for="`${formId}-title`">Title</label>
         <InputText :id="`${formId}-title`" v-model="title" autofocus maxlength="300" :invalid="!!error" />
@@ -174,7 +182,13 @@ async function create() {
     </form>
     <template #footer>
       <Button label="Cancel" severity="secondary" text @click="visible = false" />
-      <Button type="submit" :form="formId" :label="`Create ${info.label}`" :loading="saving" :disabled="noStatus" />
+      <Button
+        type="submit"
+        :form="formId"
+        :label="`Create ${info.label}`"
+        :loading="saving"
+        :disabled="noStatus || preparing"
+      />
     </template>
   </Dialog>
 </template>

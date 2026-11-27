@@ -161,13 +161,15 @@ const more = computed<MenuItem[]>(() =>
             <Tag icon="pi pi-arrow-right" :value="`Converted to ${itemKey(converted)}`" severity="success" />
           </RouterLink>
           <Tag v-if="item.access === 'read'" value="Read only" severity="secondary" />
-          <Tag
+          <Button
             v-if="conflicts.length"
             v-tooltip.bottom="'Open the conflict'"
             icon="pi pi-exclamation-triangle"
-            value="Conflict"
+            label="Conflict"
             severity="warn"
-            class="clickable"
+            size="small"
+            outlined
+            class="conflict-button"
             @click="sync.openDialog('conflicts')"
           />
           <Tag v-else-if="item._local?.pending" icon="pi pi-cloud-upload" value="Not synced yet" severity="secondary" />
@@ -244,8 +246,14 @@ const more = computed<MenuItem[]>(() =>
   padding: var(--pgpm-space-6);
 }
 
-.clickable {
-  cursor: pointer;
+.conflict-button {
+  padding-block: 0;
+}
+
+@media print {
+  .page {
+    padding: 0;
+  }
 }
 
 .editing {

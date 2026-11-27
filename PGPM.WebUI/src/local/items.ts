@@ -17,6 +17,7 @@ import {
   type Stored,
 } from './rows'
 import { setUpItem, templateStatus } from './templates'
+import { uuidv7 } from './uuid'
 
 /**
  * The item rules the views share (docs/01 §4–§10), on the local data: statuses and their aging, creating an item with
@@ -357,63 +358,101 @@ export function convertedStatus(all: readonly StatusRow[], type: ItemType): Stat
   return statusesOf(all, type).find((s) => !s.isArchived && s.name.trim().toLowerCase() === name) ?? null
 }
 
+/** A link to a file of PGPM's store in a text (docs/03 §18.3): `/api/v1/files/{id}/…`, relative or absolute. */
+const FILE_LINK = /(\/api\/v1\/files\/)([0-9A-Za-z-]+)(?=\/)/g
+
+/** The ids of the files a Markdown text links to or shows. */
+export function fileIdsIn(text: string | null | undefined): Set<string> {
+  return new Set([...(text ?? '').matchAll(FILE_LINK)].map((m) => m[2]!))
+}
+
+/** The text with its links to the files in `ids` (old id → new id) pointing at the new ones; the names stay. */
+export function rewriteFileLinks(text: string, ids: ReadonlyMap<string, string>): string {
+  return text.replace(FILE_LINK, (all, prefix: string, id: string) => (ids.has(id) ? `${prefix}${ids.get(id)}` : all))
+}
+
+interface FileCopy {
+  file: Stored<FileRow>
+  /** The id the copy gets, known before the project's texts are written. */
+  copyId: string
+}
+
 /**
- * The source's cover and attachments as files of the project (docs/01 §8, docs/03 §12.8): new `files` rows with the same
- * name, type, size and SHA-256 – the server shares the stored bytes of an available file the user can read, so nothing
- * is uploaded again (docs/03 §10.3) – and the bytes on this device copied along (an upload still waiting goes up for the
- * copy too). A file whose bytes are only on another device and not uploaded yet stays on the source. Answers the
- * cover's copy, if any, and how many files were copied.
+ * The source's files the project gets (docs/01 §8, docs/03 §12.8): its cover, its attachments and the embedded images
+ * its texts show (`texts`: the description and the Markdown values carried over), each with its copy's id. A file whose
+ * bytes are only on another device and not uploaded yet stays on the source.
  */
-function copyFiles(
-  tx: RepoTransaction,
-  source: ItemRow,
-  projectId: string,
-): Promise<{ cover: string | null; files: number }> {
-  return inTransaction(copyEach(tx, source, projectId))
+function filesToCopy(db: PgpmDb, source: ItemRow, texts: readonly unknown[]): Promise<FileCopy[]> {
+  return inTransaction(pickFiles(db, source, texts))
+}
+
+async function pickFiles(db: PgpmDb, source: ItemRow, texts: readonly unknown[]): Promise<FileCopy[]> {
+  const shown = new Set(texts.flatMap((t) => (typeof t === 'string' ? [...fileIdsIn(t)] : [])))
+  const rows = ((await db.synced('files').where('itemId').equals(source.id).toArray()) as unknown as Stored<FileRow>[])
+    .filter(
+      (f) =>
+        !f.deleted &&
+        (f.purpose === 'attachment' || f.id === source.imageFileId || (f.purpose === 'embedded' && shown.has(f.id))),
+    )
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || (a.id < b.id ? -1 : 1))
+  const picked: FileCopy[] = []
+  for (const file of rows) {
+    if (file.status !== 'available' && !(await db.blobs.get(file.id))) continue
+    picked.push({ file, copyId: uuidv7() })
+  }
+  return picked
+}
+
+/**
+ * The picked files as files of the project: new `files` rows with the same name, type, size and SHA-256 – the server
+ * shares the stored bytes of an available file the user can read, so nothing is uploaded again (docs/03 §10.3) – and
+ * the bytes on this device copied along (an upload still waiting goes up for the copy too). Answers the cover's copy,
+ * if any.
+ */
+function copyFiles(tx: RepoTransaction, source: ItemRow, projectId: string, picked: readonly FileCopy[]) {
+  return inTransaction(copyEach(tx, source, projectId, picked))
 }
 
 async function copyEach(
   tx: RepoTransaction,
   source: ItemRow,
   projectId: string,
-): Promise<{ cover: string | null; files: number }> {
-  const rows = (
-    (await tx.db.synced('files').where('itemId').equals(source.id).toArray()) as unknown as Stored<FileRow>[]
-  ).filter((f) => !f.deleted && (f.purpose === 'attachment' || f.id === source.imageFileId))
-  rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || (a.id < b.id ? -1 : 1))
+  picked: readonly FileCopy[],
+): Promise<string | null> {
   let cover: string | null = null
-  let files = 0
-  for (const file of rows) {
+  for (const { file, copyId } of picked) {
     const bytes = await tx.db.blobs.get(file.id)
-    if (file.status !== 'available' && !bytes) continue
-    const copy = await tx.create<FileRow>('files', {
-      itemId: projectId,
-      mapId: null,
-      purpose: file.purpose,
-      fileName: file.fileName,
-      contentType: file.contentType,
-      sizeBytes: file.sizeBytes,
-      sha256: file.sha256,
-      width: file.width,
-      height: file.height,
-      thumbnail: file.thumbnail,
-    })
+    await tx.create<FileRow>(
+      'files',
+      {
+        itemId: projectId,
+        mapId: null,
+        purpose: file.purpose,
+        fileName: file.fileName,
+        contentType: file.contentType,
+        sizeBytes: file.sizeBytes,
+        sha256: file.sha256,
+        width: file.width,
+        height: file.height,
+        thumbnail: file.thumbnail,
+      },
+      { id: copyId },
+    )
     if (bytes) {
       // The server has the source's bytes: the copy shares them at its insert, nothing to upload.
       const uploaded = file.status === 'available'
       await tx.db.blobs.put({
         ...bytes,
-        id: copy.id,
+        id: copyId,
         uploaded,
         nextChunk: 0,
         error: null,
         cachedAt: new Date().toISOString(),
       })
     }
-    if (file.id === source.imageFileId) cover = copy.id
-    files++
+    if (file.id === source.imageFileId) cover = copyId
   }
-  return { cover, files }
+  return cover
 }
 
 /**
@@ -425,7 +464,9 @@ async function copyEach(
  * (local/templates.ts); either way the source's sections that apply to projects come along, and the values of every
  * field that applies to projects (same field = same value, docs/01 §6.2) – except in sections the user may not edit (the
  * server would refuse those values). Needs *edit* on the source (its status changes). The cover is set by a patch after
- * the copy's insert: the server takes only an image file of the project itself as its `imageFileId`.
+ * the copy's insert: the server takes only an image file of the project itself as its `imageFileId`. Images embedded in
+ * the description and the Markdown values are copied too, and the texts' `/api/v1/files/{id}/…` links point at the
+ * copies (attachment chips as well) – the project doesn't depend on the source's files.
  */
 export async function convertToProject(
   repo: Repo,
@@ -452,31 +493,42 @@ export async function convertToProject(
     const shares = (
       (await db.synced('item_shares').where('itemId').equals(sourceId).toArray()) as unknown as ItemShareRow[]
     ).filter((s) => !s.deleted)
-    const project = await createItem(tx, {
-      type: 'project',
-      title: options.title?.trim() || source.title,
-      statusId,
-      shares: shares.map((s) => ({ groupId: s.groupId, access: s.access })),
-      values: {
-        description: source.description,
-        color: source.color,
-        originItemId: source.id,
-        projectTemplateId: template?.template.id ?? null,
-        ...(startDate ? { projectStartDate: startDate } : {}),
-      },
-    })
-    const copies = await copyFiles(tx, source, project.id)
-    if (copies.cover) await tx.patch('items', project.id, { imageFileId: copies.cover })
 
     // The sections and values that apply to projects (ideas only; leads have no sections).
     const appliesToProjects = (sectionId: string | undefined) =>
       !!sectionId && !!catalogue.sectionById.get(sectionId)?.appliesTo.includes('project')
     const sectionIds = (await itemSectionsOf(db, sourceId)).map((s) => s.sectionId).filter(appliesToProjects)
     const values = new Map<string, unknown>()
+    const markdown = new Set<string>()
     for (const v of await fieldValuesOf(db, sourceId)) {
       const field = catalogue.fieldById.get(v.fieldId)
-      if (field && field.type !== 'score' && appliesToProjects(field.sectionId)) values.set(v.fieldId, v.value)
+      if (!field || field.type === 'score' || !appliesToProjects(field.sectionId)) continue
+      values.set(v.fieldId, v.value)
+      if (field.type === 'markdown') markdown.add(v.fieldId)
     }
+
+    // The files, and the texts showing them pointed at the copies: the source's images stay the source's.
+    const picked = await filesToCopy(db, source, [source.description, ...[...markdown].map((id) => values.get(id))])
+    const copyIds = new Map(picked.map((p) => [p.file.id, p.copyId]))
+    const relink = <T>(text: T): T => (typeof text === 'string' ? (rewriteFileLinks(text, copyIds) as T) : text)
+    for (const id of markdown) values.set(id, relink(values.get(id)))
+
+    const project = await createItem(tx, {
+      type: 'project',
+      title: options.title?.trim() || source.title,
+      statusId,
+      shares: shares.map((s) => ({ groupId: s.groupId, access: s.access })),
+      values: {
+        description: relink(source.description),
+        color: source.color,
+        originItemId: source.id,
+        projectTemplateId: template?.template.id ?? null,
+        ...(startDate ? { projectStartDate: startDate } : {}),
+      },
+    })
+    const cover = await copyFiles(tx, source, project.id, picked)
+    if (cover) await tx.patch('items', project.id, { imageFileId: cover })
+
     const setup = await setUpItem(tx, project, catalogue, { template, startDate, carried: { sectionIds, values } })
 
     let assignments = 0
@@ -503,7 +555,7 @@ export async function convertToProject(
         shares: shares.length,
         assignments,
         links,
-        files: copies.files,
+        files: picked.length,
         sections: setup.sections,
         values: setup.values,
         milestones: setup.milestones,

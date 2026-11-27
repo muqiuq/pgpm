@@ -15,7 +15,8 @@ import ErrorState from './ErrorState.vue'
  * rows whose ids are in v-model:expanded open their details below them (on a phone too). With
  * v-model:selection and a column with selection-mode="multiple", rows can be picked on a desktop.
  * With `fixed`, the table's layout is fixed: the columns with a width keep it, and those without
- * share the rest, so a long text is cut at its column's edge, not at a width of its own.
+ * share the rest, so a long text is cut at its column's edge, not at a width of its own. With `rowLinks`, a phone's
+ * #mobile row is a link itself: the row is then no second tab stop around it. An #empty slot replaces the empty state.
  */
 const props = withDefaults(
   defineProps<{
@@ -25,8 +26,9 @@ const props = withDefaults(
     rowClass?: (item: T) => string | object | undefined
     selectable?: boolean
     fixed?: boolean
+    rowLinks?: boolean
   }>(),
-  { emptyText: undefined, rowClass: undefined, selectable: false, fixed: false },
+  { emptyText: undefined, rowClass: undefined, selectable: false, fixed: false, rowLinks: false },
 )
 const emit = defineEmits<{ select: [item: T] }>()
 /** The expanded rows by id ({ [id]: true }); a collapsed row is not in it. */
@@ -36,21 +38,22 @@ const selection = defineModel<T[] | undefined>('selection', { default: undefined
 const phone = useMedia('(max-width: 599px)')
 const q = computed(() => props.table.query)
 const pages = computed(() => Math.max(1, Math.ceil(props.table.total.value / props.table.pageSize.value)))
+const rowsFocus = computed(() => props.selectable && !props.rowLinks)
 </script>
 
 <template>
   <ErrorState v-if="q.isError.value && !q.data.value" :error="q.error.value" :what="what" @retry="q.refetch()" />
   <div v-else-if="phone" class="mobile-list panel">
     <div v-if="!q.data.value" class="center"><ProgressSpinner style="width: 32px; height: 32px" /></div>
-    <EmptyState v-else-if="!table.items.value.length" :title="emptyText ?? `No ${what}.`" />
+    <slot v-else-if="!table.items.value.length" name="empty"><EmptyState :title="emptyText ?? `No ${what}.`" /></slot>
     <ul v-else>
       <li
         v-for="item in table.items.value"
         :key="item.id"
         :class="rowClass?.(item)"
-        :tabindex="selectable ? 0 : undefined"
-        @click="selectable && emit('select', item)"
-        @keydown.enter="selectable && emit('select', item)"
+        :tabindex="rowsFocus ? 0 : undefined"
+        @click="rowsFocus && emit('select', item)"
+        @keydown.enter="rowsFocus && emit('select', item)"
       >
         <slot name="mobile" :item="item" />
         <div v-if="$slots.expansion && expanded[String(item.id)]" class="mobile-expansion" @click.stop>
@@ -102,7 +105,7 @@ const pages = computed(() => Math.max(1, Math.ceil(props.table.total.value / pro
       <slot name="expansion" :data="data as T" />
     </template>
     <template #empty>
-      <EmptyState :title="emptyText ?? `No ${what}.`" />
+      <slot name="empty"><EmptyState :title="emptyText ?? `No ${what}.`" /></slot>
     </template>
   </DataTable>
 </template>

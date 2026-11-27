@@ -159,7 +159,7 @@ function decide(mode: 'move' | 'delete') {
               @click="remove(layer)"
             />
           </template>
-          <i v-else-if="layer.is_locked" class="pi pi-lock muted" aria-label="Locked" />
+          <i v-else-if="layer.is_locked" role="img" class="pi pi-lock muted" aria-label="Locked" />
         </template>
       </li>
     </ul>

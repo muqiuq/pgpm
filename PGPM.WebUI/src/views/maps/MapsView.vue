@@ -15,8 +15,10 @@ import MoreMenu from '@/components/MoreMenu.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RelativeTime from '@/components/RelativeTime.vue'
 import ShareDialog from '@/components/share/ShareDialog.vue'
+import FirstSyncNotice from '@/components/sync/FirstSyncNotice.vue'
 import TabNav from '@/components/TabNav.vue'
 import { useActions } from '@/composables/useActions'
+import { useMedia } from '@/composables/useMedia'
 import { localDb } from '@/local/db'
 import { useUserPersons } from '@/local/lookups'
 import { mapNameError, type MapRecord } from '@/local/maps'
@@ -32,7 +34,7 @@ import NewMapDialog from './NewMapDialog.vue'
  * *Work → Maps* (doc 01 §12.1, §12.9): the tabs *Maps* (every map the user can see) and *Templates* (canvas templates
  * and matrix presets) – name, kind, preview, owner, last change – from the device, offline too. *New map* (Maps:
  * Create): a canvas, a matrix map, or one from a template. Per map: open, rename, duplicate, share, mark or unmark as a
- * template (Configuration: Manage), delete (to the Trash, with manage access).
+ * template (Configuration: Manage), delete (to the Trash, with manage access). Below 600 px a list of two-line rows.
  */
 const route = useRoute()
 const router = useRouter()
@@ -40,6 +42,7 @@ const session = useSession()
 const sync = useSyncStore()
 const users = useUserPersons()
 const { ask, notify } = useActions()
+const phone = useMedia('(max-width: 599px)')
 
 const maps = useLive(
   async () => ((await localDb().synced('maps').toArray()) as unknown as MapRecord[]).filter((m) => !m.deleted),
@@ -63,6 +66,8 @@ const shown = computed(() => {
     return words.every((w) => text.includes(w))
   })
 })
+
+const byName = computed(() => [...shown.value].sort((a, b) => a.name.localeCompare(b.name)))
 
 const canCreate = computed(() => session.allows(['Maps', 'Create']))
 const canManageTemplates = computed(() => session.allows(['Configuration', 'Manage']))
@@ -185,8 +190,9 @@ const open = (map: MapRecord) => router.push({ name: 'map', params: { id: map.id
     </PageHeader>
     <TabNav :items="tabs" :active="tab" label="Maps" />
     <FilterBar v-model:search="search" :placeholder="tab === 'templates' ? 'Search templates…' : 'Search maps…'" />
+    <FirstSyncNotice v-if="sync.firstSync && !maps.value.value.length" class="panel" />
     <EmptyState
-      v-if="maps.loaded.value && !shown.length"
+      v-else-if="maps.loaded.value && !shown.length"
       :icon="tab === 'templates' ? 'pi pi-clone' : 'pi pi-map'"
       :title="search ? 'Nothing found.' : tab === 'templates' ? 'No templates yet.' : 'No maps yet.'"
       :text="
@@ -195,6 +201,22 @@ const open = (map: MapRecord) => router.push({ name: 'map', params: { id: map.id
           : 'A map lays out ideas, projects, milestones and drawings – freely, or by two scores.'
       "
     />
+    <ul v-else-if="phone" class="mobile-maps panel" aria-label="Maps">
+      <li v-for="m in byName" :key="m.id">
+        <button type="button" class="preview small-preview" :aria-label="`Open ${m.name}`" @click="open(m)">
+          <img v-if="previewSrc(m.preview)" :src="previewSrc(m.preview)!" alt="" />
+          <i v-else :class="KIND_ICONS[m.kind]" aria-hidden="true" />
+        </button>
+        <div class="mobile-text">
+          <RouterLink :to="{ name: 'map', params: { id: m.id } }" class="strong ellipsis">{{ m.name }}</RouterLink>
+          <span class="muted small">
+            {{ KIND_LABELS[m.kind] }}<template v-if="m.access === 'read'"> · read only</template> ·
+            <RelativeTime :value="m.updatedAt" />
+          </span>
+        </div>
+        <MoreMenu :items="actions(m)" :label="`Actions for ${m.name}`" />
+      </li>
+    </ul>
     <DataTable v-else :value="shown" data-key="id" sort-field="name" :sort-order="1" class="maps" size="small">
       <Column header="" style="width: 7.5rem">
         <template #body="{ data }">
@@ -211,12 +233,14 @@ const open = (map: MapRecord) => router.push({ name: 'map', params: { id: map.id
             <i
               v-if="conflicted.has(data.id)"
               v-tooltip.top="'Sync conflict'"
+              role="img"
               class="pi pi-exclamation-triangle conflict"
               aria-label="Sync conflict"
             />
             <i
               v-else-if="data._local?.pending"
               v-tooltip.top="'Not synced yet'"
+              role="img"
               class="pi pi-cloud-upload muted"
               aria-label="Not synced yet"
             />
@@ -317,7 +341,7 @@ const open = (map: MapRecord) => router.push({ name: 'map', params: { id: map.id
 }
 
 .conflict {
-  color: var(--p-orange-500);
+  color: var(--pgpm-warn);
 }
 
 .small {
@@ -333,5 +357,40 @@ const open = (map: MapRecord) => router.push({ name: 'map', params: { id: map.id
 
 .read {
   margin-left: var(--pgpm-space-1);
+}
+
+.mobile-maps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mobile-maps li {
+  display: flex;
+  align-items: center;
+  gap: var(--pgpm-space-3);
+  padding: var(--pgpm-space-2) var(--pgpm-space-3);
+  border-bottom: 1px solid var(--pgpm-border);
+}
+
+.mobile-maps li:last-child {
+  border-bottom: 0;
+}
+
+.small-preview {
+  flex: none;
+  width: 4rem;
+  height: 2.5rem;
+}
+
+.mobile-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mobile-text .ellipsis {
+  max-width: 100%;
 }
 </style>

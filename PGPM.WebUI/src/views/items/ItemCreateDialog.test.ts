@@ -5,6 +5,7 @@ import ToastService from 'primevue/toastservice'
 import Tooltip from 'primevue/tooltip'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MeResponse } from '@/api/auth'
+import { engine } from '@/local/boot'
 import { useDatabase } from '@/local/db'
 import { setRepoContext } from '@/local/repo'
 import type { ItemRow } from '@/local/rows'
@@ -125,6 +126,20 @@ describe('the create dialog (docs/01 §4.4)', () => {
     expect(entries[1]!.row).toMatchObject({ itemId: item!.id, groupId: 'g-team', access: 'edit' })
     expect(new Set(entries.map((e) => e.batch)).size).toBe(1)
     expect(push).toHaveBeenCalledWith({ name: 'idea', params: { id: item!.id } })
+  })
+
+  it('waits for the first sync after signing in: it says so, and Create is off until it is done', async () => {
+    engine.status.connection = 'starting'
+    try {
+      open('idea')
+      await until(() => !!dialog() && dialog().textContent!.includes('Preparing your data… (first sync)'), 'the notice')
+      expect(button('Create idea').disabled).toBe(true)
+      await db.setMeta('lastSyncAt', '2026-11-27T10:00:00Z')
+      await until(() => !dialog().textContent!.includes('Preparing your data'), 'the first sync done')
+      await until(() => !button('Create idea').disabled, 'Create enabled')
+    } finally {
+      engine.status.connection = 'stopped'
+    }
   })
 
   it('creates a project from a template offline: its statuses, shares, sections and gates in one batch', async () => {

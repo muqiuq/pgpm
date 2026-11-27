@@ -16,7 +16,9 @@ import StatusBadge from '@/components/items/StatusBadge.vue'
 import ListTable from '@/components/ListTable.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RelativeTime from '@/components/RelativeTime.vue'
+import FirstSyncNotice from '@/components/sync/FirstSyncNotice.vue'
 import { useLocalTable, type ViewState } from '@/composables/useLocalTable'
+import { useNotify } from '@/composables/useNotify'
 import { useNow } from '@/composables/useNow'
 import { timeboxPassed } from '@/domain/fields/renderValue'
 import { itemRoute, itemTypes } from '@/domain/itemTypes'
@@ -43,6 +45,7 @@ import { useSession } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
 import QuadrantFilter from '@/views/maps/QuadrantFilter.vue'
 import { useItemQuadrants } from '@/views/maps/quadrants'
+import { createRequested } from './createRequest'
 import ItemCreateDialog from './ItemCreateDialog.vue'
 import {
   cleanFilters,
@@ -240,6 +243,18 @@ function clearFilters() {
 const conflicted = computed(() => new Set(sync.conflicts.filter((c) => c.table === 'items').map((c) => c.rowId)))
 const canCreate = computed(() => session.allows(info.create))
 const creating = ref(false)
+// *New note* / *New idea* from a link (`?new=1`, the installed app's shortcuts).
+const notify = useNotify()
+watch(
+  createRequested,
+  (type) => {
+    if (type !== props.type) return
+    createRequested.value = null
+    if (canCreate.value) creating.value = true
+    else notify.info(`You can’t create ${info.plural.toLowerCase()}`, 'Your rights don’t include it.')
+  },
+  { immediate: true },
+)
 const selection = ref<Item[]>([])
 const selectedIds = computed(() => selection.value.map((i) => i.id))
 
@@ -371,8 +386,10 @@ function fieldOverdue(item: Item, field: FieldDefinitionRow): string | null {
       :what="info.plural.toLowerCase()"
       selectable
       fixed
+      row-links
       @select="open"
     >
+      <template v-if="sync.firstSync" #empty><FirstSyncNotice /></template>
       <Column selection-mode="multiple" header-style="width: 2.75rem" />
       <Column
         v-for="col in shownColumns"
@@ -387,17 +404,19 @@ function fieldOverdue(item: Item, field: FieldDefinitionRow): string | null {
           <span v-if="col.id === 'key'" class="mono muted">{{ itemKey(data) }}</span>
           <template v-else-if="col.id === 'title'">
             <div class="title-cell">
-              <i v-if="data.pinned" class="pi pi-thumbtack pin" aria-label="Pinned" />
+              <i v-if="data.pinned" role="img" class="pi pi-thumbtack pin" aria-label="Pinned" />
               <RouterLink :to="itemRoute(data)" class="strong ellipsis" @click.stop>{{ data.title }}</RouterLink>
               <i
                 v-if="conflicted.has(data.id)"
                 v-tooltip.top="'Sync conflict'"
+                role="img"
                 class="pi pi-exclamation-triangle conflict"
                 aria-label="Sync conflict"
               />
               <i
                 v-else-if="data._local?.pending"
                 v-tooltip.top="'Not synced yet'"
+                role="img"
                 class="pi pi-cloud-upload muted"
                 aria-label="Not synced yet"
               />
@@ -415,6 +434,7 @@ function fieldOverdue(item: Item, field: FieldDefinitionRow): string | null {
           <span v-else-if="col.id === 'persons'" class="ellipsis">{{ personNames(data, context).join(', ') }}</span>
           <span
             v-else-if="col.id === 'color'"
+            role="img"
             class="swatch"
             :style="{ background: data.color ?? 'transparent' }"
             :aria-label="data.color ?? 'No colour'"
@@ -424,6 +444,7 @@ function fieldOverdue(item: Item, field: FieldDefinitionRow): string | null {
           <i
             v-else-if="col.id === 'pinned'"
             :class="data.pinned ? 'pi pi-thumbtack pin' : ''"
+            :role="data.pinned ? 'img' : undefined"
             :aria-label="data.pinned ? 'Pinned' : undefined"
           />
           <span v-else-if="col.id === 'links'" class="ellipsis" :title="linkSummary(data, context).text">
@@ -456,7 +477,7 @@ function fieldOverdue(item: Item, field: FieldDefinitionRow): string | null {
       <template #mobile="{ item }">
         <RouterLink :to="itemRoute(item)" class="mobile-row">
           <span class="strong ellipsis">
-            <i v-if="item.pinned" class="pi pi-thumbtack pin" aria-label="Pinned" />
+            <i v-if="item.pinned" role="img" class="pi pi-thumbtack pin" aria-label="Pinned" />
             {{ item.title }}
           </span>
           <span class="muted small">
