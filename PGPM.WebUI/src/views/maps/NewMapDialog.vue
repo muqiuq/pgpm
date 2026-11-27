@@ -16,7 +16,9 @@ import { createMap, duplicateMap, mapContent, mapNameError, type MapRecord } fro
 import { repo } from '@/local/repo'
 import type { ItemShareRow } from '@/local/rows'
 import { useLive } from '@/local/useLive'
+import FirstSyncNotice from '@/components/sync/FirstSyncNotice.vue'
 import { useSession } from '@/stores/session'
+import { useSyncStore } from '@/stores/sync'
 import {
   axisFields,
   canvasTemplates,
@@ -46,6 +48,7 @@ const props = withDefaults(
 const visible = defineModel<boolean>('visible', { default: false })
 const router = useRouter()
 const session = useSession()
+const sync = useSyncStore()
 const notify = useNotify()
 const groups = useGroups()
 
@@ -129,6 +132,8 @@ watch(templateId, (id, before) => {
 })
 
 const blocked = computed(() => {
+  // The templates, presets and fields arrive with the first sync.
+  if (sync.firstSync && props.mode !== 'duplicate') return true
   if (props.mode === 'template') return !templateId.value
   if (props.mode === 'matrix') return matrixFrom.value === 'preset' ? !presetId.value : !xField.value || !yField.value
   return false
@@ -174,8 +179,9 @@ async function create() {
 <template>
   <Dialog v-model:visible="visible" :header="headers[mode]" modal :style="{ width: 'min(32rem, 100vw)' }">
     <form id="new-map" class="form" novalidate @submit.prevent="create">
+      <FirstSyncNotice v-if="sync.firstSync && mode !== 'duplicate'" compact />
       <div v-if="mode === 'template'" class="field">
-        <label for="new-map-template">Template</label>
+        <label id="new-map-template-label" for="new-map-template">Template</label>
         <Message v-if="!templates.length" severity="secondary" size="small" :closable="false">
           There are no map templates yet. Any canvas can be marked as a template (Configuration: Manage).
         </Message>
@@ -183,6 +189,7 @@ async function create() {
           v-else
           v-model="templateId"
           input-id="new-map-template"
+          aria-labelledby="new-map-template-label"
           :options="templates"
           option-label="name"
           option-value="id"
@@ -203,7 +210,7 @@ async function create() {
           aria-label="Axes"
         />
         <div v-if="matrixFrom === 'preset'" class="field">
-          <label for="new-map-preset">Preset</label>
+          <label id="new-map-preset-label" for="new-map-preset">Preset</label>
           <Message v-if="!presets.length" severity="secondary" size="small" :closable="false">
             No matrix presets on this device: import a configuration package, or choose own axes.
           </Message>
@@ -211,6 +218,7 @@ async function create() {
             v-else
             v-model="presetId"
             input-id="new-map-preset"
+            aria-labelledby="new-map-preset-label"
             :options="presets"
             option-label="name"
             option-value="id"
@@ -225,12 +233,26 @@ async function create() {
           </Message>
           <div class="axes">
             <div class="field">
-              <label for="new-map-x">Horizontal axis</label>
-              <Select v-model="xField" input-id="new-map-x" :options="axes" option-label="label" option-value="key" />
+              <label id="new-map-x-label" for="new-map-x">Horizontal axis</label>
+              <Select
+                v-model="xField"
+                input-id="new-map-x"
+                aria-labelledby="new-map-x-label"
+                :options="axes"
+                option-label="label"
+                option-value="key"
+              />
             </div>
             <div class="field">
-              <label for="new-map-y">Vertical axis</label>
-              <Select v-model="yField" input-id="new-map-y" :options="axes" option-label="label" option-value="key" />
+              <label id="new-map-y-label" for="new-map-y">Vertical axis</label>
+              <Select
+                v-model="yField"
+                input-id="new-map-y"
+                aria-labelledby="new-map-y-label"
+                :options="axes"
+                option-label="label"
+                option-value="key"
+              />
             </div>
           </div>
           <small class="field-hint">Ideas and projects with both values appear; the rest wait in a tray.</small>

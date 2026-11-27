@@ -42,6 +42,8 @@ describe('the sections of an item (docs/01 §6.2, docs/03 §12.7)', () => {
   })
   afterEach(async () => {
     for (const w of mounted.splice(0)) w.unmount()
+    // PrimeVue's tooltips remove themselves on a timer after the unmount: before the test's document goes.
+    await new Promise((resolve) => setTimeout(resolve, 5))
     vi.unstubAllGlobals()
     setRepoContext({ userId: null })
     useDatabase(null)

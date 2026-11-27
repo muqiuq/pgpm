@@ -11,13 +11,15 @@ import { FILTER_TYPES, type FilterType, type MapFilter } from '../types'
 
 /**
  * The visibility filter above the map (doc 01 §12.7), a personal view setting: types, statuses, persons, colours,
- * quadrants (matrix maps), a score range; *Show links*. Managers can save it as the map's default view.
+ * project templates, quadrants (matrix maps), a score range; *Show links*. Managers can save it as the map's default
+ * view.
  */
 const props = defineProps<{
   filter: MapFilter
   statuses: Option[]
   persons: Option[]
   colors: Option[]
+  templates?: Option[]
   scoreFields: Option[]
   quadrants: Option[] | null
   showLinks: boolean
@@ -44,7 +46,7 @@ function set<K extends keyof MapFilter>(key: K, value: MapFilter[K]) {
 }
 
 /** A multi-select: nothing chosen means no restriction (null). */
-function list<K extends 'statusIds' | 'personIds' | 'colors' | 'quadrants'>(key: K) {
+function list<K extends 'statusIds' | 'personIds' | 'colors' | 'templateIds' | 'quadrants'>(key: K) {
   return computed({
     get: () => (props.filter[key] ?? []) as string[],
     set: (v: string[]) => set(key, (v.length ? v : null) as MapFilter[K]),
@@ -53,6 +55,7 @@ function list<K extends 'statusIds' | 'personIds' | 'colors' | 'quadrants'>(key:
 const statusIds = list('statusIds')
 const personIds = list('personIds')
 const colorKeys = list('colors')
+const templateIds = list('templateIds')
 const quadrantKeys = list('quadrants')
 const types = computed({
   get: () => props.filter.types ?? [...FILTER_TYPES],
@@ -119,6 +122,18 @@ const active = computed(() => activeConditions(props.filter))
       :max-selected-labels="1"
       selected-items-label="{0} colours"
       aria-label="Colours"
+    />
+    <MultiSelect
+      v-if="templates?.length"
+      v-model="templateIds"
+      :options="templates"
+      option-label="label"
+      option-value="value"
+      size="small"
+      placeholder="Template"
+      :max-selected-labels="1"
+      selected-items-label="{0} templates"
+      aria-label="Project templates"
     />
     <MultiSelect
       v-if="quadrants"

@@ -87,7 +87,7 @@ function setStatus(status: MilestoneStatus | null) {
 <template>
   <section v-if="milestone" class="milestone-panel" :data-testid="`map-milestone-${milestone.id}`">
     <div v-if="canEdit" class="field">
-      <label :for="`map-ms-status-${milestone.id}`">Status</label>
+      <label :id="`map-ms-status-${milestone.id}-label`" :for="`map-ms-status-${milestone.id}`">Status</label>
       <Select
         :model-value="milestone.status"
         :options="[...statusOptions]"
@@ -95,6 +95,7 @@ function setStatus(status: MilestoneStatus | null) {
         option-value="value"
         size="small"
         :input-id="`map-ms-status-${milestone.id}`"
+        :aria-labelledby="`map-ms-status-${milestone.id}-label`"
         @update:model-value="setStatus"
       />
     </div>

@@ -5,9 +5,10 @@ import Drawer from 'primevue/drawer'
 import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
 import Textarea from 'primevue/textarea'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { milestoneTone, TONE_COLORS, TYPE_LABELS } from '../cards'
 import type { MapEditor, ZOrder } from '../editor'
+import { isTyping } from '../keyboard'
 import { isMatrixCard } from '../matrixItems'
 import type { MapModel } from '../model'
 import type { PanelContent } from '../sceneTypes'
@@ -21,7 +22,9 @@ import StyleEditor from './StyleEditor.vue'
  * The side panel (doc 01 §12.5, docs/03 §13.3): PrimeVue's Drawer from the right, non-modal and not dismissed by a
  * click outside – the map stays usable, another element swaps the content. PNMTD DevicePanel's layout: a header with a
  * coloured avatar, title and status, a row of actions, then stacked sections. `content` is the canvas' `shown`, the
- * last selection, kept while the drawer slides out.
+ * last selection, kept while the drawer slides out. Focus: opening it leaves the focus on the map (its shortcuts keep
+ * working); F6 (or Enter) on the map comes here (`focusPanel`, the title), and closing it with the focus inside –
+ * Escape, the close button – hands it back to the map (`leave`).
  */
 const props = defineProps<{
   open: boolean
@@ -33,7 +36,29 @@ const props = defineProps<{
   /** The host's `#milestone-panel` edits the Definition of Done: the summary leaves it out. */
   milestoneEditor?: boolean
 }>()
-const emit = defineEmits<{ close: []; select: [ids: string[]]; openItem: [itemId: string] }>()
+const emit = defineEmits<{ close: []; leave: []; select: [ids: string[]]; openItem: [itemId: string] }>()
+
+const panel = ref<HTMLElement | null>(null)
+const heading = ref<HTMLElement | null>(null)
+/** The keyboard's way in: the panel's title (read out with the panel's name), Tab goes on from there. */
+function focusPanel() {
+  void nextTick(() => heading.value?.focus())
+}
+// Closing with the focus inside: back to the map, not to the page's top.
+watch(
+  () => props.open,
+  (open) => {
+    const active = document.activeElement
+    if (!open && panel.value && active && (panel.value.contains(active) || active === document.body)) emit('leave')
+  },
+)
+/** Escape in the panel closes it – not while a field takes it (an inline editor discards its draft first). */
+function onEscape(e: KeyboardEvent) {
+  if (e.defaultPrevented || isTyping(e.target)) return
+  e.stopPropagation()
+  emit('close')
+}
+defineExpose({ focusPanel })
 
 const KIND_LABELS: Record<ElementKind, string> = {
   item: 'Card',
@@ -204,18 +229,19 @@ const spacings = [
     position="right"
     :modal="false"
     :dismissable="false"
+    :close-on-escape="false"
     class="map-drawer"
     aria-label="Details"
     @update:visible="(v: boolean) => !v && emit('close')"
   >
     <template #container="{ closeCallback }">
-      <div class="map-panel">
+      <div ref="panel" class="map-panel" @keydown.esc="onEscape">
         <header class="head">
           <span class="avatar" :style="{ '--avatar': header.color }" aria-hidden="true"
             ><i :class="header.icon"
           /></span>
           <div class="title">
-            <h2>{{ header.title }}</h2>
+            <h2 ref="heading" tabindex="-1">{{ header.title }}</h2>
             <div class="sub">
               <span v-if="card?.status && itemId" class="status" :style="{ '--status': card.status.color }">{{
                 card.status.name

@@ -7,17 +7,19 @@ import { computed, ref, watch } from 'vue'
 import { useNotify } from '@/composables/useNotify'
 import { itemTypes } from '@/domain/itemTypes'
 import { bulkAssign, bulkPatch, bulkRemove, selectableStatuses, type BulkResult } from '@/local/items'
+import { addCardsToMap, type MapRecord } from '@/local/maps'
 import { useStatuses } from '@/local/lookups'
 import { repo } from '@/local/repo'
 import type { ItemType } from '@/local/rows'
 import ColorPicker from './ColorPicker.vue'
 import PersonPicker from './PersonPicker.vue'
+import MapPickerDialog from '@/views/maps/MapPickerDialog.vue'
 import RoleInput from './RoleInput.vue'
 
 /**
  * The bulk actions of a list (docs/01 §4.3) on the picked items: assign a person (with a role), change the status, change
- * the colour, delete (to the Trash). Each is one outbox batch, offline too; items the user may not change are skipped
- * and counted. *Add to map* comes with the maps (phase 5).
+ * the colour, add to a canvas map (a card each, in a grid around the map's centre), delete (to the Trash). Each is one
+ * outbox batch, offline too; items the user may not change are skipped and counted.
  */
 const props = defineProps<{ type: ItemType; ids: readonly string[] }>()
 const emit = defineEmits<{ done: [] }>()
@@ -32,6 +34,7 @@ const role = ref<string | null>(null)
 const statusId = ref<string | null>(null)
 const color = ref<string | null>(null)
 const busy = ref(false)
+const placing = ref(false)
 const statusOptions = computed(() => selectableStatuses(statuses.all.value, props.type))
 const what = computed(() =>
   props.ids.length === 1 ? `1 ${info.value.label}` : `${props.ids.length} ${info.value.plural.toLowerCase()}`,
@@ -77,6 +80,21 @@ const apply = () => {
   }
 }
 
+/** One card per picked item on the map, in a grid near its centre; one batch. */
+async function addToMap(map: MapRecord) {
+  busy.value = true
+  try {
+    const ids = await repo.transaction((tx) => addCardsToMap(tx, map.id, props.ids))
+    placing.value = false
+    notify.success(`Added to ${map.name}`, ids.length === 1 ? '1 card' : `${ids.length} cards, side by side.`)
+    emit('done')
+  } catch (e) {
+    notify.error(e, 'Not added')
+  } finally {
+    busy.value = false
+  }
+}
+
 function remove() {
   confirm.require({
     header: `Delete ${what.value}?`,
@@ -97,6 +115,7 @@ const headers = { person: 'Assign a person', status: 'Change the status', color:
     <Button label="Assign person…" icon="pi pi-user-plus" size="small" text @click="open = 'person'" />
     <Button v-if="info.hasStatus" label="Status…" icon="pi pi-tag" size="small" text @click="open = 'status'" />
     <Button label="Colour…" icon="pi pi-palette" size="small" text @click="open = 'color'" />
+    <Button label="Add to map…" icon="pi pi-map" size="small" text @click="placing = true" />
     <Button label="Delete…" icon="pi pi-trash" size="small" text severity="danger" @click="remove" />
     <Button label="Clear selection" icon="pi pi-times" size="small" text severity="secondary" @click="emit('done')" />
   </div>
@@ -142,6 +161,12 @@ const headers = { person: 'Assign a person', status: 'Change the status', color:
       />
     </template>
   </Dialog>
+  <MapPickerDialog
+    v-model:visible="placing"
+    :header="`Add ${what} to a map`"
+    hint="A card of each goes on the map, side by side around its middle."
+    @pick="addToMap"
+  />
 </template>
 
 <style scoped>

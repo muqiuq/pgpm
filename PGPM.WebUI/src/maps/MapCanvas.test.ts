@@ -1,6 +1,7 @@
 import { flushPromises, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import { until } from '@/test/memoryDb'
 import { mountWithUi } from '@/test/mount'
 import { SETTLE_MS } from './culling'
 import type { MapEditor } from './editor'
@@ -227,6 +228,57 @@ describe('MapCanvas selection and editing', () => {
     await nextTick()
     expect(source.elements.value.filter((e) => e.kind === 'ellipse')).toHaveLength(1)
     expect(api.selection).toHaveLength(1)
+  })
+
+  it('edits a shape’s text on Enter; Escape keeps what was typed, one undo takes it back', async () => {
+    const { api, source, wrapper: w } = await mountCanvas()
+    api.select([R1])
+    await nextTick()
+    const root = w.find('[data-testid="map-canvas"]')
+    await root.trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    const editor = w.find('textarea.inline-editor')
+    expect(editor.exists()).toBe(true)
+    await editor.setValue('Box with a label')
+    await editor.trigger('keydown', { key: 'Escape' })
+    await nextTick()
+    expect(w.find('textarea.inline-editor').exists()).toBe(false)
+    expect(row(source, R1)?.text).toBe('Box with a label')
+    await root.trigger('keydown', { key: 'z', ctrlKey: true })
+    await nextTick()
+    expect(row(source, R1)?.text).toBe('Box')
+  })
+
+  it('keeps a placed text with what was typed on Escape, and drops one left empty', async () => {
+    const { source, wrapper: w } = await mountCanvas()
+    const texts = () => source.elements.value.filter((e) => e.kind === 'text')
+    const before = texts().length
+    await w.find('[data-tool="text"]').trigger('click')
+    await drag(w, null, [600, 400], [600, 400])
+    await until(() => w.find('textarea.inline-editor').exists())
+    await w.find('textarea.inline-editor').setValue('Workshop notes')
+    await w.find('textarea.inline-editor').trigger('keydown', { key: 'Escape' })
+    await nextTick()
+    expect(texts()).toHaveLength(before + 1)
+    expect(texts().at(-1)!.text).toBe('Workshop notes')
+
+    await w.find('[data-tool="text"]').trigger('click')
+    await drag(w, null, [600, 520], [600, 520])
+    await until(() => w.find('textarea.inline-editor').exists())
+    await w.find('textarea.inline-editor').trigger('keydown', { key: 'Escape' })
+    await nextTick()
+    expect(texts()).toHaveLength(before + 1)
+  })
+
+  it('leaves Space and the arrows to a focused toolbar button', async () => {
+    const { api, source, wrapper: w } = await mountCanvas()
+    api.select([R1])
+    await nextTick()
+    const rect = w.find('[data-tool="rect"]')
+    await rect.trigger('keydown', { key: 'ArrowDown' })
+    await rect.trigger('keydown', { key: ' ' })
+    expect(row(source, R1)).toMatchObject({ x: 0, y: 300 })
+    expect(source.log.value).toHaveLength(0)
   })
 
   it('draws a rectangle with its tool and goes back to Select', async () => {

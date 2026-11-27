@@ -3,6 +3,7 @@ import type { Right } from '@/api/rights'
 import { itemTabs, itemTypeList, itemTypes, typeOfList } from '@/domain/itemTypes'
 import { navigation } from '@/layouts/navigation'
 import { useSession } from '@/stores/session'
+import { takeCreateRequest } from '@/views/items/createRequest'
 import { decide } from './guard'
 
 declare module 'vue-router' {
@@ -246,6 +247,9 @@ router.beforeEach(async (to) => {
     { signedIn: session.user !== null, flags: session.flags, allows: session.allows },
   )
 })
+
+// `/notes?new=1` (the installed app's shortcuts): the list without `new`, which opens its create dialog.
+router.beforeEach((to) => takeCreateRequest(to) ?? true)
 
 /** "Projects · PGPM". */
 export function pageTitle(title: string | undefined): string {

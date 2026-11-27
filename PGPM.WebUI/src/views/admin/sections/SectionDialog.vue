@@ -212,10 +212,11 @@ async function save() {
           <p v-if="!groups.length" class="muted">No groups yet.</p>
           <ul v-else class="groups">
             <li v-for="g in groups" :key="g.id">
-              <label :for="`sc-group-${g.id}`" class="ellipsis">{{ g.name }}</label>
+              <label :id="`sc-group-${g.id}-label`" :for="`sc-group-${g.id}`" class="ellipsis">{{ g.name }}</label>
               <Select
                 :model-value="access[g.id] ?? null"
                 :input-id="`sc-group-${g.id}`"
+                :aria-labelledby="`sc-group-${g.id}-label`"
                 :options="levels"
                 option-label="label"
                 option-value="value"

@@ -167,10 +167,11 @@ async function submit() {
         <legend>{{ legend }}</legend>
         <div class="grid">
           <div class="field wide">
-            <label :for="`mc-${name}-field`">Field</label>
+            <label :id="`mc-${name}-field-label`" :for="`mc-${name}-field`">Field</label>
             <Select
               :model-value="draft.field"
               :input-id="`mc-${name}-field`"
+              :aria-labelledby="`mc-${name}-field-label`"
               :options="axes"
               option-label="label"
               option-value="key"
@@ -202,10 +203,11 @@ async function submit() {
         </div>
       </fieldset>
       <div class="field">
-        <label for="mc-size">Bubble size</label>
+        <label id="mc-size-label" for="mc-size">Bubble size</label>
         <Select
           v-model="size"
           input-id="mc-size"
+          aria-labelledby="mc-size-label"
           :options="axes"
           option-label="label"
           option-value="key"
@@ -226,10 +228,11 @@ async function submit() {
         <legend>Which items appear</legend>
         <div class="grid two">
           <div class="field">
-            <label for="mc-types">Types</label>
+            <label id="mc-types-label" for="mc-types">Types</label>
             <MultiSelect
               v-model="types"
               input-id="mc-types"
+              aria-labelledby="mc-types-label"
               :options="typeOptions"
               option-label="label"
               option-value="value"
@@ -237,10 +240,11 @@ async function submit() {
             />
           </div>
           <div class="field">
-            <label for="mc-statuses">Statuses</label>
+            <label id="mc-statuses-label" for="mc-statuses">Statuses</label>
             <MultiSelect
               v-model="statusIds"
               input-id="mc-statuses"
+              aria-labelledby="mc-statuses-label"
               :options="statusOptions"
               option-label="label"
               option-value="value"
@@ -249,10 +253,11 @@ async function submit() {
             />
           </div>
           <div class="field">
-            <label for="mc-templates">Project templates</label>
+            <label id="mc-templates-label" for="mc-templates">Project templates</label>
             <MultiSelect
               v-model="templateIds"
               input-id="mc-templates"
+              aria-labelledby="mc-templates-label"
               :options="templates.value.value"
               option-label="name"
               option-value="id"
@@ -260,10 +265,11 @@ async function submit() {
             />
           </div>
           <div class="field">
-            <label for="mc-groups">Shared with</label>
+            <label id="mc-groups-label" for="mc-groups">Shared with</label>
             <MultiSelect
               v-model="groupIds"
               input-id="mc-groups"
+              aria-labelledby="mc-groups-label"
               :options="groups"
               option-label="name"
               option-value="id"

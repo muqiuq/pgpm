@@ -149,6 +149,7 @@ function clearToken() {
         ><Tag :value="outcomeLabel(data.outcome)" :severity="outcomeSeverity(data.outcome)" /><i
           v-if="data.strike"
           v-tooltip.top="'A strike'"
+          role="img"
           class="pi pi-flag strike"
           aria-label="A strike"
       /></template>

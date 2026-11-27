@@ -1,7 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { memoryDb } from '@/test/memoryDb'
 import type { PgpmDb } from './db'
-import { addCardToMap, createMap, duplicateMap, mapCentre, mapContent, placementsOf, targetLayer } from './maps'
+import {
+  addCardsToMap,
+  addCardToMap,
+  cardGrid,
+  createMap,
+  duplicateMap,
+  mapCentre,
+  mapContent,
+  placementsOf,
+  targetLayer,
+} from './maps'
 import { Repo } from './repo'
 
 const synced = { seq: 1, rev: 1, deleted: false, _local: { serverRev: 1, pending: false } }
@@ -231,6 +241,40 @@ describe('maps on the device (doc 01 §12.1, §12.9)', () => {
     expect((card.z as string) > 'a5').toBe(true)
     expect(await placementsOf(db, 'p1')).toEqual(new Map([[map.id, 1]]))
     expect(await placementsOf(db, 'i1')).toEqual(new Map([['tpl', 1]]))
+  })
+
+  it('adds several cards in one batch, in a grid around the centre, each on top of the one before', async () => {
+    const map = await repo.transaction((tx) => createMap(tx, { kind: 'canvas', name: 'Board', shares: [] }))
+    await db.outbox.clear()
+    const ids = await repo.transaction((tx) => addCardsToMap(tx, map.id, ['i1', 'i2', 'i3', 'i4', 'i5']))
+    const cards = await Promise.all(ids.map(async (id) => (await db.synced('map_elements').get(id))!))
+    expect(cards.map((c) => c.itemId)).toEqual(['i1', 'i2', 'i3', 'i4', 'i5'])
+    // Three columns, two rows around the empty map's origin: 3 × 220 + 2 × 24 wide, 2 × 92 + 24 high.
+    expect(cards.map((c) => [c.x, c.y])).toEqual([
+      [-354, -104],
+      [-110, -104],
+      [134, -104],
+      [-354, 12],
+      [-110, 12],
+    ])
+    const zs = cards.map((c) => c.z as string)
+    expect([...zs].sort()).toEqual(zs)
+    expect(new Set((await db.outbox.toArray()).map((e) => e.batch)).size).toBe(1)
+    expect(cardGrid({ x: 0, y: 0 }, 1)).toEqual([{ x: -110, y: -46 }])
+  })
+
+  it('refuses cards on a map one may only read', async () => {
+    await db.synced('maps').put({ ...synced, id: 'ro', kind: 'canvas', name: 'R', access: 'read' })
+    await db.synced('map_layers').put({
+      ...synced,
+      id: 'ro-base',
+      mapId: 'ro',
+      name: 'Base',
+      sortOrder: 'a0',
+      isVisible: true,
+      isLocked: false,
+    })
+    await expect(repo.transaction((tx) => addCardsToMap(tx, 'ro', ['i1']))).rejects.toThrow(/read this map/)
   })
 
   it('refuses a card on a matrix map, and finds no layer when all are locked', async () => {

@@ -243,10 +243,11 @@ async function save() {
           <div id="tp-statuses" class="panel-header">Statuses</div>
           <div class="panel-body form">
             <div class="field">
-              <label for="tp-allowed">Allowed statuses</label>
+              <label id="tp-allowed-label" for="tp-allowed">Allowed statuses</label>
               <MultiSelect
                 v-model="form.statusIds"
                 input-id="tp-allowed"
+                aria-labelledby="tp-allowed-label"
                 :options="projectStatuses"
                 option-label="name"
                 option-value="id"
@@ -256,10 +257,11 @@ async function save() {
               <small class="field-hint">Projects of this template can only use these.</small>
             </div>
             <div class="field">
-              <label for="tp-default-status">Default status</label>
+              <label id="tp-default-status-label" for="tp-default-status">Default status</label>
               <Select
                 v-model="form.defaultStatusId"
                 input-id="tp-default-status"
+                aria-labelledby="tp-default-status-label"
                 :options="defaultOptions"
                 option-label="label"
                 option-value="value"
@@ -336,7 +338,7 @@ async function save() {
               class="field"
               :data-testid="`tp-default-${d.fieldId}`"
             >
-              <label :for="`tp-def-${d.fieldId}`">
+              <label :id="`tp-def-${d.fieldId}-label`" :for="`tp-def-${d.fieldId}`">
                 {{
                   fieldOf(d.fieldId)
                     ? `${sectionName(fieldOf(d.fieldId)!.sectionId)} · ${fieldOf(d.fieldId)!.label}`

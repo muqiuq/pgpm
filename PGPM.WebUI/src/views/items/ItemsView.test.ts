@@ -10,6 +10,7 @@ import { useDatabase } from '@/local/db'
 import { setRepoContext } from '@/local/repo'
 import { useSession } from '@/stores/session'
 import { memoryDb, until } from '@/test/memoryDb'
+import { createRequested } from './createRequest'
 import ItemsView from './ItemsView.vue'
 
 const { route, replace } = vi.hoisted(() => ({
@@ -128,6 +129,14 @@ describe('the item list page (docs/01 §4.3)', () => {
     // The sorted column carries its position in the multi-column sort ("Modified1").
     expect(headers).toEqual(['', 'Key', 'Title', 'Owner', 'Modified1'])
     expect(warnings.filter((w) => w.includes('[Vue warn]'))).toEqual([])
+  })
+
+  it('opens its create dialog when a link asked for it (`?new=1`, the installed app’s New note)', async () => {
+    createRequested.value = 'note'
+    open()
+    await until(() => !!document.body.querySelector('[role="dialog"]'), 'the dialog')
+    expect(document.body.querySelector('[role="dialog"]')!.textContent).toContain('New note')
+    expect(createRequested.value).toBeNull()
   })
 
   it('opens a linked saved view: the seeded Learnings shows the notes that are a learning of a project', async () => {

@@ -166,6 +166,7 @@ const excluded = computed(() => [props.item.id])
             <i
               v-if="line.link._local?.pending"
               v-tooltip.top="'Not synced yet'"
+              role="img"
               class="pi pi-cloud-upload muted"
               aria-label="Not synced yet"
             />

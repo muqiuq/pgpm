@@ -301,7 +301,7 @@ async function create() {
         <div class="mobile-line">
           <span class="mono strong">{{ item.username }}</span>
           <Tag :value="access(item)" :severity="item.isAdmin ? 'info' : 'secondary'" />
-          <i v-if="item.isTotpEnabled" class="pi pi-shield on" aria-label="2FA on" />
+          <i v-if="item.isTotpEnabled" role="img" class="pi pi-shield on" aria-label="2FA on" />
           <RelativeTime :value="item.lastLoginAt" class="muted right" />
         </div>
       </template>
@@ -356,10 +356,11 @@ async function create() {
             <label for="u-admin">Admin: every right, and users, groups and rights</label>
           </div>
           <div class="field">
-            <label for="u-groups">Groups</label>
+            <label id="u-groups-label" for="u-groups">Groups</label>
             <MultiSelect
               v-model="edit.groupIds"
               input-id="u-groups"
+              aria-labelledby="u-groups-label"
               :options="groupOptions"
               option-label="label"
               option-value="value"
@@ -434,10 +435,11 @@ async function create() {
           <label for="nu-admin">Admin: every right, and users, groups and rights</label>
         </div>
         <div class="field">
-          <label for="nu-groups">Groups</label>
+          <label id="nu-groups-label" for="nu-groups">Groups</label>
           <MultiSelect
             v-model="draft.groupIds"
             input-id="nu-groups"
+            aria-labelledby="nu-groups-label"
             :options="groupOptions"
             option-label="label"
             option-value="value"

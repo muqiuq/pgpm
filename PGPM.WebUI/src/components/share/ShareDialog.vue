@@ -144,10 +144,11 @@ function close() {
         <small class="field-hint">{{ summary }} A member of several groups gets the highest access.</small>
       </div>
       <div class="field">
-        <label for="share-owner">Owner</label>
+        <label id="share-owner-label" for="share-owner">Owner</label>
         <Select
           v-model="owner"
           input-id="share-owner"
+          aria-labelledby="share-owner-label"
           :options="ownerOptions"
           option-label="label"
           option-value="value"

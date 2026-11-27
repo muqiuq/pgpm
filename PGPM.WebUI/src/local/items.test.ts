@@ -13,8 +13,10 @@ import {
   createItem,
   daysInStatus,
   defaultStatus,
+  fileIdsIn,
   isOverdue,
   overdueReason,
+  rewriteFileLinks,
   selectableStatuses,
   statusesOf,
   titleError,
@@ -336,6 +338,67 @@ describe('idea / lead → project conversion (docs/01 §8, docs/03 §12.8)', () 
     ben.engine.start()
     await until(async () => !!(await ben.db.synced('items').get(project.id)), 'the project at Ben')
     expect(await ben.db.synced('items').get(project.id)).toMatchObject({ access: 'edit', originItemId: idea.id })
+  })
+
+  it('copies the images embedded in the description and points the text at the copies', async () => {
+    const ana = client(ANA)
+    ana.engine.start()
+    await until(() => ana.engine.status.connection === 'live', 'live')
+    const idea = await ana.repo.transaction((tx) =>
+      createItem(tx, {
+        type: 'idea',
+        title: 'Shelf scanner',
+        statusId: 's-idea-new',
+        shares: [{ groupId: G1, access: 'edit' }],
+      }),
+    )
+    await until(async () => (await ana.db.outbox.count()) === 0, 'the idea on the server')
+    const shown = '01970000-0000-7000-8000-0000000e0001'
+    const unused = '01970000-0000-7000-8000-0000000e0002'
+    const manual = '01970000-0000-7000-8000-0000000e0003'
+    const elsewhere = '01970000-0000-7000-8000-0000000e0004'
+    serverFile(idea.id, shown, 'embedded', 'available', 4)
+    serverFile(idea.id, unused, 'embedded', 'available', 5)
+    serverFile(idea.id, manual, 'attachment', 'available', 6)
+    const description = [
+      `![Shelf](/api/v1/files/${shown}/shelf.png "front")`,
+      `The [manual](/api/v1/files/${manual}/manual.pdf) and [a file of another item](/api/v1/files/${elsewhere}/x.png).`,
+      `Again: ![Shelf](https://pgpm.example/api/v1/files/${shown}/shelf.png)`,
+    ].join('\n\n')
+    server.change(ANA, 'items', idea.id, { description })
+    await until(async () => (await ana.db.synced('files').count()) === 3, 'the files at Ana')
+    await until(async () => (await ana.db.synced('items').get(idea.id))?.description === description, 'the text')
+
+    const { project, copied } = await convertToProject(ana.repo, idea.id, statuses)
+    const copies = (await ana.db.synced('files').where('itemId').equals(project.id).toArray()) as unknown as FileRow[]
+    // The shown image and the attachment, not the image no text shows any more.
+    expect(copied.files).toBe(2)
+    const image = copies.find((f) => f.purpose === 'embedded')!
+    const attachment = copies.find((f) => f.purpose === 'attachment')!
+    expect(copies).toHaveLength(2)
+    expect(image.sha256).toBe(server.table('files').get(shown)!.sha256)
+    expect(project.description).toBe(
+      [
+        `![Shelf](/api/v1/files/${image.id}/shelf.png "front")`,
+        `The [manual](/api/v1/files/${attachment.id}/manual.pdf) and [a file of another item](/api/v1/files/${elsewhere}/x.png).`,
+        `Again: ![Shelf](https://pgpm.example/api/v1/files/${image.id}/shelf.png)`,
+      ].join('\n\n'),
+    )
+    // The source keeps its own text.
+    expect((await ana.db.synced('items').get(idea.id))?.description).toBe(description)
+    await until(async () => (await ana.db.outbox.count()) === 0, 'the conversion on the server')
+    expect(server.table('files').get(image.id)).toMatchObject({ status: 'available', itemId: project.id })
+  })
+
+  it('finds and rewrites the file links of a text', () => {
+    expect([...fileIdsIn('![a](/api/v1/files/f-1/a.png) [b](/api/v1/files/f-2/b.pdf) /api/v1/files/x')]).toEqual([
+      'f-1',
+      'f-2',
+    ])
+    expect(fileIdsIn(null).size).toBe(0)
+    expect(
+      rewriteFileLinks('![a](/api/v1/files/f-1/a.png) ![b](/api/v1/files/f-2/b.png)', new Map([['f-1', 'n-1']])),
+    ).toBe('![a](/api/v1/files/n-1/a.png) ![b](/api/v1/files/f-2/b.png)')
   })
 
   it('refuses what can’t be converted: a project, read access, no project status', async () => {

@@ -2,7 +2,7 @@
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
 import type { MenuItem } from 'primevue/menuitem'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import GlobalSearch from '@/components/GlobalSearch.vue'
 import LogoMark from '@/components/LogoMark.vue'
@@ -30,6 +30,11 @@ const notify = useNotify()
 const phone = useMedia('(max-width: 599px)')
 const narrow = useMedia('(max-width: 959px)')
 const overlayOpen = ref(false)
+// On a phone the search is an icon until tapped; then it takes the app bar.
+const searching = ref(false)
+watch(phone, (on) => !on && (searching.value = false))
+const menuButton = ref<{ $el?: HTMLElement } | null>(null)
+const drawer = ref<HTMLElement | null>(null)
 
 const groups = computed(() => visibleNavigation(session.allows))
 
@@ -40,10 +45,33 @@ const rail = computed(
 )
 const drawerVisible = computed(() => !phone.value || overlayOpen.value)
 
+// The phone's overlay navigation: focus moves into it when it opens, back to the menu button when it closes – unless a
+// link inside took the user to another page (the page's content is next then); Escape closes it.
+let navigated = false
 watch(
   () => route.fullPath,
-  () => (overlayOpen.value = false),
+  () => {
+    navigated = overlayOpen.value
+    overlayOpen.value = false
+  },
 )
+watch(overlayOpen, async (open, was) => {
+  await nextTick()
+  if (open) {
+    drawer.value?.querySelector<HTMLElement>('a, button')?.focus()
+    return
+  }
+  const active = document.activeElement
+  const lost = !active || active === document.body || !!drawer.value?.contains(active)
+  if (was && lost && !navigated) menuButton.value?.$el?.focus()
+  navigated = false
+})
+function onDrawerKey(e: KeyboardEvent) {
+  if (e.key === 'Escape' && phone.value && overlayOpen.value) {
+    e.preventDefault()
+    overlayOpen.value = false
+  }
+}
 watch(
   () => preferences.railHeld,
   () => (openedWhileHeld.value = false),
@@ -126,7 +154,14 @@ const userItems = computed<MenuItem[]>(() => [
   <div class="app-layout" :class="{ rail, phone }">
     <a class="skip-link" href="#main">Skip to content</a>
     <div v-if="phone && overlayOpen" class="backdrop" @click="overlayOpen = false" />
-    <aside v-show="drawerVisible" class="drawer" :class="{ overlay: phone }" aria-label="Navigation">
+    <aside
+      v-show="drawerVisible"
+      ref="drawer"
+      class="drawer"
+      :class="{ overlay: phone }"
+      aria-label="Navigation"
+      @keydown="onDrawerKey"
+    >
       <RouterLink to="/" class="drawer-brand" aria-label="PGPM home">
         <LogoMark :size="24" />
         <span v-if="!rail" class="wordmark">PGPM</span>
@@ -170,6 +205,7 @@ const userItems = computed<MenuItem[]>(() => [
     <div class="main-column">
       <header class="app-bar">
         <Button
+          ref="menuButton"
           icon="pi pi-bars"
           text
           rounded
@@ -178,8 +214,20 @@ const userItems = computed<MenuItem[]>(() => [
           :aria-expanded="phone ? overlayOpen : !rail"
           @click="toggleDrawer"
         />
-        <div class="app-bar-center"><GlobalSearch v-if="!phone" /></div>
-        <div class="app-bar-end">
+        <div class="app-bar-center">
+          <GlobalSearch v-if="!phone" />
+          <GlobalSearch v-else-if="searching" autofocus @done="searching = false" />
+        </div>
+        <div v-show="!(phone && searching)" class="app-bar-end">
+          <Button
+            v-if="phone"
+            icon="pi pi-search"
+            text
+            rounded
+            severity="secondary"
+            aria-label="Search"
+            @click="searching = true"
+          />
           <SyncIndicator />
           <Button
             v-tooltip.bottom="preferences.isDark() ? 'Light theme' : 'Dark theme'"
@@ -435,5 +483,19 @@ const userItems = computed<MenuItem[]>(() => [
   height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
+}
+
+@media print {
+  .drawer,
+  .app-bar,
+  .backdrop,
+  .skip-link {
+    display: none !important;
+  }
+
+  .app-layout {
+    display: block;
+    min-height: 0;
+  }
 }
 </style>

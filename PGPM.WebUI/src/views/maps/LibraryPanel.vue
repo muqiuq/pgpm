@@ -18,7 +18,7 @@ import { ITEM_DRAG_TYPE } from './mapList'
  * The map's library panel (doc 01 §12.4): every item on the device, searchable (key, title, description – every word
  * must occur) and filterable by type and status; a row is dragged onto the canvas (`application/x-pgpm-item`, the host
  * drops it with `addItemCard` where it lands) or added in the middle of the view with its *+*. Items already on the map
- * show how often.
+ * show how often. Below 600 px it is a sheet over the bottom of the map (touch can't drag: *+* adds).
  */
 const LIMIT = 100
 
@@ -107,7 +107,8 @@ function onDragStart(event: DragEvent, item: ItemRow) {
       />
     </div>
     <p v-if="canAdd" class="muted hint">Drag an item onto the map, or add it in the middle with +.</p>
-    <ul class="rows">
+    <!-- Read only, the rows have no buttons: the list itself takes the focus, so the keyboard can scroll it. -->
+    <ul class="rows" aria-label="Items" :tabindex="canAdd ? undefined : 0">
       <li
         v-for="item in shown"
         :key="item.id"
@@ -241,5 +242,22 @@ h2 {
 
 .small {
   font-size: 0.857rem;
+}
+
+@media (max-width: 599px) {
+  .library {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    width: auto;
+    min-width: 0;
+    max-height: 55%;
+    border-right: 0;
+    border-radius: var(--p-border-radius-lg) var(--p-border-radius-lg) 0 0;
+    box-shadow: 0 -4px 16px rgb(0 0 0 / 15%);
+    padding-bottom: calc(var(--pgpm-space-2) + env(safe-area-inset-bottom, 0px));
+  }
 }
 </style>

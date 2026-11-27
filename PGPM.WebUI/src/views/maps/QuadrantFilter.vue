@@ -31,11 +31,12 @@ function setQuadrants(quadrants: Quadrant[]) {
 
 <template>
   <div class="quadrant-filter field">
-    <label for="filter-quadrant-map">Quadrant</label>
+    <label id="filter-quadrant-label" for="filter-quadrant-map">Quadrant</label>
     <Select
       v-if="maps.length > 1"
       :model-value="mapId"
       input-id="filter-quadrant-map"
+      aria-labelledby="filter-quadrant-label"
       :options="[...maps]"
       option-label="name"
       option-value="id"
@@ -50,6 +51,7 @@ function setQuadrants(quadrants: Quadrant[]) {
       :placeholder="maps.length === 1 ? `Any quadrant of ${maps[0]!.name}` : 'Any quadrant'"
       size="small"
       :input-id="maps.length > 1 ? undefined : 'filter-quadrant-map'"
+      aria-labelledby="filter-quadrant-label"
       @update:model-value="setQuadrants"
     />
   </div>

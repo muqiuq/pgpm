@@ -246,7 +246,7 @@ function onClick(event: MouseEvent) {
 .pgpm-markdown .hljs-comment,
 .pgpm-markdown .hljs-quote,
 .pgpm-markdown .hljs-meta {
-  color: var(--p-surface-500);
+  color: var(--p-surface-600);
   font-style: italic;
 }
 
