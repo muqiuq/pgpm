@@ -13,6 +13,8 @@ import { useStatuses } from '@/local/lookups'
 import { repo } from '@/local/repo'
 import { itemKey, type ItemRow } from '@/local/rows'
 import { allowedStatuses, selectableTemplates, templateStatus } from '@/local/templates'
+import FirstSyncNotice from '@/components/sync/FirstSyncNotice.vue'
+import { useSyncStore } from '@/stores/sync'
 import TemplatePicker from './TemplatePicker.vue'
 
 /**
@@ -27,6 +29,7 @@ const router = useRouter()
 const notify = useNotify()
 const statuses = useStatuses()
 const { templates } = useTemplates()
+const sync = useSyncStore()
 
 const title = ref('')
 const statusId = ref<string | null>(null)
@@ -62,7 +65,7 @@ watch(preselected, (value, before) => {
 
 async function convert() {
   error.value = titleError(title.value)
-  if (error.value) return
+  if (error.value || sync.firstSync) return
   saving.value = true
   try {
     const result = await convertToProject(repo, props.source.id, statuses.all.value, {
@@ -88,6 +91,7 @@ async function convert() {
 <template>
   <Dialog v-model:visible="visible" header="Convert to project" modal :style="{ width: 'min(32rem, 100vw)' }">
     <form id="convert-item" class="form" novalidate @submit.prevent="convert">
+      <FirstSyncNotice v-if="sync.firstSync" compact />
       <div class="field">
         <label for="convert-title">Project title</label>
         <InputText id="convert-title" v-model="title" maxlength="300" :invalid="!!error" autofocus />
@@ -118,7 +122,7 @@ async function convert() {
       <div class="carried">
         <span class="label">The project gets</span>
         <ul>
-          <li>title, description, colour, cover image and attachments</li>
+          <li>title, description (with its images), colour, cover image and attachments</li>
           <li>sharing, assigned persons and links</li>
           <li v-if="source.type === 'idea'">the sections and field values that apply to projects</li>
           <li v-if="template">the template’s sections, defaults, milestones and gates</li>
@@ -133,7 +137,14 @@ async function convert() {
     </form>
     <template #footer>
       <Button label="Cancel" severity="secondary" text @click="visible = false" />
-      <Button type="submit" form="convert-item" label="Convert" icon="pi pi-arrow-right" :loading="saving" />
+      <Button
+        type="submit"
+        form="convert-item"
+        label="Convert"
+        icon="pi pi-arrow-right"
+        :loading="saving"
+        :disabled="sync.firstSync"
+      />
     </template>
   </Dialog>
 </template>

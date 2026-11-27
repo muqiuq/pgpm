@@ -190,6 +190,7 @@ async function forAll(side: 'mine' | 'theirs') {
                     <ToggleSwitch
                       v-if="typeof f.mine === 'boolean'"
                       :model-value="Boolean(edited[key])"
+                      :aria-label="`Your ${fieldLabel(c.table, String(key), describe(c).type)}`"
                       @update:model-value="(v: boolean) => (edited[key] = v)"
                     />
                     <Textarea
@@ -198,6 +199,7 @@ async function forAll(side: 'mine' | 'theirs') {
                       auto-resize
                       rows="3"
                       fluid
+                      :aria-label="`Your ${fieldLabel(c.table, String(key), describe(c).type)}`"
                       @update:model-value="(v: string | undefined) => (edited[key] = v ?? '')"
                     />
                     <InputText

@@ -7,12 +7,13 @@ import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import ShareDialog from '@/components/share/ShareDialog.vue'
 import { useFilePipeline } from '@/composables/useFileUrl'
+import { useMedia } from '@/composables/useMedia'
 import { useNotify } from '@/composables/useNotify'
 import { itemRoute } from '@/domain/itemTypes'
 import { localDb } from '@/local/db'
 import { useGroups, useOnline } from '@/local/lookups'
 import { repo } from '@/local/repo'
-import type { ItemShareRow } from '@/local/rows'
+import type { ItemShareRow, ProjectTemplateRow } from '@/local/rows'
 import { useLive } from '@/local/useLive'
 import { createLocalSource, type LocalMapSource } from '@/maps/localSource'
 import MapCanvas from '@/maps/MapCanvas.vue'
@@ -48,6 +49,8 @@ const files = useFilePipeline()
 const online = useOnline()
 const sync = useSyncStore()
 const groups = useGroups()
+// Below 600 px the header's buttons are icons and the library is a sheet over the bottom of the map.
+const phone = useMedia('(max-width: 599px)')
 
 const make = (id: string) => createLocalSource(id, { files })
 const source = shallowRef<LocalMapSource>(make(props.id))
@@ -83,6 +86,17 @@ const shareText = computed(() => {
 })
 const conflicts = computed(() =>
   sync.conflicts.filter((c) => c.mapId === props.id || (c.table === 'maps' && c.rowId === props.id)),
+)
+
+/** The project templates' names, for the filter bar's template choice. */
+const templateNames = useLive(
+  async () =>
+    new Map(
+      ((await localDb().synced('project_templates').toArray()) as unknown as ProjectTemplateRow[])
+        .filter((t) => !t.deleted)
+        .map((t) => [t.id, t.name]),
+    ),
+  new Map<string, string>(),
 )
 
 /** How often each item has a card on this map (the dialogs mark them, the library counts). */
@@ -235,19 +249,22 @@ onBeforeUnmount(() => {
         <h1>{{ map.name }}</h1>
         <Tag v-if="map.is_template" value="Template" severity="info" />
         <Tag v-if="access === 'read'" icon="pi pi-lock" value="Read only" severity="secondary" />
-        <Tag
+        <Button
           v-if="conflicts.length"
           v-tooltip.bottom="'Open the conflicts'"
           icon="pi pi-exclamation-triangle"
-          :value="conflicts.length === 1 ? '1 conflict' : `${conflicts.length} conflicts`"
+          :label="conflicts.length === 1 ? '1 conflict' : `${conflicts.length} conflicts`"
           severity="warn"
-          class="clickable"
+          size="small"
+          outlined
           @click="sync.openDialog('conflicts')"
         />
         <span class="spacer" />
         <Button
           v-if="map.kind === 'canvas'"
-          label="Library"
+          v-tooltip.bottom="phone ? 'Library' : undefined"
+          :label="phone ? undefined : 'Library'"
+          aria-label="Library"
           icon="pi pi-book"
           size="small"
           severity="secondary"
@@ -257,7 +274,9 @@ onBeforeUnmount(() => {
         />
         <Button
           v-if="map.kind === 'matrix' && canManage"
-          label="Matrix settings"
+          v-tooltip.bottom="phone ? 'Matrix settings' : undefined"
+          :label="phone ? undefined : 'Matrix settings'"
+          aria-label="Matrix settings"
           icon="pi pi-sliders-v"
           size="small"
           severity="secondary"
@@ -265,7 +284,9 @@ onBeforeUnmount(() => {
           @click="configuring = true"
         />
         <Button
-          :label="`Share · ${shareText}`"
+          v-tooltip.bottom="phone ? `Share · ${shareText}` : undefined"
+          :label="phone ? undefined : `Share · ${shareText}`"
+          :aria-label="`Share · ${shareText}`"
           icon="pi pi-users"
           size="small"
           severity="secondary"
@@ -288,6 +309,7 @@ onBeforeUnmount(() => {
             ref="matrix"
             :source="source"
             :focus="focus"
+            :template-names="templateNames.value.value"
             @open-item="openItem"
             @request-image="requests.onRequestImage"
             @error="onError"
@@ -316,6 +338,7 @@ onBeforeUnmount(() => {
             ref="canvas"
             :source="source"
             :focus="focus"
+            :template-names="templateNames.value.value"
             @request-item="requests.onRequestItem"
             @request-milestone="requests.onRequestMilestone"
             @request-project="requests.onRequestProject"
@@ -379,7 +402,10 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--pgpm-space-2);
-  height: calc(100vh - var(--pgpm-header-height) - 2 * var(--pgpm-space-4));
+  padding: var(--pgpm-space-3) var(--pgpm-space-4);
+  /* dvh: a phone's browser bars don't cover the zoom controls. */
+  height: calc(100vh - var(--pgpm-header-height));
+  height: calc(100dvh - var(--pgpm-header-height));
   min-height: 480px;
 }
 
@@ -410,11 +436,8 @@ h1 {
   flex: 1;
 }
 
-.clickable {
-  cursor: pointer;
-}
-
 .body {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -449,5 +472,26 @@ h1 {
 
 .hidden-input {
   display: none;
+}
+
+@media (max-width: 599px) {
+  .map-page {
+    padding: var(--pgpm-space-2);
+    min-height: 420px;
+  }
+
+  h1 {
+    max-width: none;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .bar {
+    flex-wrap: nowrap;
+  }
+
+  .spacer {
+    display: none;
+  }
 }
 </style>

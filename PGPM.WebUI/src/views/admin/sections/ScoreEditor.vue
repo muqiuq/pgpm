@@ -157,10 +157,11 @@ function maxOf(key: string): string {
     </div>
     <div class="form-grid">
       <div class="field">
-        <label for="score-op">Operation</label>
+        <label id="score-op-label" for="score-op">Operation</label>
         <Select
           :model-value="form.op"
           input-id="score-op"
+          aria-labelledby="score-op-label"
           :options="ops"
           option-label="label"
           option-value="value"
@@ -169,10 +170,11 @@ function maxOf(key: string): string {
         />
       </div>
       <div class="field">
-        <label for="score-na">n/a answers</label>
+        <label id="score-na-label" for="score-na">n/a answers</label>
         <Select
           :model-value="form.na"
           input-id="score-na"
+          aria-labelledby="score-na-label"
           :options="naModes"
           option-label="label"
           option-value="value"

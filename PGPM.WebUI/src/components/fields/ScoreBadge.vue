@@ -33,6 +33,7 @@ const aria = computed(() =>
 
 <template>
   <span
+    role="img"
     class="score-badge"
     :class="{ incomplete: value === null, compact }"
     :style="color ? { '--score': color } : undefined"

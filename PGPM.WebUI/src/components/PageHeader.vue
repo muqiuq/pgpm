@@ -69,4 +69,16 @@ defineProps<{ title: string; crumbs?: { label: string; to?: string | object }[] 
   align-items: center;
   gap: var(--pgpm-space-2);
 }
+
+/* Printed, the title wraps instead of being cut; the actions stay on screen. */
+@media print {
+  .actions {
+    display: none;
+  }
+
+  h1 {
+    white-space: normal;
+    overflow: visible;
+  }
+}
 </style>

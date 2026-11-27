@@ -91,4 +91,10 @@ defineProps<{
   background: var(--pgpm-fail-soft);
   color: var(--pgpm-fail);
 }
+
+@media print {
+  .tab-nav {
+    display: none;
+  }
+}
 </style>

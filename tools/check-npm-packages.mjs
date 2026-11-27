@@ -32,7 +32,7 @@ const allowedLicenses = new Set([
   'ISC',
   'MIT',
   'MIT-0',
-  'MPL-2.0', // lightningcss, in the build tools only
+  'MPL-2.0', // lightningcss (build tools) and axe-core (the e2e accessibility checks): weak copyleft per file, used unmodified
   'OFL-1.1', // the fonts (Inter, JetBrains Mono)
   'Python-2.0', // argparse
   'Unlicense',

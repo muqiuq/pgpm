@@ -308,19 +308,51 @@ export const CARD_SIZE = { width: 220, height: 92 }
  * map…*). Answers the new element's id; throws for a matrix map (its cards are computed) or one without a free layer.
  */
 export function addCardToMap(tx: RepoTransaction, mapId: string, itemId: string): Promise<string> {
-  const work = async () => {
-    const content = await mapContent(tx.db, mapId)
-    if (!content) throw new Error('The map is not on this device.')
-    if (content.map.kind === 'matrix') throw new Error('A matrix map places its items itself.')
-    const layer = targetLayer(content.layers)
-    if (!layer) throw new Error('Every layer of the map is hidden or locked.')
-    const centre = mapCentre(content.elements)
-    const top = content.elements
+  return inTransaction(placeCards(tx, mapId, [itemId]).then((ids) => ids[0]!))
+}
+
+/** The gap between the cards *Add to map* lays out in a grid. */
+export const CARD_GAP = 24
+
+/** Where `count` cards go around a centre: a grid about as wide as high, row by row (top left of each card). */
+export function cardGrid(centre: { x: number; y: number }, count: number): { x: number; y: number }[] {
+  const columns = Math.max(1, Math.ceil(Math.sqrt(count)))
+  const rows = Math.ceil(count / columns)
+  const width = columns * CARD_SIZE.width + (columns - 1) * CARD_GAP
+  const height = rows * CARD_SIZE.height + (rows - 1) * CARD_GAP
+  const round = (v: number) => Math.round(v * 100) / 100
+  return Array.from({ length: count }, (_, i) => ({
+    x: round(centre.x - width / 2 + (i % columns) * (CARD_SIZE.width + CARD_GAP)),
+    y: round(centre.y - height / 2 + Math.floor(i / columns) * (CARD_SIZE.height + CARD_GAP)),
+  }))
+}
+
+/**
+ * Inside a transaction: a card of each item (the list's bulk *Add to map…*, docs/01 §4.3) in a grid around the map's
+ * centre, in the given order, on top of the target layer – one batch with the caller's. Answers the new elements' ids;
+ * throws as {@link addCardToMap} does.
+ */
+export function addCardsToMap(tx: RepoTransaction, mapId: string, itemIds: readonly string[]): Promise<string[]> {
+  return inTransaction(placeCards(tx, mapId, itemIds))
+}
+
+async function placeCards(tx: RepoTransaction, mapId: string, itemIds: readonly string[]): Promise<string[]> {
+  const content = await mapContent(tx.db, mapId)
+  if (!content) throw new Error('The map is not on this device.')
+  if (content.map.kind === 'matrix') throw new Error('A matrix map places its items itself.')
+  if (content.map.access === 'read') throw new Error('You can read this map, not change it.')
+  const layer = targetLayer(content.layers)
+  if (!layer) throw new Error('Every layer of the map is hidden or locked.')
+  const spots = cardGrid(mapCentre(content.elements), itemIds.length)
+  let z =
+    content.elements
       .filter((e) => e.layer_id === layer.id)
       .sort((a, b) => compareKeyThenId(a.z, a.id, b.z, b.id))
-      .at(-1)
+      .at(-1)?.z ?? null
+  const ids: string[] = []
+  for (const [i, itemId] of itemIds.entries()) {
     const id = uuidv7()
-    const round = (v: number) => Math.round(v * 100) / 100
+    z = keyBetween(z, null)
     await tx.create(
       'map_elements',
       {
@@ -328,9 +360,9 @@ export function addCardToMap(tx: RepoTransaction, mapId: string, itemId: string)
         layerId: layer.id,
         kind: 'item',
         itemId,
-        z: keyBetween(top?.z ?? null, null),
-        x: round(centre.x - CARD_SIZE.width / 2),
-        y: round(centre.y - CARD_SIZE.height / 2),
+        z,
+        x: spots[i]!.x,
+        y: spots[i]!.y,
         width: CARD_SIZE.width,
         height: CARD_SIZE.height,
         milestoneId: null,
@@ -345,9 +377,9 @@ export function addCardToMap(tx: RepoTransaction, mapId: string, itemId: string)
       },
       { id },
     )
-    return id
+    ids.push(id)
   }
-  return inTransaction(work())
+  return ids
 }
 
 /** How often an item is placed on each map (its cards), from the device's elements. */

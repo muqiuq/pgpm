@@ -19,7 +19,9 @@ import { itemRank } from '@/local/search'
 import { useLive } from '@/local/useLive'
 import { DECISION_LABELS, MILESTONE_STATUS_LABELS } from '@/maps/cards'
 import type { GateDecision, MilestoneStatus } from '@/maps/types'
+import FirstSyncNotice from '@/components/sync/FirstSyncNotice.vue'
 import { useSession } from '@/stores/session'
+import { useSyncStore } from '@/stores/sync'
 import type { MapRequests } from './mapRequests'
 
 /**
@@ -30,6 +32,7 @@ import type { MapRequests } from './mapRequests'
  */
 const props = defineProps<{ requests: MapRequests; counts: ReadonlyMap<string, number> }>()
 const session = useSession()
+const sync = useSyncStore()
 const notify = useNotify()
 const groups = useGroups()
 const statuses = useStatuses()
@@ -132,7 +135,7 @@ const canCreate = computed(() => pending.value?.kind === 'item' && session.allow
 
 async function create() {
   titleProblem.value = titleError(title.value)
-  if (titleProblem.value) return
+  if (titleProblem.value || sync.firstSync) return
   creating.value = true
   try {
     await props.requests.createAndPlace({ title: title.value, statusId: statusId.value, shares: shares.value })
@@ -167,16 +170,18 @@ function visibleChanged(open: boolean) {
   >
     <form v-if="canCreate" id="place-create" class="form create" novalidate @submit.prevent="create">
       <h3>Create new</h3>
+      <FirstSyncNotice v-if="sync.firstSync" compact />
       <div class="field">
         <label for="place-title">Title</label>
         <InputText id="place-title" v-model="title" autofocus maxlength="300" :invalid="!!titleProblem" />
         <small v-if="titleProblem" class="field-error">{{ titleProblem }}</small>
       </div>
       <div v-if="info.hasStatus" class="field">
-        <label for="place-status">Status</label>
+        <label id="place-status-label" for="place-status">Status</label>
         <Select
           v-model="statusId"
           input-id="place-status"
+          aria-labelledby="place-status-label"
           :options="statusOptions"
           option-label="name"
           option-value="id"
@@ -196,7 +201,7 @@ function visibleChanged(open: boolean) {
         icon="pi pi-plus"
         size="small"
         :loading="creating"
-        :disabled="info.hasStatus && !statusId"
+        :disabled="(info.hasStatus && !statusId) || sync.firstSync"
       />
     </form>
     <section class="existing">

@@ -8,12 +8,14 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import FilterBar from '@/components/FilterBar.vue'
 import ListTable from '@/components/ListTable.vue'
+import FirstSyncNotice from '@/components/sync/FirstSyncNotice.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { useLocalTable } from '@/composables/useLocalTable'
 import { localDb } from '@/local/db'
 import type { PersonRow, Stored } from '@/local/rows'
 import { useLive } from '@/local/useLive'
 import { useSession } from '@/stores/session'
+import { useSyncStore } from '@/stores/sync'
 import PersonDialog from './PersonDialog.vue'
 
 /**
@@ -29,6 +31,7 @@ type Kind = 'Member' | 'Guest'
 const route = useRoute()
 const router = useRouter()
 const session = useSession()
+const sync = useSyncStore()
 
 const text = (v: unknown) => (typeof v === 'string' && v ? v : null)
 const source = ref<Source | null>((text(route.query.source) as Source | null) ?? null)
@@ -151,7 +154,8 @@ const created = (id: string) => router.push({ name: 'person', params: { id } })
         size="small"
       />
     </FilterBar>
-    <ListTable :table="table" what="persons" selectable fixed @select="open">
+    <ListTable :table="table" what="persons" selectable fixed row-links @select="open">
+      <template v-if="sync.firstSync" #empty><FirstSyncNotice /></template>
       <Column field="displayName" header="Name" sortable>
         <template #body="{ data }">
           <div class="name-cell">

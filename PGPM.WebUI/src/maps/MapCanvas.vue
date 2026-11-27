@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRef, useSlots, watch } from 'vue'
+import Button from 'primevue/button'
+import { useMedia } from '@/composables/useMedia'
 import { useNow } from '@/composables/useNow'
 import { jsonEqual } from '@/local/outbox'
 import { cssColor } from './cards'
@@ -23,7 +25,7 @@ import {
 } from './culling'
 import type { MapDataSource } from './dataSource'
 import { createMapEditor } from './editor'
-import { colorKey, visibleIds, type FilterContext } from './filter'
+import { activeConditions, colorKey, visibleIds, type FilterContext } from './filter'
 import { parseFocus } from './focus'
 import { useFileUrls } from './fileUrls'
 import {
@@ -44,7 +46,7 @@ import {
   type Rect,
   type Shape,
 } from './geometry'
-import { commandFor, isTyping } from './keyboard'
+import { commandFor, isControl, isControlKey, isTyping } from './keyboard'
 import { DEFAULT_QUADRANT_LABELS, type Quadrant } from './matrixLayout'
 import { isMatrixCard } from './matrixItems'
 import { createMapModel, type VirtualLayer } from './model'
@@ -93,6 +95,8 @@ const props = withDefaults(
     tools?: readonly Tool[]
     /** Elements without rows on a layer of their own below the others (a matrix map's cards). */
     virtual?: VirtualLayer | null
+    /** Project template id → name: the filter bar's template choice (the projects' templates on the map). */
+    templateNames?: ReadonlyMap<string, string> | null
     /** Item id → quadrant (matrix maps): card badges, the filter. */
     quadrants?: ReadonlyMap<string, { quadrant: Quadrant; label: string }> | null
     /** What *Fit* shows at least (a matrix map's world). */
@@ -107,6 +111,7 @@ const props = withDefaults(
     readonly: false,
     tools: () => CANVAS_TOOLS,
     virtual: null,
+    templateNames: null,
     quadrants: null,
     world: null,
     animated: false,
@@ -165,6 +170,11 @@ function updateSettings(patch: Partial<MapViewSettings>) {
   settings.value = { ...settings.value, ...patch }
   saveSettings()
 }
+// Below 600 px the filter bar folds into a button (it would cover the map), and the chrome is compact (CSS).
+const phone = useMedia('(max-width: 599px)')
+const filterOpen = ref(false)
+const filterCount = computed(() => activeConditions(filter.value))
+
 const filter = computed<MapFilter>(() => {
   const s = settings.value
   return {
@@ -428,6 +438,7 @@ const panelContent = computed<PanelContent | null>(() => {
   return panelMap.value ? { kind: 'map' } : null
 })
 const panelOpen = computed(() => panelContent.value !== null)
+const sidePanel = ref<InstanceType<typeof MapSidePanel> | null>(null)
 // The panel keeps the last content while the drawer slides out (PNMTD's `shown`).
 const shown = ref<PanelContent | null>(null)
 watch(panelContent, (c) => c && (shown.value = c), { immediate: true })
@@ -827,6 +838,7 @@ function finishDraw() {
   } else if (t === 'text') {
     const id = editor.add({ kind: 'text', text: null, ...centred(SIZES.text) })
     placed(id)
+    newText = id
     if (id) void nextTick(() => editWhenThere(id))
   } else if (t === 'rect' || t === 'ellipse') {
     const box = bandBox(d.from, d.to)
@@ -916,19 +928,27 @@ function startEdit(id: string) {
 function isMovableOrLine(el: ElementRow) {
   return canEdit.value && !lockedLayers.value.has(el.layer_id) && !isMatrixCard(el.id)
 }
+/** A text just placed with the text tool: left empty, it goes again (an invisible element helps nobody). */
+let newText: string | null = null
 function commitEdit() {
   const id = editingId.value
   editingId.value = null
   const el = id ? model.elementsById.value.get(id) : undefined
-  if (el && (editText.value || null) !== (el.text ?? null)) editor.setText(el.id, editText.value)
+  const placedNow = !!id && id === newText
+  newText = null
+  if (el && placedNow && el.kind === 'text' && !editText.value.trim() && !el.text) {
+    editor.remove([el.id])
+    select([])
+  } else if (el && (editText.value || null) !== (el.text ?? null)) {
+    editor.setText(el.id, editText.value)
+  }
   focusMap()
 }
+/** Escape, Ctrl/⌘+Enter and a click elsewhere keep what was typed (one undo step takes it back). */
 function onEditKey(e: KeyboardEvent) {
   e.stopPropagation()
-  if (e.key === 'Escape') {
-    editingId.value = null
-    focusMap()
-  } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+  if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
+    e.preventDefault()
     commitEdit()
   }
 }
@@ -1009,7 +1029,8 @@ function nudge(e: KeyboardEvent) {
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (isTyping(e.target)) return
+  // A field, or a control of the chrome (toolbar, filter bar, zoom) acting on its own keys.
+  if (isTyping(e.target) || (isControl(e.target) && isControlKey(e))) return
   if (e.key === ' ' || e.code === 'Space') {
     spaceHeld.value = true
     e.preventDefault()
@@ -1067,6 +1088,18 @@ function onKeydown(e: KeyboardEvent) {
       if (gesture || band.value || draft.value || lineDraft.value) cancelGesture()
       else if (tool.value !== 'select') tool.value = 'select'
       else closePanel()
+      break
+    case 'enter': {
+      // The keyboard's double-click: edit the text of the one selected shape, line or text; else go to the side panel.
+      const only = selection.value.length === 1 ? model.elementsById.value.get(selection.value[0]!) : undefined
+      if (only && ['rect', 'ellipse', 'text', 'line'].includes(only.kind) && isMovableOrLine(only)) startEdit(only.id)
+      else if (panelOpen.value) sidePanel.value?.focusPanel()
+      else return
+      break
+    }
+    case 'panel':
+      if (!panelOpen.value) return
+      sidePanel.value?.focusPanel()
       break
   }
   e.preventDefault()
@@ -1249,6 +1282,12 @@ const colorOptions = computed<Option[]>(() => {
   const keys = new Set(itemsShown.value.map(colorKey))
   return [...keys].map((key) => ({ value: key, label: key === 'default' ? 'Type colour' : key }))
 })
+const templateOptions = computed<Option[]>(() => {
+  const ids = new Set(itemsShown.value.map((i) => i.project_template_id).filter((t): t is string => !!t))
+  return [...ids]
+    .map((id) => ({ value: id, label: props.templateNames?.get(id) ?? 'Unknown template' }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+})
 const scoreOptions = computed<Option[]>(() =>
   Object.values(model.defsByKey.value)
     .filter((d) => !d.isArchived && ['score', 'rating', 'number'].includes(d.type))
@@ -1270,6 +1309,7 @@ const gridPattern = computed(() => {
   return s >= 6 ? { size: gridSize.value, transform: transform.value } : null
 })
 const patternId = `map-grid-${Math.random().toString(36).slice(2, 8)}`
+const hintId = `${patternId}-keys`
 const handleSize = computed(() => 8 / pan.view.value.k)
 
 function hideLayerLocally(id: string, hidden: boolean) {
@@ -1326,10 +1366,19 @@ defineExpose({
     class="map-canvas"
     :class="[`tool-${tool}`, { panning: spaceHeld, readonly: !canEdit }]"
     tabindex="0"
+    role="group"
+    aria-roledescription="map"
+    :aria-label="model.map.value?.name ?? 'Map'"
+    :aria-describedby="hintId"
     data-testid="map-canvas"
     @keydown="onKeydown"
     @keyup="onKeyup"
   >
+    <p :id="hintId" class="sr-only">
+      {{ selection.length ? `${selection.length} selected.` : 'Nothing selected.' }} Ctrl+A selects everything, arrow
+      keys move the selection, Enter edits its text (or goes to the side panel), F6 goes to the side panel, Delete
+      removes it from the map, Escape closes the panel; F fits the view, plus and minus zoom.
+    </p>
     <div class="stage">
       <svg
         ref="svg"
@@ -1479,11 +1528,23 @@ defineExpose({
       </svg>
 
       <div class="top">
+        <Button
+          v-if="phone"
+          :label="filterCount ? `Filter (${filterCount})` : 'Filter'"
+          icon="pi pi-filter"
+          size="small"
+          severity="secondary"
+          class="filter-toggle"
+          :aria-expanded="filterOpen"
+          @click="filterOpen = !filterOpen"
+        />
         <MapFilterBar
+          v-if="!phone || filterOpen"
           :filter="filter"
           :statuses="statusOptions"
           :persons="personOptions"
           :colors="colorOptions"
+          :templates="templateOptions"
           :score-fields="scoreOptions"
           :quadrants="quadrantOptions"
           :show-links="showLinks"
@@ -1557,6 +1618,7 @@ defineExpose({
       </div>
     </div>
     <MapSidePanel
+      ref="sidePanel"
       :open="panelOpen"
       :content="shown"
       :model="model"
@@ -1565,6 +1627,7 @@ defineExpose({
       :now="now"
       :milestone-editor="!!slots['milestone-panel']"
       @close="closePanel"
+      @leave="focusMap"
       @select="select"
       @open-item="(id) => emit('openItem', id)"
     >
@@ -1736,5 +1799,35 @@ defineExpose({
   .bottom-left {
     display: none;
   }
+
+  .top {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--pgpm-space-1);
+  }
+
+  .left {
+    bottom: 56px;
+  }
+
+  .left :deep(.map-toolbar .p-button) {
+    width: 1.875rem;
+    height: 1.875rem;
+    padding: 0;
+  }
+
+  .left :deep(.layer-panel) {
+    margin-top: 0;
+    max-width: calc(100vw - 80px);
+  }
+}
+
+.map-canvas:focus-visible {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: -2px;
+}
+
+.filter-toggle {
+  box-shadow: 0 2px 10px rgb(0 0 0 / 10%);
 }
 </style>

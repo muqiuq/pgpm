@@ -80,6 +80,7 @@ function what(entry: OutboxEntry): string {
       option-value="value"
       :allow-empty="false"
       size="small"
+      aria-label="Show"
       class="tabs"
     />
     <div v-if="sync.dialogTab === 'status'" class="status">

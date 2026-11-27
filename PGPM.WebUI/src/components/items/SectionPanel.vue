@@ -75,6 +75,7 @@ const menu = computed<MenuItem[]>(() =>
       <i
         v-if="readOnlySection"
         v-tooltip.top="'Only some groups may edit this section'"
+        role="img"
         class="pi pi-lock muted lock"
         aria-label="Read-only for you"
         tabindex="0"
@@ -104,6 +105,7 @@ const menu = computed<MenuItem[]>(() =>
             <i
               v-if="f.helpText"
               v-tooltip.top="f.helpText"
+              role="img"
               class="pi pi-question-circle muted help"
               :aria-label="f.helpText"
               tabindex="0"

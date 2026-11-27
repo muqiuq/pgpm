@@ -127,10 +127,11 @@ async function create() {
           <InputText id="ng-description" v-model="draft.description" />
         </div>
         <div class="field">
-          <label for="ng-copy">Rights</label>
+          <label id="ng-copy-label" for="ng-copy">Rights</label>
           <Select
             v-model="draft.copyOf"
             input-id="ng-copy"
+            aria-labelledby="ng-copy-label"
             :options="groups.data.value ?? []"
             option-label="name"
             option-value="id"

@@ -159,6 +159,7 @@ const more = computed<MenuItem[]>(() => [
       <i
         v-if="milestone._local?.pending"
         v-tooltip.top="'Not synced yet'"
+        role="img"
         class="pi pi-cloud-upload muted"
         aria-label="Not synced yet"
       />

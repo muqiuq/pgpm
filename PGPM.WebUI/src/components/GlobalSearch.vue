@@ -12,8 +12,11 @@ import { useLive } from '@/local/useLive'
  * The global search in the app bar (docs/01 §3): Ctrl/⌘ K focuses it; it searches every item type and the persons in
  * the local data (local/search.ts) – instant, offline, following changes live – and lists the results grouped *Items* /
  * *Persons* below the field. ↑/↓ move, Enter opens, Esc closes; a click opens too. A combobox with its listbox
- * (`aria-activedescendant`), closed on blur and after a navigation.
+ * (`aria-activedescendant`), closed on blur and after a navigation. On a phone the app bar opens it on demand
+ * (`autofocus`); `done` tells it to fold again (a result chosen, Esc on the empty field, left empty).
  */
+const props = defineProps<{ autofocus?: boolean }>()
+const emit = defineEmits<{ done: [] }>()
 const route = useRoute()
 const router = useRouter()
 const field = ref<{ $el?: HTMLElement } | null>(null)
@@ -64,6 +67,7 @@ function choose(result: SearchResult | undefined) {
   query.value = ''
   debounced.value = ''
   input()?.blur()
+  emit('done')
   void router.push(result.to)
 }
 
@@ -89,6 +93,7 @@ function onInputKey(event: KeyboardEvent) {
     } else {
       query.value = ''
       input()?.blur()
+      emit('done')
     }
   }
 }
@@ -99,6 +104,7 @@ function onFocus() {
 
 function onBlur() {
   open.value = false
+  if (!query.value.trim()) emit('done')
 }
 
 // Another page closes the results – not a change of the page's query (a list writes its search and filters there, a
@@ -117,7 +123,10 @@ function onKey(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onKey))
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  if (props.autofocus) input()?.focus()
+})
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   clearTimeout(timer)

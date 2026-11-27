@@ -50,6 +50,7 @@
     "workbox-routing": "7.4.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.65.0",
     "@types/hast": "3.0.4",

@@ -54,9 +54,10 @@ const date = (value: unknown) => (typeof value === 'string' && value ? value : u
 <template>
   <div class="item-filters form" role="group" aria-label="Filters">
     <div class="field">
-      <label for="f-owner">Owner</label>
+      <label id="f-owner-label" for="f-owner">Owner</label>
       <MultiSelect
         input-id="f-owner"
+        aria-labelledby="f-owner-label"
         :model-value="filters.ownerIds ?? []"
         :options="owners"
         option-label="label"
@@ -68,9 +69,10 @@ const date = (value: unknown) => (typeof value === 'string' && value ? value : u
       />
     </div>
     <div class="field">
-      <label for="f-person">Assigned person</label>
+      <label id="f-person-label" for="f-person">Assigned person</label>
       <MultiSelect
         input-id="f-person"
+        aria-labelledby="f-person-label"
         :model-value="filters.personIds ?? []"
         :options="assignees"
         option-label="label"
@@ -82,9 +84,10 @@ const date = (value: unknown) => (typeof value === 'string' && value ? value : u
       />
     </div>
     <div class="field">
-      <label for="f-group">Shared with</label>
+      <label id="f-group-label" for="f-group">Shared with</label>
       <MultiSelect
         input-id="f-group"
+        aria-labelledby="f-group-label"
         :model-value="filters.groupIds ?? []"
         :options="groupOptions"
         option-label="label"
@@ -95,9 +98,10 @@ const date = (value: unknown) => (typeof value === 'string' && value ? value : u
       />
     </div>
     <div class="field">
-      <label for="f-color">Colour</label>
+      <label id="f-color-label" for="f-color">Colour</label>
       <MultiSelect
         input-id="f-color"
+        aria-labelledby="f-color-label"
         :model-value="filters.colors ?? []"
         :options="colorOptions"
         option-label="name"

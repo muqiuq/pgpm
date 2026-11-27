@@ -279,6 +279,48 @@ code,
   }
 }
 
+/* Read by screen readers, not shown. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Visible keyboard focus (WCAG 2.4.7) where PrimeVue draws none of its own – links, plain buttons, focusable rows:
+   no specificity of its own (:where), so every component's focus ring wins over it. */
+:where(a, button, summary, [tabindex]:not([tabindex='-1'])):focus-visible {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 2px;
+}
+
+/* Printing (docs/03 §12.10): the page's content only, on white (preferences.ts switches the dark theme off). */
+@media print {
+  body {
+    background: #fff;
+  }
+
+  /* Controls are no content: buttons, toggles, the pencils of inline fields. */
+  .no-print,
+  .p-toast,
+  .p-tooltip,
+  .p-button,
+  .p-togglebutton,
+  .p-selectbutton,
+  .inline-field .shown > i {
+    display: none !important;
+  }
+
+  .panel {
+    border-color: #bbb;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

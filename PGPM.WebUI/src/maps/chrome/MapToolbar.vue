@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import Button from 'primevue/button'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { TOOL_INFO, type Tool } from '../tools'
 
-/** The tools on the left (doc 01 §12.4), with undo and redo, the layer panel and the map's properties below. */
+/**
+ * The tools on the left (doc 01 §12.4), with undo and redo, the layer panel and the map's properties below. A toolbar
+ * for the keyboard too: ↑/↓ (and ←/→) move between its buttons, Home/End go to the first/last; Tab leaves it.
+ */
 const props = defineProps<{
   tools: readonly Tool[]
   canEdit: boolean
@@ -19,11 +22,37 @@ const emit = defineEmits<{ undo: []; redo: []; layers: []; properties: [] }>()
 const shown = computed(() =>
   TOOL_INFO.filter((t) => props.tools.includes(t.tool) && (props.canEdit || t.tool === 'select' || t.tool === 'hand')),
 )
+const bar = ref<HTMLElement | null>(null)
+function onKey(e: KeyboardEvent) {
+  const buttons = [...(bar.value?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') ?? [])]
+  const at = buttons.indexOf(document.activeElement as HTMLButtonElement)
+  if (at < 0) return
+  const next =
+    e.key === 'ArrowDown' || e.key === 'ArrowRight'
+      ? (at + 1) % buttons.length
+      : e.key === 'ArrowUp' || e.key === 'ArrowLeft'
+        ? (at - 1 + buttons.length) % buttons.length
+        : e.key === 'Home'
+          ? 0
+          : e.key === 'End'
+            ? buttons.length - 1
+            : -1
+  if (next < 0) return
+  e.preventDefault()
+  buttons[next]!.focus()
+}
 const mod = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+'
 </script>
 
 <template>
-  <div class="map-toolbar panel" role="toolbar" aria-label="Map tools" aria-orientation="vertical">
+  <div
+    ref="bar"
+    class="map-toolbar panel"
+    role="toolbar"
+    aria-label="Map tools"
+    aria-orientation="vertical"
+    @keydown="onKey"
+  >
     <Button
       v-for="t in shown"
       :key="t.tool"
