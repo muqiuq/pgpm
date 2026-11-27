@@ -43,11 +43,11 @@ const views: Record<string, () => Promise<RouteComponent>> = {
   sections: () => import('@/views/admin/sections/SectionsView.vue'),
   templates: () => import('@/views/admin/templates/TemplatesView.vue'),
   packages: () => import('@/views/admin/packages/PackagesView.vue'),
+  maps: () => import('@/views/maps/MapsView.vue'),
 }
 
 /** Each menu entry's placeholder until its phase replaces the component (docs/05 §3). */
 const pages: Record<string, { phase: number; summary: string }> = {
-  maps: { phase: 5, summary: 'Canvas and matrix maps of ideas, projects, milestones and shapes, with templates.' },
   system: { phase: 7, summary: 'Sync clients, live connections, storage and versions.' },
 }
 
@@ -144,6 +144,14 @@ export const routes: RouteRecordRaw[] = [
     name: 'roles',
     component: () => import('@/views/admin/RolesView.vue'),
     meta: { title: 'Assignment roles', right: configuration, icon: 'pi pi-id-card', crumbs: adminCrumbs },
+  },
+  // A map (docs/01 §12): the canvas or matrix host, `?focus=item:<id>` (docs/03 §13.1).
+  {
+    path: '/maps/:id',
+    name: 'map',
+    component: () => import('@/views/maps/MapView.vue'),
+    props: true,
+    meta: { title: 'Map', icon: 'pi pi-map', crumbs: [{ label: 'Maps', to: '/maps' }] },
   },
   {
     path: '/persons/:id',

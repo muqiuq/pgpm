@@ -1,49 +1,29 @@
 import { describe, expect, it } from 'vitest'
-import { watch } from 'vue'
+import { describeDataSource } from './dataSourceBehaviour'
 import { uuidv7 } from './ids'
 import { createMemorySource } from './memorySource'
-import { BASE, C1, MAP_ID, R1, seed } from './testFixtures'
+import { C1, seed } from './testFixtures'
+
+describeDataSource('the in-memory data source', async (data) => {
+  const source = createMemorySource(data)
+  return {
+    source,
+    written: async () => source.log.value.map((m) => ({ batch: m.batch, table: m.table, op: m.op, id: m.id })),
+    setAccess: async (access) => source.setAccess(access),
+  }
+})
 
 describe('the in-memory data source', () => {
-  it('publishes a batch once, at its end, with one batch id', async () => {
+  it('logs every write with its batch, and publishes the read-only tables it is given', () => {
     const source = createMemorySource(seed())
-    let published = 0
-    watch(source.elements, () => published++, { flush: 'sync' })
-    await source.batch(() => {
-      void source.patch('map_elements', C1, { x: { old: 0, new: 5 } })
-      void source.patch('map_elements', R1, { x: { old: 0, new: 6 } })
-      void source.remove('map_elements', C1)
-    })
-    expect(published).toBe(1)
-    expect(source.log.value.map((m) => m.op)).toEqual(['patch', 'patch', 'delete'])
-    expect(new Set(source.log.value.map((m) => m.batch)).size).toBe(1)
-    expect(source.elements.value.find((e) => e.id === R1)!.x).toBe(6)
-  })
-
-  it('keeps the identity of rows that didn’t change', () => {
-    const source = createMemorySource(seed())
-    const before = source.elements.value.find((e) => e.id === R1)
     void source.patch('map_elements', C1, { x: { old: 0, new: 5 } })
-    expect(source.elements.value.find((e) => e.id === R1)).toBe(before)
-  })
-
-  it('applies dotted keys to jsonb members and patches the map', async () => {
-    const source = createMemorySource(seed())
-    await source.patch('map_elements', R1, { 'style.fill': { old: undefined, new: 'pink' } })
-    expect(source.elements.value.find((e) => e.id === R1)!.style).toEqual({ fill: 'pink' })
-    await source.patch('maps', MAP_ID, { 'settings.grid': { old: undefined, new: true } })
-    expect(source.map.value!.settings).toEqual({ gridSize: 20, grid: true })
-  })
-
-  it('refuses writes with read access, and rows it doesn’t know', async () => {
-    const source = createMemorySource(seed({ access: 'read' }))
-    await expect(source.remove('map_elements', C1)).rejects.toThrow(/Read access/)
-    source.setAccess('edit')
-    await expect(source.patch('map_elements', 'nope', {})).rejects.toThrow()
-    await expect(
-      source.create('map_layers', { id: BASE, map_id: MAP_ID, name: 'x', sort_order: 'a', is_visible: true }),
-    ).rejects.toThrow(/exists/)
-    expect(source.log.value).toHaveLength(0)
+    expect(source.log.value).toEqual([
+      { batch: null, table: 'map_elements', op: 'patch', id: C1, changes: { x: { old: 0, new: 5 } } },
+    ])
+    source.put('items', { id: 'x', type: 'note', title: 'New' })
+    expect(source.items.value.map((i) => i.id)).toContain('x')
+    source.drop('items', 'x')
+    expect(source.items.value.map((i) => i.id)).not.toContain('x')
   })
 })
 

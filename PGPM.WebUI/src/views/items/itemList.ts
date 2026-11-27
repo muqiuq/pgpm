@@ -17,6 +17,7 @@ import {
   type StatusCategory,
   type StatusRow,
 } from '@/local/rows'
+import type { Quadrant } from '@/maps/matrixLayout'
 
 /**
  * The item lists' rules (docs/01 §4.3), pure so that they are tested without a page: the filters – the saved views'
@@ -74,6 +75,8 @@ export interface ItemFilters {
   mine?: boolean
   /** Not in a closed status. */
   hideClosed?: boolean
+  /** In these quadrants of a matrix map (docs/01 §12.8; views/maps/quadrants.ts). */
+  quadrant?: { mapId: string; quadrants: Quadrant[] }
 }
 
 /** What the filters and columns look up besides the item. */
@@ -102,6 +105,10 @@ export interface ListContext {
   fieldValues: ReadonlyMap<string, Readonly<Record<string, unknown>>>
   /** Scores computed for this context, by item id then field key (filled as they are asked for). */
   scoreCache: Map<string, Map<string, number | null>>
+  /** Columns beyond the type's own (a matrix map's quadrant): the value shown and sorted by. */
+  columnValue?: (item: ItemRow, id: string) => unknown
+  /** The item's quadrant on a matrix map; null: not on it, or not assessed. */
+  quadrantOf?: (item: ItemRow, mapId: string) => Quadrant | null
 }
 
 /** An empty context (tests, a list before its lookups arrive). */
@@ -308,6 +315,10 @@ export function matchItem(item: ItemRow, f: ItemFilters, ctx: ListContext): bool
   const modified = dayOf(item.updatedAt)
   if (f.modifiedFrom && modified < f.modifiedFrom) return false
   if (f.modifiedTo && modified > f.modifiedTo) return false
+  if (f.quadrant?.mapId && has(f.quadrant.quadrants)) {
+    const q = ctx.quadrantOf?.(item, f.quadrant.mapId)
+    if (!q || !f.quadrant.quadrants.includes(q)) return false
+  }
   return true
 }
 
@@ -318,6 +329,7 @@ export function cleanFilters(f: ItemFilters): ItemFilters {
     if (value === undefined || value === null || value === false || value === '') continue
     if (Array.isArray(value) && !value.length) continue
     if (key === 'hasLink' && !(value as HasLinkFilter).relation) continue
+    if (key === 'quadrant' && !(value as ItemFilters['quadrant'])?.quadrants?.length) continue
     out[key] = value
   }
   return out as ItemFilters
@@ -329,6 +341,7 @@ export function readFilters(value: Record<string, unknown> | null | undefined): 
   const strings = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string') : undefined)
   const date = (x: unknown) => (typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : undefined)
   const link = v.hasLink as Partial<HasLinkFilter> | undefined
+  const quadrant = v.quadrant as { mapId?: unknown; quadrants?: unknown } | undefined
   return cleanFilters({
     statusIds: strings(v.statusIds),
     categories: strings(v.categories)?.filter((c): c is StatusCategory => ['open', 'active', 'closed'].includes(c)),
@@ -355,6 +368,15 @@ export function readFilters(value: Record<string, unknown> | null | undefined): 
     pinned: v.pinned === true,
     mine: v.mine === true,
     hideClosed: v.hideClosed === true,
+    quadrant:
+      quadrant && typeof quadrant.mapId === 'string'
+        ? {
+            mapId: quadrant.mapId,
+            quadrants: (strings(quadrant.quadrants) ?? []).filter((q): q is Quadrant =>
+              ['tl', 'tr', 'bl', 'br'].includes(q),
+            ),
+          }
+        : undefined,
   })
 }
 
@@ -507,10 +529,18 @@ export function fieldColumns(type: ItemType, catalogue: Catalogue): ColumnDef[] 
     }))
 }
 
-/** Every column a type's list can show, in the chooser's order: the built-in ones, further ones, the fields. */
-export function columnsFor(type: ItemType, ctx?: ListContext): ColumnDef[] {
-  if (!ctx) return byType[type]
-  return [...byType[type], ...providers.flatMap((p) => p.columns(type, ctx)), ...fieldColumns(type, ctx.catalogue)]
+/**
+ * Every column a type's list can show, in the chooser's order: the built-in ones, further ones (registered providers,
+ * and `extra` – a matrix map's quadrant, phase 5), the fields.
+ */
+export function columnsFor(type: ItemType, ctx?: ListContext, extra: readonly ColumnDef[] = []): ColumnDef[] {
+  if (!ctx) return extra.length ? [...byType[type], ...extra] : byType[type]
+  return [
+    ...byType[type],
+    ...providers.flatMap((p) => p.columns(type, ctx)),
+    ...extra,
+    ...fieldColumns(type, ctx.catalogue),
+  ]
 }
 
 export function defaultColumns(type: ItemType): string[] {
@@ -522,8 +552,9 @@ export function visibleColumns(
   type: ItemType,
   ids: readonly string[] | null | undefined,
   ctx?: ListContext,
+  extra: readonly ColumnDef[] = [],
 ): ColumnDef[] {
-  const all = new Map(columnsFor(type, ctx).map((c) => [c.id, c]))
+  const all = new Map(columnsFor(type, ctx, extra).map((c) => [c.id, c]))
   const chosen = (ids?.length ? ids : defaults[type]).filter((id, i, list) => all.has(id) && list.indexOf(id) === i)
   for (const required of ['title', 'key']) if (!chosen.includes(required)) chosen.unshift(required)
   return chosen.map((id) => all.get(id)!)
@@ -599,7 +630,7 @@ export function sortValue(item: ItemRow, id: string, ctx: ListContext): unknown 
         const value = provider.value(item, id, ctx)
         if (value !== undefined) return value
       }
-      return undefined
+      return ctx.columnValue?.(item, id)
     }
   }
 }

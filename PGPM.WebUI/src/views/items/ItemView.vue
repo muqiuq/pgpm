@@ -24,6 +24,7 @@ import { repo } from '@/local/repo'
 import { itemKey, type ItemType } from '@/local/rows'
 import { useSession } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
+import ItemMapsTab from '@/views/maps/ItemMapsTab.vue'
 import ItemHistory from './ItemHistory.vue'
 import ItemLinks from './ItemLinks.vue'
 import ItemOverview from './ItemOverview.vue'
@@ -33,7 +34,7 @@ import { useItemFields } from './useItemFields'
 
 /**
  * An item's page (docs/01 §4.4): the header line with type icon, key, title, status (with *overdue*), *Share* and the
- * ⋯ menu (delete); the tabs Overview · Milestones (projects: ItemMilestones) · Links · Maps (phase 5) · History, each
+ * ⋯ menu (delete); the tabs Overview · Milestones (projects: ItemMilestones) · Links · Maps · History, each
  * with its own route (`/<list>/:id/<tab>`). Ideas and leads offer *Convert to project*. Everything is written to the local data
  * and synced; with *read* access the page is read-only.
  */
@@ -222,12 +223,7 @@ const more = computed<MenuItem[]>(() =>
       />
       <ItemLinks v-else-if="activeTab === 'links'" :item="item" :can-edit="canEdit" />
       <ItemMilestones v-else-if="activeTab === 'milestones'" :item="item" :can-edit="canEdit" />
-      <EmptyState
-        v-else-if="activeTab === 'maps'"
-        icon="pi pi-map"
-        title="Maps come with phase 5."
-        :text="`The maps this ${info.label} is placed on will be listed here, with Add to map….`"
-      />
+      <ItemMapsTab v-else-if="activeTab === 'maps'" :item="item" />
       <ItemHistory v-else :item-id="id" :type="type" />
       <ShareDialog
         v-model:visible="sharing"

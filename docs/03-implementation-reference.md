@@ -2005,7 +2005,7 @@ a real editor and offline-first:
   persons, field definitions/values, access, the personal view settings), a file
   URL resolver, `newId`, and `create/patch/remove/batch` with the outbox's
   `{key: {old, new}}` changes on the three map tables. `createMemorySource` holds
-  it in memory (tests, `/dev/map`); phase 5 implements it over the repo. Placing
+  it in memory (tests, `/dev/map`); `createLocalSource` implements it over the repo (§13.7). Placing
   tools ask the host through events (`requestItem` → *Create new* / *Add
   existing*, `requestMilestone`, `requestProject`, `requestImage`) whose payload
   has `place(id)`.
@@ -2076,6 +2076,91 @@ a real editor and offline-first:
   with new ids (fractional keys kept), `template_source_id` set; works offline.
 - Seeded by the `innovation-ai` package: *Impact field canvas*, *Crazy 8s*,
   *Customer journey*, *Use-case funnel*.
+
+### 13.7 Phase 5 client (as built)
+
+- **Local data source** (`maps/localSource.ts`, `createLocalSource(mapId, {db, repo, files, objectUrls})`): the
+  `MapDataSource` over the repository. The device stores rows camelCase (as synced), the map UI reads snake_case:
+  `maps/mapRows.ts` renames a row's own members only (jsonb content stays), a patch key's first segment
+  (`default_view.types` → `defaultView.types`). Live queries: the map, its layers, its elements, all statuses, all
+  field definitions, `user_settings` `map:<id>`, and one *related* query keyed by what the elements refer to (item,
+  project and milestone ids) plus a matrix' filter – re-subscribed only when that key changes. It reads the referenced
+  items and placed milestones' projects, on a matrix map the filter's candidates (types via the `type` index,
+  statuses, templates, `groupIds` through `item_shares`), the projects' milestones, their DoD items, links with both
+  ends among the items, assignments of items and milestones, their persons, the items' field values.
+  **Reconciliation** (`Reconciler`): a row keeps its object while `seq`, `rev` and `deleted` are the same and nothing
+  is pending (a re-stamp – computed `access` – changes `seq`); a pending local change (same `seq`/`rev`) is compared by
+  content; an answer that changed nothing returns the previous array. **Writes**: refused with read access
+  (`MapWriteError`); `create` refuses an existing id and maps, `remove` an unknown row and maps (as the memory source);
+  a patch's `{old, new}` go to the repository as given (`old` decides the server's conflict check; keys whose old and
+  new are equal are left out). **`batch(fn)`** calls `fn` at once and queues every write made until it ends (its
+  promise settles) into **one** repository transaction, in order; a write that fails there (a row gone) fails alone,
+  the others are stored; `fn` must not await its own writes (they settle with the batch); a batch inside a batch joins
+  it. **View settings** are published at once and written in order (one row, patched afterwards). **Files**:
+  `fileUrl` answers `blob:` URLs the source creates – the row's thumbnail when asked, else the local bytes, else a
+  download through the file pipeline (`fileBlob`) – and otherwise waits (a live query on the row and `blobs`) until
+  they arrive; `dispose()` ends the queries and revokes its URLs (also when the creating scope ends). `writes` counts
+  write operations (a batch once), `loaded` says the map, layers and elements were read once. Tests: the memory
+  source's behaviour tests are shared (`maps/dataSourceBehaviour.ts`, run by both), plus reads, matrix candidates,
+  reconciliation, batches, view settings, files, and two devices against the fake server (live move, offline
+  conflict per map, unsharing evicts) in `localSource.sync.test.ts`.
+- **Map operations** (`local/maps.ts`, inside repository transactions, offline): `createMap` (a canvas with layer
+  *Base* and `{grid: true, snap: false, gridSize: 20}`, a matrix with its own `matrix`, or from a template/preset via
+  `instantiateTemplate` + `mapFromTemplate`) with its `map_shares` in the same batch; `duplicateMap` (settings,
+  layers, every element with new ids and connections – cards, milestones, timelines only of items on the device, the
+  server would refuse others; lines to dropped ones become free ends); `addCardToMap` (*Add to map…*: the middle of
+  the map's elements, the topmost visible unlocked layer, on top); `placementsOf`. **Copying a map image**: a map image
+  belongs to its map (the server checks `fileId` is a `map_image` of the same map), so a copy (template, duplicate)
+  inserts a new `files` row with the same SHA-256 and size (the server takes known bytes at once, docs/03 §10.3) and
+  copies the local bytes, if any (`uploaded` when the original was available); an image whose file isn't on the device
+  is left out. Rows go in reference order (files and connected elements before what refers to them). Helpers keep
+  the Dexie zone (`inTransaction`; `mapContent` awaits Dexie promises only).
+- **Maps list** (`views/maps/MapsView.vue`, `/maps`, tabs *Maps* · *Templates* via `?tab=templates`): preview, name
+  and description, kind, *Read only*, owner, modified; *New map* (Maps: Create) → *Canvas map*, *Matrix map* (from a
+  preset – the *Prioritization matrix* first – or *Own axes*: two number/rating/score fields with their ranges, split in
+  the middle, default quadrant labels, ideas and projects), *From template…*; per map *Open*, *New map from this
+  template*, *Rename…* (edit), *Duplicate…* (Maps: Create; *Share with* preselected with the original's sharing),
+  *Share…* (`ShareDialog` with `mapId`: `PUT /api/v1/maps/{id}/shares`, `POST …/owner`), *Mark/Unmark as template*
+  (Configuration: Manage and edit; a marked matrix map becomes a preset), *Delete…* (manage, to the Trash). New maps
+  preselect *Share with* as items do (the creator's groups at *edit*).
+- **Preview** (`maps/preview.ts`): not an SVG snapshot (`<foreignObject>` cards and CSS variables don't survive a
+  canvas, Safari taints it) but a schematic drawn on a 320 × 200 canvas from the rows – cards in their colours
+  (palette names resolved to their light-mode hex), shapes with fill and stroke, lines, text as bars, images and
+  milestones as boxes, a matrix map's quadrants and computed cards – as WebP (PNG where the browser can't encode WebP;
+  the list sniffs the type), base64 in `maps.preview`. Written when leaving a map (route change, unmount) if the user
+  can edit, is online, and changed something during the visit (or the map has none). Two devices writing a preview
+  at once collide like any field: `views/maps/previewConflicts.ts` settles a conflict on `maps` whose only field is
+  `preview` with *Keep theirs* at once (the list and the map page install it).
+- **Map page** (`views/maps/MapView.vue`, `/maps/:id`, `props: true`): holds the rail, makes the source (with the
+  app's file pipeline), keys `MapCanvas`/`MatrixMap` by kind and id, and recreates the source when the id changes.
+  Header: back, kind icon, name, *Template*, *Read only*, the map's conflicts (opens the sync dialog), *Library*
+  (canvas), *Matrix settings* (matrix, manage), *Share · …*. Requests (`mapRequests.ts`, `PlaceDialog.vue`): an item
+  tool → *Create new* (title, status – the type's default –, *Share with* preselected; item and shares one batch, then
+  `place`) and *Add existing* (local search; items on the map marked *on the map · n×*); the milestone tool → a
+  project, then its milestones and gates; the timeline tool → a project; the image tool → the pasted file or a file
+  chooser (hidden input; *cancel* cancels), stored with `attachFile({mapId}, file, 'map_image')`, placed at its size
+  (at most 480 × 360). Slots: `#item-panel` → `ItemQuickEdit` (title, status, colour, image – `CoverImage` –,
+  persons – `AssignmentsPanel` –, and *Values*: the card badges and a matrix' axes and size, a score with its inputs,
+  ratings as 0…max + n/a buttons, numbers, selects; scores read-only; the item's own access and the section's
+  `canEdit` decide; `#sections` slot for phase 4); `#milestone-panel` → *Open the project's milestones* (phase 4 adds
+  DoD and gate decision there); `#map-sharing` → the groups and *Share…*. **Library** (`LibraryPanel.vue`): every
+  item on the device, search, type and status filters, the count on the map; rows drag as
+  `application/x-pgpm-item`, the stage's drop calls `addItemCard(id, toWorld(x, y))`, *+* adds in the middle of the
+  view. **Matrix settings** (`MatrixConfigDialog.vue`): axes (field, label, min, max, split), bubble size, the four
+  labels, filter types, statuses, templates, groups – one patch of `matrix`. `?focus=item:<id>` goes to the canvas.
+- **Item page *Maps* tab** (`views/maps/ItemMapsTab.vue`): canvas maps with the item's card count, matrix maps whose
+  filter takes it with its quadrant or *Not yet assessed*, each linking `?focus=item:<id>`; *Add to map…* lists the
+  canvas maps the user may edit (not templates) and calls `addCardToMap`.
+- **Quadrant column and filter** (`views/maps/quadrants.ts`, `QuadrantFilter.vue`): phase 4's hook wasn't there, so
+  the item lists got a minimal one: `columnsFor`/`visibleColumns` take extra columns, `ListContext.columnValue` and
+  `quadrantOf`, `ItemFilters.quadrant = {mapId, quadrants}` (kept in views and `list:<type>`); one column
+  `quadrant:<map id>` (*Quadrant · name*) per matrix map whose filter takes the type, showing and sorting by the
+  label; the filter in the *Filters* popover.
+- **Server assumptions**: the maps' patch whitelist includes `isTemplate` (the fake server's now does too);
+  `preview` is base64 on the wire (bytea), ≤ 256 KB; a `files` insert whose SHA-256 and size match an available file
+  the user can read is available at once (map image copies); map share inserts are accepted in the map's batch only;
+  `PUT /api/v1/maps/{id}/shares` re-stamps the map and its rows and evicts users who lost access (kind `map`). Not
+  built: bulk *Add to map* on the item lists, a template filter control on the canvas' filter bar.
 
 ## 14. Configuration keys
 

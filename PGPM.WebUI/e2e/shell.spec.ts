@@ -20,7 +20,7 @@ test('the shell shows the PGPM menu, folded administration and the placeholders'
   await page.goto('/')
   await expect(page).toHaveURL(/\/maps$/)
   await expect(page.getByRole('heading', { level: 1, name: 'Maps' })).toBeVisible()
-  await expect(page.getByText('Coming in phase 5')).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Maps' }).getByRole('link', { name: 'Templates' })).toBeVisible()
   await expect(page).toHaveTitle('Maps · PGPM')
 
   const nav = page.getByRole('navigation', { name: 'Navigation' }).or(page.locator('nav.drawer-nav'))

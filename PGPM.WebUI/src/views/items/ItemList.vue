@@ -41,6 +41,8 @@ import {
 import { useLive } from '@/local/useLive'
 import { useSession } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
+import QuadrantFilter from '@/views/maps/QuadrantFilter.vue'
+import { useItemQuadrants } from '@/views/maps/quadrants'
 import ItemCreateDialog from './ItemCreateDialog.vue'
 import {
   cleanFilters,
@@ -99,6 +101,8 @@ const types = useLive(async () => {
     })
   return map
 }, new Map<string, ItemType>())
+// Matrix maps that show the type: a quadrant column and filter each (phase 5).
+const quadrants = useItemQuadrants(props.type)
 const templates = useLive(
   async () => new Map((await all<ProjectTemplateRow>('project_templates')()).map((t) => [t.id, t.name])),
   new Map<string, string>(),
@@ -139,6 +143,8 @@ const context = computed<ListContext>(() => ({
   catalogue: catalogue.value,
   fieldValues: fieldValues.value,
   scoreCache: new Map(),
+  columnValue: quadrants.columnValue,
+  quadrantOf: quadrants.quadrantOf,
 }))
 const renderContext = computed(() => ({ personName: (id: string) => persons.byId.value.get(id)?.displayName }))
 
@@ -213,8 +219,8 @@ function applyView(state: ViewState | null) {
 }
 
 const currentState = computed(() => table.currentState())
-const shownColumns = computed(() => visibleColumns(props.type, columns.value, context.value))
-const allColumns = computed(() => columnsFor(props.type, context.value))
+const shownColumns = computed(() => visibleColumns(props.type, columns.value, context.value, quadrants.columns.value))
+const allColumns = computed(() => columnsFor(props.type, context.value, quadrants.columns.value))
 const statusOptions = computed(() =>
   info.hasStatus ? selectableStatuses(statuses.all.value, props.type, null).filter((s) => !s.isArchived) : [],
 )
@@ -345,6 +351,12 @@ function fieldOverdue(item: Item, field: FieldDefinitionRow): string | null {
       />
       <Popover ref="filtersPanel">
         <ItemFiltersPanel v-model="filters" :type="type" />
+        <QuadrantFilter
+          v-if="quadrants.maps.value.length"
+          :model-value="filters.quadrant"
+          :maps="quadrants.maps.value"
+          @update:model-value="(v) => setFilter('quadrant', v)"
+        />
       </Popover>
       <Button v-if="activeCount" label="Clear" icon="pi pi-filter-slash" size="small" text @click="clearFilters" />
       <template #end>
