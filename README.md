@@ -16,6 +16,7 @@
   <img alt="PostgreSQL 18" src="https://img.shields.io/badge/PostgreSQL-18-336791">
   <img alt="Offline-first PWA" src="https://img.shields.io/badge/PWA-offline--first-5a0fc8">
   <img alt="MCP server" src="https://img.shields.io/badge/MCP-21_tools-0f172a">
+  <a href="LICENSE.md"><img alt="Licence: PolyForm Strict 1.0.0" src="https://img.shields.io/badge/licence-PolyForm_Strict_1.0.0-64748b"></a>
 </p>
 
 <p align="center">
@@ -221,4 +222,14 @@ spec/                 package schema, shared test vectors      docs/   specifica
 
 ## Licence
 
-Not decided yet: no licence is granted until one is added here.
+Copyright © 2026 Philipp Albrecht.
+
+PGPM is licensed under the [PolyForm Strict License 1.0.0](LICENSE.md)
+(<https://polyformproject.org/licenses/strict/1.0.0>). It is source-available, not open source:
+
+- **Allowed:** using it for any noncommercial purpose. That covers personal study, research, experiments and hobby
+  projects, and use by charities, schools and universities, public research, public safety and health organisations,
+  and government institutions.
+- **Not allowed:** commercial use, redistributing it, or changing it or building on it.
+
+For anything else, such as commercial use, ask the licensor for a separate licence.

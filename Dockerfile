@@ -39,8 +39,10 @@ RUN --network=none dotnet publish PGPM/PGPM.csproj -c Release -o /app --no-resto
 # Ubuntu, Microsoft's default .NET 10 image – not Alpine: GGITSV found musl failing to resolve
 # login.microsoftonline.com under Podman's DNS (an AAAA SERVFAIL fails the whole lookup).
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
+# PolyForm Strict is not on the SPDX list, hence a LicenseRef (LICENSE.md).
 LABEL org.opencontainers.image.title="PGPM" \
-      org.opencontainers.image.description="PGPM: offline-first innovation portfolio – ideas, leads, projects and maps."
+      org.opencontainers.image.description="PGPM: offline-first innovation portfolio – ideas, leads, projects and maps." \
+      org.opencontainers.image.licenses="LicenseRef-PolyForm-Strict-1.0.0"
 # wget for the health check. libgssapi-krb5-2: Npgsql probes for it at every start and complains loudly when it is
 # missing. /var/lib/pgpm belongs to the image's non-root user (app, uid 1654), who runs the app: keys/ is the Data
 # Protection key ring (a volume), files/ the mount point of the attachments' folder on the host. `pgpm …` is the app's
