@@ -159,7 +159,13 @@ Copy from PNMTD and rename:
 - `deploy/docker-compose.yml`: `db` (postgres:18-alpine, `pg_isready`) + `pgpm`
   (`read_only: true`, tmpfs `/tmp`, `cap_drop: [ALL]`, `no-new-privileges`),
   volumes for pgdata, Data-Protection keys, and a bind mount for files.
-  `deploy/*.sh` wrap `docker compose exec pgpm pgpm users …`.
+  `deploy/*.sh` (PNMTD's, sharing `lib.sh`): `init.sh` (`.env` with generated secrets, the files folder for uid 1654),
+  `backup.sh` (one archive `pgpm-<stamp>.tar`: `manifest.txt`, `SHA256SUMS`, `database.pgdump`, `keys.tar.gz`,
+  `files.tar`; `--keep`), `restore.sh` (verifies the archive first; into an existing or a fresh stack; raises every
+  user's `access_epoch`, so every device resets and none keeps rows or a cursor the database lost), `update.sh` (pull,
+  backup, `up -d --wait`, `/healthz`, the release before and after), `info.sh`, and the user wrappers around
+  `docker compose exec pgpm pgpm users …`. Tested by the `deploy` group (`tools/deploy-test.sh`, project
+  `pgpm-deploytest`, port 7390). Reference for operators: `deploy/README.md`, `docs/admin-guide.md`.
 
 PGPM is served at `/` (PNMTD serves its UI under `/pnmt-admin/`; a PWA is
 simpler at the root scope).
@@ -2235,8 +2241,11 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 
 | Key | Default | Source |
 |---|---|---|
-| `Database:Host/Port/Name/Username/Password` or `Database:ConnectionString` | | PNMTD |
+| `Database:Host/Port/Name/Username/Password` or `Database:ConnectionString` | `localhost` / 5432 / `pgpm` / `pgpm` / – | PNMTD |
 | `PublicUrl` | | GGITSV (redirect URI base, WebSocket origin check) |
+| `Proxy` | – (none trusted) | PNMTD (`docker`, addresses, networks; a bad entry stops the start) |
+| `DataProtection:KeysPath` | `/var/lib/pgpm/keys` | PNMTD |
+| `TZ` (environment only) | UTC | PNMTD (wall-clock rules such as `Auth:ResetHour`) |
 | `Auth:InitialAdmin:Username` / `:Password` | `admin` / generated | PNMTD |
 | `Auth:SessionDays` | 7 | PNMTD |
 | `Auth:LoginDays` / `Auth:TotpDays` / `Auth:ResetHour` | 30 / 1 / 4 | PNMTD |
@@ -2249,9 +2258,9 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | `Directory:Enabled` | false (also needs `Entra:TenantId/ClientId/ClientSecret`, not `Entra:Enabled`) | NEW |
 | `Directory:IntervalHours` / `FullSyncDays` | 6 / 7 | NEW |
 | `Files:Path` | `/var/lib/pgpm/files` | PNMTD |
-| `Files:MaxAttachmentBytes` / `MaxImageBytes` | 25 MB / 2 MB | PNMTD |
+| `Files:MaxAttachmentBytes` / `MaxImageBytes` | 25 MiB / 2 MiB (in bytes) | PNMTD |
 | `Files:BlockedExtensions` / `UploadsPerHour` / `MinFreeMb` | see §10 / 200 / 1024 | PNMTD |
-| `Sync:PageLimit` / `MaxMutations` / `MaxBodyBytes` | 500 / 200 / 8 MB | PLM / NEW |
+| `Sync:PageLimit` / `MaxMutations` / `MaxBodyBytes` | 500 (1–1000) / 200 / 8 MiB (in bytes) | PLM / NEW |
 | `Sync:TombstoneDays` | 90 (non-trash tombstones only) | PLM |
 | `Sync:Live:Enabled` | true | NEW |
 | `Sync:Live:MaxConnectionsPerUser` | 10 | NEW |

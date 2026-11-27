@@ -1,4 +1,14 @@
-# Build and test on .NET 10 and the web UI in containers (docs/05 §5), as PNMTD's dotnet.yml.
+# Build and test (docs/05 §5), as PNMTD's dotnet.yml: .NET on the runner, the web UI and everything else in containers,
+# Docker here as Podman locally. The groups of ./run-tests.sh, split into jobs that run side by side:
+#
+#   build    dotnet: restore (locked), build, the OpenAPI document, the migrations, the tests in two time zones
+#   web      web, shell: the npm package check, signatures, types, lint, format, Vitest, the build; bash -n, shellcheck,
+#            the configuration packages
+#   stack    contract, e2e: the image for real, the contract tests and the browser tests (Playwright)
+#   deploy   deploy: deploy/ for real (init, up, backup, restore, update) – nightly, by hand, and before a release
+#
+# NuGet's packages are cached by the lock files, npm's cache by package-lock.json (the containers use it as a folder).
+# Release.yml calls this workflow before it publishes an image.
 name: Build and test
 
 on:
@@ -6,10 +16,36 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Also run the deploy test (deploy/*.sh against the image)
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      deploy:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  ENGINE: docker
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # The integration tests' PostgreSQL, where tools/test-db.sh puts it locally.
     services:
       postgres:
@@ -25,10 +61,12 @@ jobs:
           --health-retries 10
     steps:
     - uses: actions/checkout@v7
-    - name: Setup .NET
+    - name: Setup .NET (NuGet cache by the lock files)
       uses: actions/setup-dotnet@v6
       with:
         global-json-file: global.json
+        cache: true
+        cache-dependency-path: "**/packages.lock.json"
     - name: Restore (locked)
       run: dotnet restore PGPM.slnx --locked-mode
     - name: Build
@@ -49,27 +87,46 @@ jobs:
     - name: Test (time zone west of UTC)
       run: PGPM_TEST_TZ=America/New_York TZ=America/New_York tools/dotnet-test.sh --project PGPM.Tests/PGPM.Tests.csproj --no-build
 
-  # The web UI, in node containers as everywhere: the package check, the registry's signatures, types against
-  # openapi.json, vue-tsc, ESLint, Prettier, Vitest, the build; and the shell scripts.
+  # The web UI, in node containers as everywhere, and the shell scripts.
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
     - uses: actions/checkout@v7
+    - name: npm cache
+      uses: actions/cache@v5
+      with:
+        path: ${{ runner.temp }}/npm-cache
+        key: npm-${{ runner.os }}-${{ hashFiles('PGPM.WebUI/package-lock.json') }}
+        restore-keys: npm-${{ runner.os }}-
     - name: Web UI and scripts
-      run: ENGINE=docker ./run-tests.sh --only web,shell
+      # npm's cache as a folder instead of the volume pgpm-npm-cache, so actions/cache keeps it between runs.
+      env:
+        NPM_CACHE: ${{ runner.temp }}/npm-cache
+      run: ./run-tests.sh --only web,shell
 
-  # The image for real: the contract tests and the browser tests (Playwright, incl. the offline shell), in Docker as
-  # locally in Podman.
+  # The image for real: the contract tests and the browser tests (Playwright, incl. the offline shell).
   stack:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
     - uses: actions/checkout@v7
-    - name: Setup .NET
+    - name: Setup .NET (NuGet cache by the lock files)
       uses: actions/setup-dotnet@v6
       with:
         global-json-file: global.json
+        cache: true
+        cache-dependency-path: "**/packages.lock.json"
+    - name: npm cache
+      uses: actions/cache@v5
+      with:
+        path: ${{ runner.temp }}/npm-cache
+        key: npm-${{ runner.os }}-${{ hashFiles('PGPM.WebUI/package-lock.json') }}
+        restore-keys: npm-${{ runner.os }}-
     - name: Contract and browser tests against the image
-      run: ENGINE=docker ./run-tests.sh --only contract,e2e
+      env:
+        NPM_CACHE: ${{ runner.temp }}/npm-cache
+      run: ./run-tests.sh --only contract,e2e
     - name: Keep the screenshots
       if: always()
       uses: actions/upload-artifact@v7
@@ -77,3 +134,13 @@ jobs:
         name: playwright
         path: PGPM.WebUI/test-results/
         if-no-files-found: ignore
+
+  # deploy/ for real: nightly, by hand (workflow_dispatch) and before a release (release.yml), not on every push.
+  deploy:
+    if: github.event_name == 'schedule' || inputs.deploy == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v7
+    - name: init, up, users, a note and a file, backup, restore, update, info, down
+      run: ./run-tests.sh --only deploy
