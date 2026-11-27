@@ -1,0 +1,996 @@
+{
+  "$comment": [
+    "Score evaluation (docs/03 §16): the test vectors both implementations run against.",
+    "TypeScript: PGPM.WebUI/src/domain/score.test.ts. C#: PGPM.Tests/Config/ScoreEvaluatorTests.cs.",
+    "A case's fields are its fieldSets (in the order of 'use'), then its own 'fields'; a later definition with the same key",
+    "replaces an earlier one. 'expect' names score keys and their results (null: incomplete or not evaluable),",
+    "'expectMax' what scoreMax() gives. A validation case validates 'score' against all the case's fields and expects",
+    "exactly the errors listed (in any order)."
+  ],
+  "fieldSets": {
+    "feasibility": [
+      { "key": "feas_data_access", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "feas_infra", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "feas_data_quality", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "feas_problem_known", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "feas_similar_solution", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "feas_tech_known", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "feas_no_new_processes", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "feas_processes_adaptable", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "feas_no_changes", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "feas_tech_knowhow", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "feas_domain_knowhow", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "feas_ai_understanding", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      {
+        "key": "time_to_proof_of_value",
+        "type": "select",
+        "config": {
+          "options": [
+            { "id": "lt3", "label": "< 3 months", "points": 5 },
+            { "id": "m4_6", "label": "4–6 months", "points": 4 },
+            { "id": "m7_9", "label": "7–9 months", "points": 3 },
+            { "id": "m10_12", "label": "10–12 months", "points": 2 },
+            { "id": "gt12", "label": "> 12 months", "points": 1 }
+          ]
+        }
+      },
+      {
+        "key": "feasibility_index",
+        "type": "score",
+        "config": {
+          "op": "sum",
+          "inputs": [
+            "feas_data_access", "feas_infra", "feas_data_quality",
+            "feas_problem_known", "feas_similar_solution", "feas_tech_known",
+            "feas_no_new_processes", "feas_processes_adaptable", "feas_no_changes",
+            "feas_tech_knowhow", "feas_domain_knowhow", "feas_ai_understanding",
+            "time_to_proof_of_value"
+          ],
+          "na": "rescale",
+          "max": 65,
+          "decimals": 0
+        }
+      }
+    ],
+    "impact": [
+      { "key": "impact_reach", "type": "rating", "config": { "min": 0, "max": 5 } },
+      { "key": "impact_strategic", "type": "rating", "config": { "min": 0, "max": 5 } },
+      {
+        "key": "impact_value_band",
+        "type": "select",
+        "config": {
+          "options": [
+            { "id": "lt10k", "label": "< 10k", "points": 1 },
+            { "id": "k10_50", "label": "10–50k", "points": 2 },
+            { "id": "k50_200", "label": "50–200k", "points": 3 },
+            { "id": "k200_1m", "label": "200k–1M", "points": 4 },
+            { "id": "gt1m", "label": "> 1M", "points": 5 }
+          ]
+        }
+      },
+      {
+        "key": "strategic_advantages",
+        "type": "multiselect",
+        "config": {
+          "multiPoints": "count",
+          "options": [
+            { "id": "customer_experience", "label": "Better customer experience" },
+            { "id": "revenue_growth", "label": "Revenue growth" },
+            { "id": "higher_sales", "label": "Higher sales" },
+            { "id": "less_complexity", "label": "Reduced complexity / risk" },
+            { "id": "efficiency", "label": "Responsiveness / efficiency" },
+            { "id": "quality", "label": "Quality of service or product" },
+            { "id": "new_market", "label": "New market" },
+            { "id": "insights", "label": "Better decisions through insights" }
+          ]
+        }
+      },
+      {
+        "key": "impact_score",
+        "type": "score",
+        "config": {
+          "op": "sum",
+          "inputs": ["impact_reach", "impact_strategic", "impact_value_band", "strategic_advantages"],
+          "cap": { "strategic_advantages": 5 },
+          "na": "rescale",
+          "max": 20,
+          "normalize": true,
+          "decimals": 0
+        }
+      }
+    ],
+    "basic": [
+      { "key": "n1", "type": "number", "config": { "decimals": 2, "min": null, "max": 10 } },
+      { "key": "n2", "type": "number", "config": { "max": 10 } },
+      { "key": "n3", "type": "number", "config": { "max": 10 } },
+      { "key": "n4", "type": "number", "config": { "max": 10 } },
+      { "key": "n_nomax", "type": "number", "config": { "unit": "CHF" } },
+      { "key": "r1", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "r2", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "r3", "type": "rating", "config": { "min": 0, "max": 5, "allowNa": true } },
+      { "key": "r_default", "type": "rating", "config": { "allowNa": true } },
+      {
+        "key": "s1",
+        "type": "select",
+        "config": {
+          "options": [
+            { "id": "a", "label": "A", "points": 1 },
+            { "id": "b", "label": "B", "points": 3 },
+            { "id": "c", "label": "C (no points)" }
+          ]
+        }
+      },
+      {
+        "key": "m1",
+        "type": "multiselect",
+        "config": {
+          "multiPoints": "count",
+          "options": [
+            { "id": "o1", "label": "O1", "points": 2 },
+            { "id": "o2", "label": "O2", "points": 5 },
+            { "id": "o3", "label": "O3", "points": 1 },
+            { "id": "o4", "label": "O4 (no points)" }
+          ]
+        }
+      },
+      {
+        "key": "m2",
+        "type": "multiselect",
+        "config": {
+          "multiPoints": "sum",
+          "options": [
+            { "id": "o1", "label": "O1", "points": 2 },
+            { "id": "o2", "label": "O2", "points": 5 },
+            { "id": "o3", "label": "O3", "points": 1 },
+            { "id": "o4", "label": "O4 (no points)" }
+          ]
+        }
+      },
+      {
+        "key": "m3",
+        "type": "multiselect",
+        "config": {
+          "multiPoints": "sum",
+          "options": [
+            { "id": "p1", "label": "P1", "points": 2 },
+            { "id": "p2", "label": "P2", "points": 3, "archived": true }
+          ]
+        }
+      },
+      { "key": "m_default", "type": "multiselect", "config": { "options": [{ "id": "x", "label": "X" }, { "id": "y", "label": "Y" }] } },
+      { "key": "t1", "type": "text", "config": { "maxLength": 200 } },
+      { "key": "b1", "type": "bool", "config": {} },
+      { "key": "d1", "type": "date", "config": { "timebox": true } }
+    ]
+  },
+  "cases": [
+    {
+      "name": "feasibility index: the playbook's ratings (p. 34) and < 3 months give 53 + 5 = 58",
+      "use": ["feasibility"],
+      "values": {
+        "feas_data_access": 5, "feas_infra": 4, "feas_data_quality": 4,
+        "feas_problem_known": 5, "feas_similar_solution": 4, "feas_tech_known": 5,
+        "feas_no_new_processes": 5, "feas_processes_adaptable": 4, "feas_no_changes": 4,
+        "feas_tech_knowhow": 4, "feas_domain_knowhow": 5, "feas_ai_understanding": 4,
+        "time_to_proof_of_value": "lt3"
+      },
+      "expect": { "feasibility_index": 58 },
+      "expectMax": { "feasibility_index": 65 }
+    },
+    {
+      "name": "feasibility index, rescale: two ratings n/a, a raw 48 becomes 48 × 65/55 = 56.7 → 57",
+      "use": ["feasibility"],
+      "values": {
+        "feas_data_access": "na", "feas_infra": 4, "feas_data_quality": 4,
+        "feas_problem_known": "na", "feas_similar_solution": 4, "feas_tech_known": 5,
+        "feas_no_new_processes": 5, "feas_processes_adaptable": 4, "feas_no_changes": 4,
+        "feas_tech_knowhow": 4, "feas_domain_knowhow": 5, "feas_ai_understanding": 4,
+        "time_to_proof_of_value": "lt3"
+      },
+      "expect": { "feasibility_index": 57 }
+    },
+    {
+      "name": "feasibility index: all ratings 5 and > 12 months give 61",
+      "use": ["feasibility"],
+      "values": {
+        "feas_data_access": 5, "feas_infra": 5, "feas_data_quality": 5,
+        "feas_problem_known": 5, "feas_similar_solution": 5, "feas_tech_known": 5,
+        "feas_no_new_processes": 5, "feas_processes_adaptable": 5, "feas_no_changes": 5,
+        "feas_tech_knowhow": 5, "feas_domain_knowhow": 5, "feas_ai_understanding": 5,
+        "time_to_proof_of_value": "gt12"
+      },
+      "expect": { "feasibility_index": 61 }
+    },
+    {
+      "name": "feasibility index: a rating of 0 is an answer, not n/a (54)",
+      "use": ["feasibility"],
+      "values": {
+        "feas_data_access": 5, "feas_infra": 0, "feas_data_quality": 4,
+        "feas_problem_known": 5, "feas_similar_solution": 4, "feas_tech_known": 5,
+        "feas_no_new_processes": 5, "feas_processes_adaptable": 4, "feas_no_changes": 4,
+        "feas_tech_knowhow": 4, "feas_domain_knowhow": 5, "feas_ai_understanding": 4,
+        "time_to_proof_of_value": "lt3"
+      },
+      "expect": { "feasibility_index": 54 }
+    },
+    {
+      "name": "feasibility index, rescale: every rating n/a leaves the select, 5 × 65/5 = 65",
+      "use": ["feasibility"],
+      "values": {
+        "feas_data_access": "na", "feas_infra": "na", "feas_data_quality": "na",
+        "feas_problem_known": "na", "feas_similar_solution": "na", "feas_tech_known": "na",
+        "feas_no_new_processes": "na", "feas_processes_adaptable": "na", "feas_no_changes": "na",
+        "feas_tech_knowhow": "na", "feas_domain_knowhow": "na", "feas_ai_understanding": "na",
+        "time_to_proof_of_value": "lt3"
+      },
+      "expect": { "feasibility_index": 65 }
+    },
+    {
+      "name": "feasibility index: time to proof of value missing → incomplete (null)",
+      "use": ["feasibility"],
+      "values": {
+        "feas_data_access": 5, "feas_infra": 4, "feas_data_quality": 4,
+        "feas_problem_known": 5, "feas_similar_solution": 4, "feas_tech_known": 5,
+        "feas_no_new_processes": 5, "feas_processes_adaptable": 4, "feas_no_changes": 4,
+        "feas_tech_knowhow": 4, "feas_domain_knowhow": 5, "feas_ai_understanding": 4
+      },
+      "expect": { "feasibility_index": null }
+    },
+    {
+      "name": "feasibility index: a rating stored as JSON null is missing too",
+      "use": ["feasibility"],
+      "values": {
+        "feas_data_access": 5, "feas_infra": null, "feas_data_quality": 4,
+        "feas_problem_known": 5, "feas_similar_solution": 4, "feas_tech_known": 5,
+        "feas_no_new_processes": 5, "feas_processes_adaptable": 4, "feas_no_changes": 4,
+        "feas_tech_knowhow": 4, "feas_domain_knowhow": 5, "feas_ai_understanding": 4,
+        "time_to_proof_of_value": "lt3"
+      },
+      "expect": { "feasibility_index": null }
+    },
+    {
+      "name": "feasibility index: an option id the select doesn't know → null",
+      "use": ["feasibility"],
+      "values": {
+        "feas_data_access": 5, "feas_infra": 4, "feas_data_quality": 4,
+        "feas_problem_known": 5, "feas_similar_solution": 4, "feas_tech_known": 5,
+        "feas_no_new_processes": 5, "feas_processes_adaptable": 4, "feas_no_changes": 4,
+        "feas_tech_knowhow": 4, "feas_domain_knowhow": 5, "feas_ai_understanding": 4,
+        "time_to_proof_of_value": "someday"
+      },
+      "expect": { "feasibility_index": null }
+    },
+    {
+      "name": "feasibility index with na: ignore drops the two n/a without rescaling (48)",
+      "use": ["feasibility"],
+      "fields": [
+        {
+          "key": "feasibility_index",
+          "type": "score",
+          "config": {
+            "op": "sum",
+            "inputs": [
+              "feas_data_access", "feas_infra", "feas_data_quality",
+              "feas_problem_known", "feas_similar_solution", "feas_tech_known",
+              "feas_no_new_processes", "feas_processes_adaptable", "feas_no_changes",
+              "feas_tech_knowhow", "feas_domain_knowhow", "feas_ai_understanding",
+              "time_to_proof_of_value"
+            ],
+            "na": "ignore",
+            "max": 65
+          }
+        }
+      ],
+      "values": {
+        "feas_data_access": "na", "feas_infra": 4, "feas_data_quality": 4,
+        "feas_problem_known": "na", "feas_similar_solution": 4, "feas_tech_known": 5,
+        "feas_no_new_processes": 5, "feas_processes_adaptable": 4, "feas_no_changes": 4,
+        "feas_tech_knowhow": 4, "feas_domain_knowhow": 5, "feas_ai_understanding": 4,
+        "time_to_proof_of_value": "lt3"
+      },
+      "expect": { "feasibility_index": 48 }
+    },
+    {
+      "name": "impact score: reach 4 + strategic 3 + band 10–50k (2) + 3 advantages = 12 of 20 → 60 / 100",
+      "use": ["impact"],
+      "values": {
+        "impact_reach": 4,
+        "impact_strategic": 3,
+        "impact_value_band": "k10_50",
+        "strategic_advantages": ["less_complexity", "efficiency", "quality"]
+      },
+      "expect": { "impact_score": 60 },
+      "expectMax": { "impact_score": 100 }
+    },
+    {
+      "name": "impact score: 7 advantages are capped at 5 → 14 of 20 → 70",
+      "use": ["impact"],
+      "values": {
+        "impact_reach": 4,
+        "impact_strategic": 3,
+        "impact_value_band": "k10_50",
+        "strategic_advantages": ["customer_experience", "revenue_growth", "higher_sales", "less_complexity", "efficiency", "quality", "new_market"]
+      },
+      "expect": { "impact_score": 70 }
+    },
+    {
+      "name": "impact score: no advantage chosen is an answer (count 0) → 9 of 20 → 45",
+      "use": ["impact"],
+      "values": { "impact_reach": 4, "impact_strategic": 3, "impact_value_band": "k10_50", "strategic_advantages": [] },
+      "expect": { "impact_score": 45 }
+    },
+    {
+      "name": "op sum (decimals 1): 3 + 0 − 2 + 5.5 = 6.5",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["n1", "n2", "n3", "n4"], "decimals": 1 } }],
+      "values": { "n1": 3, "n2": 0, "n3": -2, "n4": 5.5 },
+      "expect": { "x": 6.5 },
+      "expectMax": { "x": null }
+    },
+    {
+      "name": "op sum (decimals 0): 6.5 rounds away from zero to 7",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["n1", "n2", "n3", "n4"], "decimals": 0 } }],
+      "values": { "n1": 3, "n2": 0, "n3": -2, "n4": 5.5 },
+      "expect": { "x": 7 }
+    },
+    {
+      "name": "op avg: 6.5 / 4 = 1.625 (decimals 3), 1.63 (decimals 2), 2 (no decimals given)",
+      "use": ["basic"],
+      "fields": [
+        { "key": "x3", "type": "score", "config": { "op": "avg", "inputs": ["n1", "n2", "n3", "n4"], "decimals": 3 } },
+        { "key": "x2", "type": "score", "config": { "op": "avg", "inputs": ["n1", "n2", "n3", "n4"], "decimals": 2 } },
+        { "key": "x0", "type": "score", "config": { "op": "avg", "inputs": ["n1", "n2", "n3", "n4"] } }
+      ],
+      "values": { "n1": 3, "n2": 0, "n3": -2, "n4": 5.5 },
+      "expect": { "x3": 1.625, "x2": 1.63, "x0": 2 }
+    },
+    {
+      "name": "op product: 0 with a zero input, 3 × −2 × 5.5 = −33 without",
+      "use": ["basic"],
+      "fields": [
+        { "key": "with_zero", "type": "score", "config": { "op": "product", "inputs": ["n1", "n2", "n3", "n4"] } },
+        { "key": "without", "type": "score", "config": { "op": "product", "inputs": ["n1", "n3", "n4"] } }
+      ],
+      "values": { "n1": 3, "n2": 0, "n3": -2, "n4": 5.5 },
+      "expect": { "with_zero": 0, "without": -33 }
+    },
+    {
+      "name": "op count: the non-zero inputs (3 of 4)",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "count", "inputs": ["n1", "n2", "n3", "n4"] } }],
+      "values": { "n1": 3, "n2": 0, "n3": -2, "n4": 5.5 },
+      "expect": { "x": 3 }
+    },
+    {
+      "name": "op min and max",
+      "use": ["basic"],
+      "fields": [
+        { "key": "lo", "type": "score", "config": { "op": "min", "inputs": ["n1", "n2", "n3", "n4"] } },
+        { "key": "hi", "type": "score", "config": { "op": "max", "inputs": ["n1", "n2", "n3", "n4"], "decimals": 1 } }
+      ],
+      "values": { "n1": 3, "n2": 0, "n3": -2, "n4": 5.5 },
+      "expect": { "lo": -2, "hi": 5.5 }
+    },
+    {
+      "name": "a single input",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "avg", "inputs": ["n4"], "decimals": 2 } }],
+      "values": { "n4": 5.5 },
+      "expect": { "x": 5.5 }
+    },
+    {
+      "name": "na modes with avg over 4, n/a, 3: ignore 3.5 · zero 2.33 · rescale (not a sum: as ignore) 3.5",
+      "use": ["basic"],
+      "fields": [
+        { "key": "ignore", "type": "score", "config": { "op": "avg", "inputs": ["r1", "r2", "r3"], "na": "ignore", "decimals": 2 } },
+        { "key": "zero", "type": "score", "config": { "op": "avg", "inputs": ["r1", "r2", "r3"], "na": "zero", "decimals": 2 } },
+        { "key": "rescale", "type": "score", "config": { "op": "avg", "inputs": ["r1", "r2", "r3"], "na": "rescale", "decimals": 2 } },
+        { "key": "default", "type": "score", "config": { "op": "avg", "inputs": ["r1", "r2", "r3"], "decimals": 2 } }
+      ],
+      "values": { "r1": 4, "r2": "na", "r3": 3 },
+      "expect": { "ignore": 3.5, "zero": 2.33, "rescale": 3.5, "default": 3.5 }
+    },
+    {
+      "name": "na modes with sum over 4, n/a, 3: ignore 7 · zero 7 · rescale to 15: 7 × 15/10 = 10.5 → 11 (decimals 0), 10.5 (decimals 1)",
+      "use": ["basic"],
+      "fields": [
+        { "key": "ignore", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r2", "r3"], "na": "ignore" } },
+        { "key": "zero", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r2", "r3"], "na": "zero" } },
+        { "key": "rescale0", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r2", "r3"], "na": "rescale", "max": 15 } },
+        { "key": "rescale1", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r2", "r3"], "na": "rescale", "max": 15, "decimals": 1 } }
+      ],
+      "values": { "r1": 4, "r2": "na", "r3": 3 },
+      "expect": { "ignore": 7, "zero": 7, "rescale0": 11, "rescale1": 10.5 }
+    },
+    {
+      "name": "na modes with count, min, max and product over 4, n/a, 3",
+      "use": ["basic"],
+      "fields": [
+        { "key": "count_zero", "type": "score", "config": { "op": "count", "inputs": ["r1", "r2", "r3"], "na": "zero" } },
+        { "key": "count_ignore", "type": "score", "config": { "op": "count", "inputs": ["r1", "r2", "r3"], "na": "ignore" } },
+        { "key": "count_rescale", "type": "score", "config": { "op": "count", "inputs": ["r1", "r2", "r3"], "na": "rescale" } },
+        { "key": "min_zero", "type": "score", "config": { "op": "min", "inputs": ["r1", "r2", "r3"], "na": "zero" } },
+        { "key": "min_ignore", "type": "score", "config": { "op": "min", "inputs": ["r1", "r2", "r3"], "na": "ignore" } },
+        { "key": "max_zero", "type": "score", "config": { "op": "max", "inputs": ["r1", "r2", "r3"], "na": "zero" } },
+        { "key": "product_zero", "type": "score", "config": { "op": "product", "inputs": ["r1", "r2", "r3"], "na": "zero" } },
+        { "key": "product_ignore", "type": "score", "config": { "op": "product", "inputs": ["r1", "r2", "r3"], "na": "ignore" } },
+        { "key": "product_rescale", "type": "score", "config": { "op": "product", "inputs": ["r1", "r2", "r3"], "na": "rescale", "max": 25 } }
+      ],
+      "values": { "r1": 4, "r2": "na", "r3": 3 },
+      "expect": {
+        "count_zero": 2, "count_ignore": 2, "count_rescale": 2,
+        "min_zero": 0, "min_ignore": 3, "max_zero": 4,
+        "product_zero": 0, "product_ignore": 12, "product_rescale": 12
+      }
+    },
+    {
+      "name": "every input n/a: nothing remains (null) unless n/a counts as 0",
+      "use": ["basic"],
+      "fields": [
+        { "key": "sum_ignore", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r2", "r3"], "na": "ignore" } },
+        { "key": "sum_rescale", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r2", "r3"], "na": "rescale", "max": 15 } },
+        { "key": "sum_zero", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r2", "r3"], "na": "zero" } },
+        { "key": "avg_zero", "type": "score", "config": { "op": "avg", "inputs": ["r1", "r2", "r3"], "na": "zero" } },
+        { "key": "min_ignore", "type": "score", "config": { "op": "min", "inputs": ["r1", "r2", "r3"], "na": "ignore" } }
+      ],
+      "values": { "r1": "na", "r2": "na", "r3": "na" },
+      "expect": { "sum_ignore": null, "sum_rescale": null, "sum_zero": 0, "avg_zero": 0, "min_ignore": null }
+    },
+    {
+      "name": "rescale scales to max even without n/a: (3 + 4) × 100/10 = 70",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r3"], "na": "rescale", "max": 100 } }],
+      "values": { "r1": 3, "r3": 4 },
+      "expect": { "x": 70 }
+    },
+    {
+      "name": "a rating without config.max has the default scale 0–5 (rescale: 4 × 10/5 = 8)",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["r_default", "r2"], "na": "rescale", "max": 10 } }],
+      "values": { "r_default": 4, "r2": "na" },
+      "expect": { "x": 8 }
+    },
+    {
+      "name": "cap: a number above it is capped, one below it is not",
+      "use": ["basic"],
+      "fields": [
+        { "key": "above", "type": "score", "config": { "op": "sum", "inputs": ["n1", "n2"], "cap": { "n1": 5 } } },
+        { "key": "below", "type": "score", "config": { "op": "sum", "inputs": ["n3", "n2"], "cap": { "n3": 5 } } }
+      ],
+      "values": { "n1": 8, "n2": 1, "n3": 3 },
+      "expect": { "above": 6, "below": 4 }
+    },
+    {
+      "name": "cap: a rating of 5 capped at 3; n/a stays n/a; the capped maximum counts in rescale: (3 + 4) × 10/(3 + 5) = 8.75",
+      "use": ["basic"],
+      "fields": [
+        {
+          "key": "x",
+          "type": "score",
+          "config": { "op": "sum", "inputs": ["r1", "r2", "r3"], "cap": { "r1": 3, "r2": 1 }, "na": "rescale", "max": 10, "decimals": 2 }
+        }
+      ],
+      "values": { "r1": 5, "r2": "na", "r3": 4 },
+      "expect": { "x": 8.75 }
+    },
+    {
+      "name": "cap: a multiselect count of 4 capped at 2",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["m1"], "cap": { "m1": 2 } } }],
+      "values": { "m1": ["o1", "o2", "o3", "o4"] },
+      "expect": { "x": 2 }
+    },
+    {
+      "name": "cap gives a number without config.max its maximum: (4 + 3) × 20/(10 + 5) = 9.33",
+      "use": ["basic"],
+      "fields": [
+        { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["n_nomax", "r3"], "cap": { "n_nomax": 10 }, "na": "rescale", "max": 20, "decimals": 2 } }
+      ],
+      "values": { "n_nomax": 4, "r3": 3 },
+      "expect": { "x": 9.33 }
+    },
+    {
+      "name": "scale: effective gain = 30 % × 50 % × 0.01 = 15 %",
+      "use": [],
+      "fields": [
+        { "key": "expected_gain_pct", "type": "number", "config": { "min": 0, "max": 100, "unit": "%" } },
+        { "key": "adoption_pct", "type": "number", "config": { "min": 0, "max": 100, "unit": "%" } },
+        { "key": "effective_gain_pct", "type": "score", "config": { "op": "product", "inputs": ["expected_gain_pct", "adoption_pct"], "scale": 0.01, "decimals": 1 } }
+      ],
+      "values": { "expected_gain_pct": 30, "adoption_pct": 50 },
+      "expect": { "effective_gain_pct": 15 }
+    },
+    {
+      "name": "scale with decimals: 33 % × 50 % × 0.01 = 16.5 %, 17 at decimals 0",
+      "use": [],
+      "fields": [
+        { "key": "expected_gain_pct", "type": "number", "config": { "max": 100 } },
+        { "key": "adoption_pct", "type": "number", "config": { "max": 100 } },
+        { "key": "g1", "type": "score", "config": { "op": "product", "inputs": ["expected_gain_pct", "adoption_pct"], "scale": 0.01, "decimals": 1 } },
+        { "key": "g0", "type": "score", "config": { "op": "product", "inputs": ["expected_gain_pct", "adoption_pct"], "scale": 0.01 } }
+      ],
+      "values": { "expected_gain_pct": 33, "adoption_pct": 50 },
+      "expect": { "g1": 16.5, "g0": 17 }
+    },
+    {
+      "name": "normalize: 7 of 10 → 70; 7 of 15 → 46.7 (decimals 1); scale before normalize: 5 × 2 of 20 → 50",
+      "use": ["basic"],
+      "fields": [
+        { "key": "of10", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r3"], "max": 10, "normalize": true } },
+        { "key": "of15", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r3"], "max": 15, "normalize": true, "decimals": 1 } },
+        { "key": "scaled", "type": "score", "config": { "op": "sum", "inputs": ["n1"], "scale": 2, "max": 20, "normalize": true } }
+      ],
+      "values": { "r1": 4, "r3": 3, "n1": 5 },
+      "expect": { "of10": 70, "of15": 46.7, "scaled": 50 },
+      "expectMax": { "of10": 100, "of15": 100, "scaled": 100 }
+    },
+    {
+      "name": "rounding half away from zero: 2.5 → 3, −2.5 → −3, 0.5 → 1, −0.5 → −1, −0.4 → 0",
+      "use": ["basic"],
+      "fields": [
+        { "key": "a", "type": "score", "config": { "op": "sum", "inputs": ["n1"] } },
+        { "key": "b", "type": "score", "config": { "op": "sum", "inputs": ["n2"] } },
+        { "key": "c", "type": "score", "config": { "op": "sum", "inputs": ["n3"] } },
+        { "key": "d", "type": "score", "config": { "op": "sum", "inputs": ["n4"] } },
+        { "key": "e", "type": "score", "config": { "op": "sum", "inputs": ["n_nomax"] } }
+      ],
+      "values": { "n1": 2.5, "n2": -2.5, "n3": 0.5, "n4": -0.5, "n_nomax": -0.4 },
+      "expect": { "a": 3, "b": -3, "c": 1, "d": -1, "e": 0 }
+    },
+    {
+      "name": "rounding at 2 decimals: 0.125 → 0.13, −0.125 → −0.13, 2.675 → 2.68, 1.005 → 1.01, 8.345 → 8.35",
+      "use": ["basic"],
+      "fields": [
+        { "key": "a", "type": "score", "config": { "op": "sum", "inputs": ["n1"], "decimals": 2 } },
+        { "key": "b", "type": "score", "config": { "op": "sum", "inputs": ["n2"], "decimals": 2 } },
+        { "key": "c", "type": "score", "config": { "op": "sum", "inputs": ["n3"], "decimals": 2 } },
+        { "key": "d", "type": "score", "config": { "op": "sum", "inputs": ["n4"], "decimals": 2 } },
+        { "key": "e", "type": "score", "config": { "op": "sum", "inputs": ["n_nomax"], "decimals": 2 } }
+      ],
+      "values": { "n1": 0.125, "n2": -0.125, "n3": 2.675, "n4": 1.005, "n_nomax": 8.345 },
+      "expect": { "a": 0.13, "b": -0.13, "c": 2.68, "d": 1.01, "e": 8.35 }
+    },
+    {
+      "name": "rounding: 1.45 → 1.5 (decimals 1), 2.345 → 2.35, 123456789.125 → 123456789.13, 1234.5 → 1235",
+      "use": ["basic"],
+      "fields": [
+        { "key": "a", "type": "score", "config": { "op": "sum", "inputs": ["n1"], "decimals": 1 } },
+        { "key": "b", "type": "score", "config": { "op": "sum", "inputs": ["n2"], "decimals": 2 } },
+        { "key": "c", "type": "score", "config": { "op": "sum", "inputs": ["n3"], "decimals": 2 } },
+        { "key": "d", "type": "score", "config": { "op": "sum", "inputs": ["n4"] } }
+      ],
+      "values": { "n1": 1.45, "n2": 2.345, "n3": 123456789.125, "n4": 1234.5 },
+      "expect": { "a": 1.5, "b": 2.35, "c": 123456789.13, "d": 1235 }
+    },
+    {
+      "name": "rounding happens once, at the end: 1.001 + 0.004 = 1.005 → 1.01; 0.1 + 0.2 = 0.3 at 10 decimals",
+      "use": ["basic"],
+      "fields": [
+        { "key": "a", "type": "score", "config": { "op": "sum", "inputs": ["n1", "n2"], "decimals": 2 } },
+        { "key": "b", "type": "score", "config": { "op": "sum", "inputs": ["n3", "n4"], "decimals": 10 } }
+      ],
+      "values": { "n1": 1.001, "n2": 0.004, "n3": 0.1, "n4": 0.2 },
+      "expect": { "a": 1.01, "b": 0.3 }
+    },
+    {
+      "name": "rounding an average: (1 + 2) / 2 → 2, (−1 − 2) / 2 → −2, (1 + 2 + 2) / 3 → 1.67",
+      "use": ["basic"],
+      "fields": [
+        { "key": "pos", "type": "score", "config": { "op": "avg", "inputs": ["n1", "n2"] } },
+        { "key": "neg", "type": "score", "config": { "op": "avg", "inputs": ["n3", "n4"] } },
+        { "key": "third", "type": "score", "config": { "op": "avg", "inputs": ["n1", "n2", "n_nomax"], "decimals": 2 } }
+      ],
+      "values": { "n1": 1, "n2": 2, "n3": -1, "n4": -2, "n_nomax": 2 },
+      "expect": { "pos": 2, "neg": -2, "third": 1.67 }
+    },
+    {
+      "name": "missing input → null; the other scores of the item are unaffected",
+      "use": ["basic"],
+      "fields": [
+        { "key": "incomplete", "type": "score", "config": { "op": "sum", "inputs": ["n1", "n2"] } },
+        { "key": "complete", "type": "score", "config": { "op": "sum", "inputs": ["n1"] } }
+      ],
+      "values": { "n1": 3 },
+      "expect": { "incomplete": null, "complete": 3 }
+    },
+    {
+      "name": "values that don't fit the input's type → null",
+      "use": ["basic"],
+      "fields": [
+        { "key": "number_text", "type": "score", "config": { "op": "sum", "inputs": ["n1"] } },
+        { "key": "number_na", "type": "score", "config": { "op": "sum", "inputs": ["n2"] } },
+        { "key": "rating_bool", "type": "score", "config": { "op": "sum", "inputs": ["r1"] } },
+        { "key": "rating_other_text", "type": "score", "config": { "op": "sum", "inputs": ["r2"] } },
+        { "key": "select_number", "type": "score", "config": { "op": "sum", "inputs": ["s1"] } },
+        { "key": "multiselect_text", "type": "score", "config": { "op": "sum", "inputs": ["m1"] } },
+        { "key": "multiselect_numbers", "type": "score", "config": { "op": "sum", "inputs": ["m2"] } }
+      ],
+      "values": { "n1": "12", "n2": "na", "r1": true, "r2": "n/a", "s1": 3, "m1": "o1", "m2": [1, 2] },
+      "expect": {
+        "number_text": null, "number_na": null, "rating_bool": null, "rating_other_text": null,
+        "select_number": null, "multiselect_text": null, "multiselect_numbers": null
+      }
+    },
+    {
+      "name": "inputs without numeric meaning or without a definition → null",
+      "use": ["basic"],
+      "fields": [
+        { "key": "text", "type": "score", "config": { "op": "sum", "inputs": ["t1"] } },
+        { "key": "bool", "type": "score", "config": { "op": "count", "inputs": ["b1"] } },
+        { "key": "date", "type": "score", "config": { "op": "max", "inputs": ["d1"] } },
+        { "key": "unknown", "type": "score", "config": { "op": "sum", "inputs": ["n1", "nowhere"] } },
+        { "key": "empty", "type": "score", "config": { "op": "sum", "inputs": [] } }
+      ],
+      "values": { "t1": "12", "b1": true, "d1": "2026-11-26", "n1": 1, "nowhere": 4 },
+      "expect": { "text": null, "bool": null, "date": null, "unknown": null, "empty": null }
+    },
+    {
+      "name": "select: the chosen option's points; an option without points → null",
+      "use": ["basic"],
+      "fields": [
+        { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["s1", "n1"] } },
+        { "key": "y", "type": "score", "config": { "op": "sum", "inputs": ["s1"] } }
+      ],
+      "values": { "s1": "b", "n1": 1 },
+      "expect": { "x": 4, "y": 3 }
+    },
+    {
+      "name": "select: an option without points makes the input invalid",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["s1"] } }],
+      "values": { "s1": "c" },
+      "expect": { "x": null }
+    },
+    {
+      "name": "select maximum = the highest points of its options (rescale: 1 × 6/3 = 2)",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["s1", "r2"], "na": "rescale", "max": 6 } }],
+      "values": { "s1": "a", "r2": "na" },
+      "expect": { "x": 2 }
+    },
+    {
+      "name": "multiselect: count of chosen options, sum of their points, an empty choice is 0",
+      "use": ["basic"],
+      "fields": [
+        { "key": "count", "type": "score", "config": { "op": "sum", "inputs": ["m1"] } },
+        { "key": "points", "type": "score", "config": { "op": "sum", "inputs": ["m2"] } },
+        { "key": "count_default", "type": "score", "config": { "op": "sum", "inputs": ["m_default"] } },
+        { "key": "empty", "type": "score", "config": { "op": "sum", "inputs": ["m3"] } }
+      ],
+      "values": { "m1": ["o1", "o3", "o4"], "m2": ["o1", "o2"], "m_default": ["x", "y"], "m3": [] },
+      "expect": { "count": 3, "points": 7, "count_default": 2, "empty": 0 }
+    },
+    {
+      "name": "multiselect: an option chosen twice counts once",
+      "use": ["basic"],
+      "fields": [
+        { "key": "count", "type": "score", "config": { "op": "sum", "inputs": ["m1"] } },
+        { "key": "points", "type": "score", "config": { "op": "sum", "inputs": ["m2"] } }
+      ],
+      "values": { "m1": ["o1", "o1"], "m2": ["o2", "o2"] },
+      "expect": { "count": 1, "points": 5 }
+    },
+    {
+      "name": "multiselect sum: a chosen option without points, or an unknown one → null",
+      "use": ["basic"],
+      "fields": [
+        { "key": "no_points", "type": "score", "config": { "op": "sum", "inputs": ["m2"] } },
+        { "key": "unknown", "type": "score", "config": { "op": "sum", "inputs": ["m1"] } }
+      ],
+      "values": { "m2": ["o1", "o4"], "m1": ["o1", "o9"] },
+      "expect": { "no_points": null, "unknown": null }
+    },
+    {
+      "name": "multiselect maxima: count → the option count (1 × 10/4 = 2.5 → 3); sum → the points of all options, archived ones too (2 × 10/5 = 4)",
+      "use": ["basic"],
+      "fields": [
+        { "key": "count", "type": "score", "config": { "op": "sum", "inputs": ["m1", "r2"], "na": "rescale", "max": 10 } },
+        { "key": "points", "type": "score", "config": { "op": "sum", "inputs": ["m3", "r2"], "na": "rescale", "max": 10 } }
+      ],
+      "values": { "m1": ["o2"], "m3": ["p1"], "r2": "na" },
+      "expect": { "count": 3, "points": 4 }
+    },
+    {
+      "name": "multiselect: an archived option still counts",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["m3"] } }],
+      "values": { "m3": ["p1", "p2"] },
+      "expect": { "x": 5 }
+    },
+    {
+      "name": "nested: inner = 4 + 3 = 7, outer = inner + 2 = 9",
+      "use": ["basic"],
+      "fields": [
+        { "key": "inner", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r3"], "max": 10 } },
+        { "key": "outer", "type": "score", "config": { "op": "sum", "inputs": ["inner", "n1"] } }
+      ],
+      "values": { "r1": 4, "r3": 3, "n1": 2 },
+      "expect": { "inner": 7, "outer": 9 },
+      "expectMax": { "inner": 10, "outer": null }
+    },
+    {
+      "name": "nested: an incomplete inner score makes the outer one incomplete",
+      "use": ["basic"],
+      "fields": [
+        { "key": "inner", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r3"], "max": 10 } },
+        { "key": "outer", "type": "score", "config": { "op": "sum", "inputs": ["inner", "n1"] } }
+      ],
+      "values": { "r1": 4, "n1": 2 },
+      "expect": { "inner": null, "outer": null }
+    },
+    {
+      "name": "nested: an inner score with nothing remaining (all n/a) is missing for the outer one",
+      "use": ["basic"],
+      "fields": [
+        { "key": "inner", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r2"], "na": "ignore", "max": 10 } },
+        { "key": "outer", "type": "score", "config": { "op": "sum", "inputs": ["inner", "n1"], "na": "ignore" } }
+      ],
+      "values": { "r1": "na", "r2": "na", "n1": 2 },
+      "expect": { "inner": null, "outer": null }
+    },
+    {
+      "name": "nested in rescale: the inner score's max counts (7 × 30/10 = 21)",
+      "use": ["basic"],
+      "fields": [
+        { "key": "inner", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r3"], "max": 10 } },
+        { "key": "outer", "type": "score", "config": { "op": "sum", "inputs": ["inner", "r2"], "na": "rescale", "max": 30 } }
+      ],
+      "values": { "r1": 4, "r3": 3, "r2": "na" },
+      "expect": { "inner": 7, "outer": 21 }
+    },
+    {
+      "name": "nested: a normalised inner score has the maximum 100 ((70 + 4) × 105/105 = 74)",
+      "use": ["basic"],
+      "fields": [
+        { "key": "inner", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r3"], "max": 10, "normalize": true } },
+        { "key": "outer", "type": "score", "config": { "op": "sum", "inputs": ["inner", "r1"], "na": "rescale", "max": 105 } }
+      ],
+      "values": { "r1": 4, "r3": 3 },
+      "expect": { "inner": 70, "outer": 74 },
+      "expectMax": { "inner": 100, "outer": 105 }
+    },
+    {
+      "name": "nested: the outer score takes the inner one's rounded value (avg 3.5 → 4, + 0.5 = 4.5)",
+      "use": ["basic"],
+      "fields": [
+        { "key": "inner", "type": "score", "config": { "op": "avg", "inputs": ["r1", "r3"] } },
+        { "key": "outer", "type": "score", "config": { "op": "sum", "inputs": ["inner", "n1"], "decimals": 1 } }
+      ],
+      "values": { "r1": 4, "r3": 3, "n1": 0.5 },
+      "expect": { "inner": 4, "outer": 4.5 }
+    },
+    {
+      "name": "nested three deep, and an input used by two of them",
+      "use": ["basic"],
+      "fields": [
+        { "key": "level1", "type": "score", "config": { "op": "sum", "inputs": ["r1", "r3"] } },
+        { "key": "level2", "type": "score", "config": { "op": "product", "inputs": ["level1", "r1"] } },
+        { "key": "level3", "type": "score", "config": { "op": "max", "inputs": ["level2", "level1", "n1"] } }
+      ],
+      "values": { "r1": 4, "r3": 3, "n1": 30 },
+      "expect": { "level1": 7, "level2": 28, "level3": 30 }
+    },
+    {
+      "name": "a cycle (a stored configuration that bypassed validation) evaluates to null",
+      "use": ["basic"],
+      "fields": [
+        { "key": "ping", "type": "score", "config": { "op": "sum", "inputs": ["pong", "n1"] } },
+        { "key": "pong", "type": "score", "config": { "op": "sum", "inputs": ["ping"] } },
+        { "key": "self", "type": "score", "config": { "op": "sum", "inputs": ["self"] } },
+        { "key": "fine", "type": "score", "config": { "op": "sum", "inputs": ["n1"] } }
+      ],
+      "values": { "n1": 1 },
+      "expect": { "ping": null, "pong": null, "self": null, "fine": 1 }
+    }
+  ],
+  "validation": [
+    { "name": "the feasibility index is valid", "use": ["feasibility"], "score": "feasibility_index", "expectErrors": [] },
+    { "name": "the impact score is valid", "use": ["impact"], "score": "impact_score", "expectErrors": [] },
+    {
+      "name": "the effective gain (product, scale, no max) is valid",
+      "use": [],
+      "fields": [
+        { "key": "expected_gain_pct", "type": "number", "config": {} },
+        { "key": "adoption_pct", "type": "number", "config": {} },
+        { "key": "effective_gain_pct", "type": "score", "config": { "op": "product", "inputs": ["expected_gain_pct", "adoption_pct"], "scale": 0.01, "decimals": 1 } }
+      ],
+      "score": "effective_gain_pct",
+      "expectErrors": []
+    },
+    {
+      "name": "not a score field",
+      "use": ["basic"],
+      "score": "n1",
+      "expectErrors": [{ "code": "not_a_score" }]
+    },
+    {
+      "name": "unknown op and na mode",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "median", "inputs": ["n1"], "na": "skip" } }],
+      "score": "x",
+      "expectErrors": [{ "code": "invalid_op" }, { "code": "invalid_na" }]
+    },
+    {
+      "name": "no inputs",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": [] } }],
+      "score": "x",
+      "expectErrors": [{ "code": "no_inputs" }]
+    },
+    {
+      "name": "an input listed twice",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["n1", "n2", "n1"] } }],
+      "score": "x",
+      "expectErrors": [{ "code": "duplicate_input", "input": "n1" }]
+    },
+    {
+      "name": "inputs that don't exist, are archived or have no numeric meaning",
+      "use": ["basic"],
+      "fields": [
+        { "key": "old", "type": "rating", "config": { "max": 5 }, "isArchived": true },
+        { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["nowhere", "old", "t1", "b1", "d1", "n1"] } }
+      ],
+      "score": "x",
+      "expectErrors": [
+        { "code": "unknown_input", "input": "nowhere" },
+        { "code": "archived_input", "input": "old" },
+        { "code": "not_numeric", "input": "t1" },
+        { "code": "not_numeric", "input": "b1" },
+        { "code": "not_numeric", "input": "d1" }
+      ]
+    },
+    {
+      "name": "a select (or a multiselect summing points) needs points on every option in use; archived options may lack them",
+      "use": ["basic"],
+      "fields": [
+        {
+          "key": "s_ok",
+          "type": "select",
+          "config": { "options": [{ "id": "a", "label": "A", "points": 1 }, { "id": "old", "label": "Old", "archived": true }] }
+        },
+        { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["s1", "m1", "m2", "s_ok"] } }
+      ],
+      "score": "x",
+      "expectErrors": [
+        { "code": "options_without_points", "input": "s1" },
+        { "code": "options_without_points", "input": "m2" }
+      ]
+    },
+    {
+      "name": "a score that is its own input",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["n1", "x"] } }],
+      "score": "x",
+      "expectErrors": [{ "code": "cycle", "input": "x" }]
+    },
+    {
+      "name": "a cycle through another score",
+      "use": ["basic"],
+      "fields": [
+        { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["y", "n1"] } },
+        { "key": "y", "type": "score", "config": { "op": "sum", "inputs": ["n2", "x"] } }
+      ],
+      "score": "x",
+      "expectErrors": [{ "code": "cycle", "input": "y" }]
+    },
+    {
+      "name": "a cycle further down that x can't be evaluated through",
+      "use": ["basic"],
+      "fields": [
+        { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["n1", "y"] } },
+        { "key": "y", "type": "score", "config": { "op": "sum", "inputs": ["z"] } },
+        { "key": "z", "type": "score", "config": { "op": "sum", "inputs": ["y"] } }
+      ],
+      "score": "x",
+      "expectErrors": [{ "code": "cycle", "input": "y" }]
+    },
+    {
+      "name": "scores sharing an input are no cycle",
+      "use": ["basic"],
+      "fields": [
+        { "key": "a", "type": "score", "config": { "op": "sum", "inputs": ["n1"] } },
+        { "key": "b", "type": "score", "config": { "op": "sum", "inputs": ["a", "n1"] } },
+        { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["a", "b"] } }
+      ],
+      "score": "x",
+      "expectErrors": []
+    },
+    {
+      "name": "rescale (sum) and normalize need a max above 0",
+      "use": ["basic"],
+      "fields": [
+        { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["r1"], "na": "rescale" } },
+        { "key": "y", "type": "score", "config": { "op": "avg", "inputs": ["r1"], "normalize": true, "max": 0 } }
+      ],
+      "score": "x",
+      "expectErrors": [{ "code": "max_required" }]
+    },
+    {
+      "name": "normalize with a max of 0",
+      "use": ["basic"],
+      "fields": [{ "key": "y", "type": "score", "config": { "op": "avg", "inputs": ["r1"], "normalize": true, "max": 0 } }],
+      "score": "y",
+      "expectErrors": [{ "code": "max_required" }]
+    },
+    {
+      "name": "rescale with neither max: reported once",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["r1"], "na": "rescale", "normalize": true } }],
+      "score": "x",
+      "expectErrors": [{ "code": "max_required" }]
+    },
+    {
+      "name": "rescale (sum) needs every input's maximum: a number without max, a score without max",
+      "use": ["basic"],
+      "fields": [
+        { "key": "inner", "type": "score", "config": { "op": "sum", "inputs": ["n1"] } },
+        { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["n_nomax", "inner", "r_default", "s_ok", "m1"], "na": "rescale", "max": 50 } },
+        { "key": "s_ok", "type": "select", "config": { "options": [{ "id": "a", "label": "A", "points": 1 }] } }
+      ],
+      "score": "x",
+      "expectErrors": [
+        { "code": "input_max_required", "input": "n_nomax" },
+        { "code": "input_max_required", "input": "inner" }
+      ]
+    },
+    {
+      "name": "a cap supplies a number's maximum; a normalised score has one",
+      "use": ["basic"],
+      "fields": [
+        { "key": "inner", "type": "score", "config": { "op": "sum", "inputs": ["n1"], "max": 10, "normalize": true } },
+        { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["n_nomax", "inner"], "cap": { "n_nomax": 100 }, "na": "rescale", "max": 50 } }
+      ],
+      "score": "x",
+      "expectErrors": []
+    },
+    {
+      "name": "rescale with another op than sum needs no maxima (it works like ignore)",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "avg", "inputs": ["n_nomax", "r1"], "na": "rescale" } }],
+      "score": "x",
+      "expectErrors": []
+    },
+    {
+      "name": "a cap on a key that isn't an input",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["n1"], "cap": { "n2": 5, "n1": 3 } } }],
+      "score": "x",
+      "expectErrors": [{ "code": "invalid_cap", "input": "n2" }]
+    },
+    {
+      "name": "decimals must be a whole number from 0 to 10",
+      "use": ["basic"],
+      "fields": [
+        { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["n1"], "decimals": 11 } },
+        { "key": "y", "type": "score", "config": { "op": "sum", "inputs": ["n1"], "decimals": -1 } },
+        { "key": "z", "type": "score", "config": { "op": "sum", "inputs": ["n1"], "decimals": 1.5 } }
+      ],
+      "score": "x",
+      "expectErrors": [{ "code": "invalid_decimals" }]
+    },
+    {
+      "name": "negative decimals",
+      "use": ["basic"],
+      "fields": [{ "key": "y", "type": "score", "config": { "op": "sum", "inputs": ["n1"], "decimals": -1 } }],
+      "score": "y",
+      "expectErrors": [{ "code": "invalid_decimals" }]
+    },
+    {
+      "name": "fractional decimals",
+      "use": ["basic"],
+      "fields": [{ "key": "z", "type": "score", "config": { "op": "sum", "inputs": ["n1"], "decimals": 1.5 } }],
+      "score": "z",
+      "expectErrors": [{ "code": "invalid_decimals" }]
+    },
+    {
+      "name": "the definition being saved replaces the stored one of the same key",
+      "use": ["basic"],
+      "fields": [{ "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["x"] } }],
+      "score": "x",
+      "replace": { "key": "x", "type": "score", "config": { "op": "sum", "inputs": ["n1"] } },
+      "expectErrors": []
+    }
+  ]
+}
