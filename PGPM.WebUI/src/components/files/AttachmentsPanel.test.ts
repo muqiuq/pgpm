@@ -4,7 +4,7 @@ import ConfirmationService from 'primevue/confirmationservice'
 import ToastService from 'primevue/toastservice'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDatabase, type PgpmDb } from '@/local/db'
-import { FilePipeline, filePipelineKey } from '@/local/files'
+import { FilePipeline, filePipelineKey, storageFullMessage } from '@/local/files'
 import { Repo } from '@/local/repo'
 import { memoryDb, until } from '@/test/memoryDb'
 import { mountWithUi } from '@/test/mount'
@@ -108,9 +108,27 @@ describe('AttachmentsPanel (docs/01 §4.5)', () => {
     expect(w.get('[aria-label="Download remote.pdf"]').attributes('disabled')).toBeDefined()
     expect(w.get('[aria-label="Download pending.pdf"]').attributes('disabled')).toBeUndefined()
 
-    const retry = vi.spyOn(files, 'retry').mockResolvedValue({ uploaded: 0, failed: 0, stopped: 'offline' })
+    const retry = vi.spyOn(files, 'retry').mockResolvedValue({ uploaded: 0, failed: 0, waiting: 0, stopped: 'offline' })
     await w.get('[aria-label="Retry the upload of failed.pdf"]').trigger('click')
     expect(retry).toHaveBeenCalledWith('failed')
+    w.unmount()
+  })
+
+  it('shows a file the server’s full storage refused as waiting, with the reason and Retry', async () => {
+    await db.synced('files').put(row('waiting', { status: 'pending', createdAt: '2026-11-20T10:00:04Z' }))
+    await db.blobs.put(
+      blob('waiting', { waiting: { reason: storageFullMessage, retryAt: '2026-11-20T10:05:00Z' }, nextChunk: 0 }),
+    )
+    const w = mount()
+    await until(async () => {
+      await flushPromises()
+      return lines(w).length === 4 && w.text().includes('Server storage full')
+    }, 'the waiting attachment')
+    expect(w.get('[data-testid="attachment-waiting"]').text()).toContain('Server storage full')
+    expect(w.get('[data-testid="attachment-waiting"]').text()).not.toContain('Failed')
+    const retry = vi.spyOn(files, 'retry').mockResolvedValue({ uploaded: 0, failed: 0, waiting: 1, stopped: null })
+    await w.get('[aria-label="Retry the upload of waiting.pdf"]').trigger('click')
+    expect(retry).toHaveBeenCalledWith('waiting')
     w.unmount()
   })
 

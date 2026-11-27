@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vitest'
+import { effectScope, watch } from 'vue'
+import { applyChanges, syncScope } from '@/local/apply'
+import type { Row } from '@/local/outbox'
 import type { ItemRow, StatusRow } from '@/local/rows'
+import { setLivePulling, useLive } from '@/local/useLive'
+import { memoryDb } from '@/test/memoryDb'
 import { emptyContext, itemText, matchItem, sortValue, type ItemFilters } from '@/views/items/itemList'
 import { matchRows, normalise, type MatchSpec } from './useLocalTable'
 
@@ -131,5 +136,96 @@ describe.skipIf(!process.env.PGPM_PERF)(`item list, ${N.toLocaleString('en')} id
       )
       expect(median).toBeLessThan(budget)
     })
+  }
+})
+
+/**
+ * A first sync of the 10,000 ideas (and a share each) into IndexedDB (fake-indexeddb here), in the engine's pages of 500
+ * rows per table – one transaction each, as `SyncEngine.run` applies them, after a request of 0 or 50 ms – while the
+ * list is closed, open, or open with its re-runs coalesced during the pull (`setLivePulling`, docs/07 §2.3). Prints the
+ * median of three runs: the time until the list counts all of them, and how often its three heavy queries ran
+ * (the rows, every item's type, every share – as `ItemList.vue` reads them).
+ */
+describe.skipIf(!process.env.PGPM_PERF)(`first sync of ${N.toLocaleString('en')} ideas with the list`, () => {
+  const PAGE = 500
+  const shares: Row[] = rows.map((r, i) => ({
+    id: `0194${i.toString(16).padStart(8, '0')}`,
+    itemId: r.id,
+    groupId: 'g1',
+    access: 'edit',
+    rev: 1,
+    seq: N + i + 1,
+    deleted: false,
+  }))
+
+  async function firstSync(list: 'closed' | 'open' | 'coalesced', latency: number) {
+    const db = memoryDb()
+    const scope = effectScope()
+    let runs = 0
+    let listed = 0
+    const started = performance.now()
+    if (list !== 'closed') {
+      scope.run(() => {
+        // The item list's three heavy queries (ItemList.vue): its rows, every item's type, every share.
+        const live = useLive(async () => {
+          runs++
+          return await db.synced('items').where('type').equals('idea').toArray()
+        }, [] as Row[])
+        useLive(async () => {
+          runs++
+          const types = new Map<string, unknown>()
+          await db.synced('items').each((row) => void types.set(row.id, row.type))
+          return types
+        }, new Map<string, unknown>())
+        useLive(async () => {
+          runs++
+          return (await db.synced('item_shares').toArray()).filter((r) => !r.deleted)
+        }, [] as Row[])
+        watch(live.value, (v) => {
+          if (v.length === N && !listed) listed = performance.now() - started
+        })
+      })
+    }
+    if (list === 'coalesced') setLivePulling(true)
+    for (let p = 0; p < N / PAGE; p++) {
+      if (latency) await new Promise((r) => setTimeout(r, latency))
+      await db.transaction('rw', syncScope(db), async () => {
+        await applyChanges(
+          db,
+          {
+            items: rows.slice(p * PAGE, (p + 1) * PAGE) as unknown as Row[],
+            item_shares: shares.slice(p * PAGE, (p + 1) * PAGE),
+          },
+          [],
+        )
+        await db.setMeta('cursor', (p + 1) * PAGE)
+      })
+    }
+    const pulled = performance.now() - started
+    setLivePulling(false)
+    if (list === 'closed') {
+      runs += 3
+      expect(await db.synced('items').where('type').equals('idea').count()).toBe(N)
+      listed = performance.now() - started
+    }
+    while (!listed) await new Promise((r) => setTimeout(r, 5))
+    scope.stop()
+    await db.delete()
+    return { pulled, listed, runs }
+  }
+
+  for (const latency of [0, 50]) {
+    for (const list of ['closed', 'open', 'coalesced'] as const) {
+      test(`list ${list}, requests of ${latency} ms`, async () => {
+        const results = []
+        for (let i = 0; i < 3; i++) results.push(await firstSync(list, latency))
+        const { pulled, listed, runs } = results.sort((a, b) => a.listed - b.listed)[1]!
+        console.log(
+          `list ${list}, requests of ${latency} ms: pulled in ${pulled.toFixed(0)} ms, listed after ` +
+            `${listed.toFixed(0)} ms, the queries ran ${runs}×`,
+        )
+        expect(listed).toBeGreaterThan(0)
+      }, 120_000)
+    }
   }
 })

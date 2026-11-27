@@ -1,6 +1,6 @@
 # PGPM – Performance (release 1.0)
 
-> Status: v1.0 (2026-11-27) · phase 7 hardening, track H1
+> Status: v1.0 (2026-11-27) · phase 7 hardening, track H1; §2.3's list during a first sync: follow-up after H2
 > Targets: [05 Build plan](05-build-plan.md) §3 phase 7 (10,000 items in lists, 1,000-element maps, 50 concurrent live
 > clients on one instance), §7 spikes S1/S2 · implementation: [03](03-implementation-reference.md) §11.6, §12.3, §13.1
 
@@ -14,6 +14,7 @@
 | Item list, 10,000 ideas: default sort (newest change) | 232 ms | **16 ms** | §2.1, `useLocalTable.perf.test.ts` |
 | 〃 sort by title / by status then date / search one word | 168 / 202 / 70 ms | **12 / 15 / 11 ms** | §2.1 |
 | First sync, ~10,000 rows (the admin of the used e2e stack) | 12.2 s | **2.8 s** | §2.3 |
+| First sync of 10,000 notes with the notes list open, until it counts them | 11.3–12.8 s | **3.3–4.6 s** | §2.3, `e2e/perf.spec.ts` |
 | 1,000-element map, real app: pan and zoom | spike S2 (playground): 60 fps, throttled zooms 43–54 fps | **60 fps in every phase**; 4× throttled 55–60 fps | §2.2, `e2e/perf.spec.ts` |
 
 ## 1. Server: the live feed under load
@@ -129,17 +130,49 @@ other. Now per table of the page: one `bulkGet`, one outbox query for the table,
 pending entries; `apply.test.ts`, `sync.test.ts` unchanged and green). The admin's first sync of the used e2e stack
 (1,546 items, 5,087 map elements, their shares and children – about 10,000 rows) went from **12.2 s to 2.8 s**.
 
-| 10,000 notes, a teammate's first sign-in | time |
+| 10,000 notes, a teammate's first sign-in (H1, before the follow-up below) | time |
 |---|---|
 | landing on `/maps`: until the indicator says *Live* | 2.2 s |
 | then `/notes` until it counts 10,000 | 1.0 s |
 | landing on `/notes` (the list open while the pages arrive): until it counts 10,000 | 11.8 s |
 | search "chatbot" (2,000 hits, the 250 ms debounce included) / cleared | 0.33 s / 0.34 s |
 
-**For H2** (not changed here, not small): a list open during a large first sync re-reads all its rows after every
-page's transaction (Dexie `liveQuery`, `useLive`), and those reads queue the next page's write – 11.8 s instead of
-2.2 + 1.0 s. Coalescing the list's re-runs while the sync is pulling (e.g. at most one per 500 ms, or after the pull),
-or showing the list only after the first sync, would remove it.
+**Fixed** (phase 7 follow-up, shared code `local/useLive.ts`, docs/03 §12.10, §15 #89). A list open during a large
+first sync re-read all its rows after every page's transaction (Dexie `liveQuery` via `useLive`), and those reads
+queued the next page's write. Instrumenting the notes list showed three heavy queries, not one: its rows, the type of
+every item (`types`) and every share (`item_shares`) – 10,000 rows each, each re-running on its own. Now, while the
+engine pulls (`status.syncing`, in every tab: boot.ts hands it to `setLivePulling`), a change only holds a live query
+back; the held ones re-run **together, in bursts**, when the last burst has been over for **500 ms** (or for twice its
+length, if longer – a burst's end taken after the task its answers render in), and **once right after the pull**.
+Between bursts the pull's pages are written without waiting. Outside a pull every change re-runs a query at once, as
+before. Dexie still calls the query on a change: `useLive` then reads nothing (it hands over the last run's result if
+Dexie dropped it for a change during that run, so the count still grows) and subscribes anew with the burst – one real
+run that observes again. Every list benefits (all of them read through `useLive`), so do the detail pages and the
+sync indicator's counts.
+
+| 10,000 notes, a teammate's first sign-in (`e2e/perf.spec.ts`, runs of the same session) | before | after |
+|---|---|---|
+| landing on `/notes` (the list open while the pages arrive): until it counts 10,000 | 12.8 / 12.1 / 11.3 s (H1: 11.8 s) | **4.6 / 3.3 s** |
+| another teammate, the list closed: landing on `/maps` until *Live*, then `/notes` until it counts 10,000 | 1.8 + 0.9 / 1.7 + 0.8 s | 2.2 + 0.9 / 1.6 + 0.8 s |
+
+Before and after alternated on the same machine (other test runs active on it, so single runs vary by a second or
+two). The spec measures both cases now: the list-closed teammate signs in after the list-open one (warm server caches –
+the comparison favours the closed case), so an open list now costs about a second over landing elsewhere, instead of
+nine. A first version that spaced each query's re-runs on its own (500 ms after its last one) gained little – 11.3 and
+7.1 s: the three heavy queries took turns and kept IndexedDB busy nearly all the pull (an instrumented run: 30 runs
+adding up to 6.3 s of query time in a 6.3 s pull); bursts leave the pauses free for the pages.
+
+In the bench (`tools/npm.sh run bench`: the 10,000 ideas and a share each applied in pages of 500 rows per table, one
+transaction each as the engine does, into fake-indexeddb, with the list's three heavy queries; median of three):
+
+| First sync of 10,000 ideas | list closed | list open, before | list open, after |
+|---|---|---|---|
+| no time between the pages: until the list counts all; the queries' runs | 229 ms; 3 | 1,874 ms; 66 | **365 ms; 6** |
+| 50 ms per request: until the list counts all; the queries' runs | 1,224 ms; 3 | 1,992 ms; 66 | **1,496 ms; 12** |
+
+(fake-indexeddb reads 10,000 rows faster than a browser's IndexedDB, which is why the real app gains more.)
+`src/local/useLive.test.ts` counts the re-runs of a 16-page pull (bursts at least 500 ms apart and one after it; a run
+per page without the coalescing) and checks that the held queries run together.
 
 ## 3. What was checked and left
 

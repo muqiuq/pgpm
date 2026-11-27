@@ -266,6 +266,8 @@ editing page.
 **Offline and upload states**
 - Uploads work offline: the file stays on the device as **Pending upload** until sent; interrupted uploads resume.
 - **Failed** with **Retry**: the server refused the file (e.g. type or size); the reason is shown.
+- **Server storage full**: the server's disk can't take the file now. It stays on the device and is tried again every
+  few minutes (or with **Retry**); ask an administrator.
 - **Not uploaded yet**: added on another device that hasn't uploaded it yet.
 - **Not available offline**: not cached on this device. Files you download are kept for offline use (up to 200 MB,
   oldest removed first); covers and map images are always downloaded.

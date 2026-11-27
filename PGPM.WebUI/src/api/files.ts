@@ -13,7 +13,8 @@ import { fetchApi, fetchJson } from './client'
  *
  * Refusals (ProblemDetails `code`, docs/03 §10.3): 409 `chunk_out_of_order` (+ `expected`), `file_available`,
  * `size_mismatch`, `sha256_mismatch`, `upload_missing`; 413 `too_large`; 415 `not_an_image`; 422 `blocked_type`; 429
- * `too_many_uploads`; 503 `file_storage_unavailable`; 404 for a row the user can't see, 403 `missing_access` for a reader.
+ * `too_many_uploads`; 503 `file_storage_unavailable`; 507 `file_storage_full` (chunk 0 would eat into the disk's reserve,
+ * `Files:MinFreeMb`); 404 for a row the user can't see, 403 `missing_access` for a reader.
  */
 export interface FileTransport {
   putChunk(id: string, index: number, bytes: ArrayBuffer, signal?: AbortSignal): Promise<{ received: number }>

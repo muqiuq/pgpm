@@ -49,6 +49,11 @@ export interface BlobRow {
   nextChunk?: number
   /** The server refused the upload for good (its reason); *Retry* clears it. */
   error?: string | null
+  /**
+   * The server can't take the bytes for now (507 `file_storage_full`): the reason shown, and when to try again. The
+   * upload stays queued; *Retry* clears it, so does an accepted chunk.
+   */
+  waiting?: { reason: string; retryAt: string } | null
 }
 
 /** The keys of `meta`. */

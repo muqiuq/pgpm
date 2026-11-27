@@ -323,6 +323,8 @@ export class FakeSyncServer {
   readonly uploads = new Map<string, Uint8Array[]>()
   /** The stored bytes of committed files. */
   readonly fileBytes = new Map<string, { bytes: Uint8Array; type: string }>()
+  /** Bytes the disk has above `Files:MinFreeMb` (null: plenty): a larger upload's chunk 0 is 507 `file_storage_full`. */
+  freeFileBytes: number | null = null
   /** Every REST call of {@link fetch}: method and path. */
   readonly calls: string[] = []
 
@@ -1078,7 +1080,7 @@ export class FakeSyncServer {
   /**
    * `PUT /api/v1/files/{id}/chunks/{n}`: chunk 0 starts (over), every other must be the next (409 `chunk_out_of_order`
    * with `expected`); 409 `file_available` when stored already; 413 `too_large` for a chunk over 4 MiB or more bytes
-   * than the row's size.
+   * than the row's size; 507 `file_storage_full` for a chunk 0 that would eat into the disk's reserve.
    */
   putChunk(userId: string, id: string, index: number, bytes: Uint8Array): { received: number } {
     if (!this.online) throw new ApiError(0, undefined)
@@ -1086,6 +1088,12 @@ export class FakeSyncServer {
     if (row.status === 'available')
       throw new ApiError(409, { code: 'file_available', detail: 'The file’s bytes are stored already.' })
     if (bytes.length > chunkBytes) throw new ApiError(413, { code: 'too_large', detail: 'A chunk is at most 4 MiB.' })
+    if (index === 0 && this.freeFileBytes !== null && Number(row.sizeBytes) > this.freeFileBytes) {
+      throw new ApiError(507, {
+        code: 'file_storage_full',
+        detail: 'The file storage is almost full (Files:MinFreeMb 1024): ask an administrator.',
+      })
+    }
     if (index === 0) this.uploads.set(id, [])
     const parts = this.uploads.get(id)
     if (!parts || parts.length !== index)
