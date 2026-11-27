@@ -10,6 +10,9 @@
 #   tools/e2e.sh                 all of it
 #   KEEP=1 tools/e2e.sh          leave the stack running afterwards
 #   tools/e2e.sh -g "offline"    arguments go to `playwright test`
+#   E2E_PERF=1 tools/e2e.sh perf.spec.ts
+#                                the measurements too (docs/07: a 1,000-element map's frame times; E2E_PERF_THROTTLE=4
+#                                for a slow laptop)
 #   E2E_NAME=pgpm-e2e-2 E2E_PORT=7431 tools/e2e.sh
 #                                another stack beside this one (containers, volumes and folders named after it)
 #
@@ -62,5 +65,5 @@ tools/npm.sh exec -- playwright --version >/dev/null
 rm -rf PGPM.WebUI/test-results
 "$ENGINE" run --rm --network "container:${NAME}" --ipc=host \
   -v "$PWD/PGPM.WebUI:/web" -v "${WEB_MODULES_VOLUME}:/web/node_modules" -w /web \
-  -e "E2E_BASE_URL=http://localhost:8080" -e CI=1 -e "E2E_ADMIN_PASSWORD=${admin_password}" \
+  -e "E2E_BASE_URL=http://localhost:8080" -e CI=1 -e "E2E_ADMIN_PASSWORD=${admin_password}" -e "E2E_PERF=${E2E_PERF:-}" -e "E2E_PERF_THROTTLE=${E2E_PERF_THROTTLE:-}" \
   "$PLAYWRIGHT_IMAGE" node_modules/.bin/playwright test "$@"

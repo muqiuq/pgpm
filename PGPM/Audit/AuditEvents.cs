@@ -84,10 +84,15 @@ public static class AuditEvents
     public const string McpTokensRevoked = "mcp.tokens_revoked";
     public const string McpItemCreated = "mcp.item_created";
     public const string McpItemUpdated = "mcp.item_updated";
+    public const string McpItemConverted = "mcp.item_converted";
+    public const string McpMapChanged = "mcp.map_changed";
 
     // The directory sync (docs/03 §8).
     public const string DirectorySyncRequested = "directory.sync_requested";
     public const string DirectorySyncFailed = "directory.sync_failed";
+
+    // Administration → System (docs/03 §9): a device made to start over.
+    public const string SystemClientReset = "system.client_reset";
 }
 
 /// <summary>The types of subject an entry can be about (<c>audit_log.subject_type</c>).</summary>
@@ -149,8 +154,10 @@ public static class AuditCatalog
         Add(AuditSubjects.McpToken, AuditEvents.McpTokenOn, AuditEvents.McpTokenOff, AuditEvents.McpTokenRegenerated, AuditEvents.McpTokenExpired,
             AuditEvents.McpTokenBlocked, AuditEvents.McpTokenOffByAdmin);
         Add(null, AuditEvents.McpTokensRevoked);
-        Add(AuditSubjects.Item, AuditEvents.McpItemCreated, AuditEvents.McpItemUpdated);
+        Add(AuditSubjects.Item, AuditEvents.McpItemCreated, AuditEvents.McpItemUpdated, AuditEvents.McpItemConverted);
+        Add(AuditSubjects.Map, AuditEvents.McpMapChanged);
         Add(null, AuditEvents.DirectorySyncRequested, AuditEvents.DirectorySyncFailed);
+        Add(AuditSubjects.User, AuditEvents.SystemClientReset);
     }
 
     public static IReadOnlyList<AuditEventInfo> All => Entries;

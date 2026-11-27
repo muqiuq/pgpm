@@ -56,4 +56,20 @@ public sealed class FractionalKeyTests
         Assert.AreEqual(1, FractionalKey.Compare("a0", b, "a0", a));
         Assert.AreEqual(0, FractionalKey.Compare("a0", a, "a0", a));
     }
+
+    /// <summary>generateKeyBetween(key, null) of the npm package fractional-indexing, for the rows the server appends.</summary>
+    [TestMethod]
+    [DataRow(null, "a0")]
+    [DataRow("a0", "a1")]
+    [DataRow("a0V", "a1")]
+    [DataRow("az", "b00")]
+    [DataRow("b0z", "b10")]
+    [DataRow("Zz", "a0")]
+    [DataRow("Yzz", "Z0")]
+    public void AfterIsTheNextKeyOfThePackage(string? key, string expected)
+    {
+        Assert.AreEqual(expected, FractionalKey.After(key));
+        Assert.IsTrue(FractionalKey.IsValid(expected));
+        Assert.IsTrue(key is null || string.CompareOrdinal(key, expected) < 0);
+    }
 }

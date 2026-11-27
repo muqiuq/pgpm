@@ -8,6 +8,7 @@
     "build": "npm run typecheck && vite build",
     "typecheck": "vue-tsc --noEmit && vue-tsc --noEmit -p tsconfig.sw.json",
     "test": "vitest run",
+    "bench": "PGPM_PERF=1 vitest run src/composables/useLocalTable.perf.test.ts",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write src e2e",
     "format:check": "prettier --check src e2e",

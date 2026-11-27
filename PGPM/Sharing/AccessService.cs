@@ -179,7 +179,7 @@ public sealed class AccessService(PgpmDbContext db)
 
     /// <summary>
     /// As items: admins and the owner manage, everybody else the highest share of their groups. A template is read by
-    /// everybody and managed with <i>Configuration: Manage</i>.
+    /// everybody and managed with <i>Configuration: Manage</i>. Capped at <see cref="Viewer.MaxAccess"/> (an MCP token's).
     /// </summary>
     public async Task<Dictionary<Guid, ItemAccess>> MapAccessAsync(Viewer viewer, IReadOnlyCollection<Guid> mapIds, CancellationToken ct)
     {
@@ -194,12 +194,14 @@ public sealed class AccessService(PgpmDbContext db)
         var configures = viewer.Rights.Has(Area.Configuration, Level.Manage);
         return maps.ToDictionary(m => m.Id, m =>
         {
-            if (viewer.IsAdmin || m.OwnerUserId == viewer.UserId || (m.IsTemplate && configures))
+            var access = viewer.IsAdmin || m.OwnerUserId == viewer.UserId || (m.IsTemplate && configures) ? ItemAccess.Manage
+                : byMap[m.Id].DefaultIfEmpty(ItemAccess.None).Max();
+            if (m.IsTemplate && access < ItemAccess.Read)
             {
-                return ItemAccess.Manage;
+                access = ItemAccess.Read;
             }
-            var shared = byMap[m.Id].DefaultIfEmpty(ItemAccess.None).Max();
-            return m.IsTemplate && shared < ItemAccess.Read ? ItemAccess.Read : shared;
+            // As items: an MCP token's access is capped (read token read, write token edit).
+            return access > viewer.MaxAccess ? viewer.MaxAccess : access;
         });
     }
 

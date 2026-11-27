@@ -31,6 +31,7 @@ internal sealed class LiveConnection(LiveSyncHub hub, WebSocket socket, LiveSess
     internal static readonly object Feed = new();
     internal static readonly object Revalidate = new();
     internal static readonly object Shutdown = new();
+    internal static readonly object ResetDevice = new();
     private static readonly object Tick = new();
 
     private readonly Channel<object> events = Channel.CreateUnbounded<object>(new UnboundedChannelOptions { SingleReader = true });
@@ -43,6 +44,7 @@ internal sealed class LiveConnection(LiveSyncHub hub, WebSocket socket, LiveSess
     private bool live;
     private bool closed;
     private Guid? clientId;
+    private volatile Device? device;
     private long cursor;
     private long deviceHorizon;
     private bool awaitingAck;
@@ -57,6 +59,11 @@ internal sealed class LiveConnection(LiveSyncHub hub, WebSocket socket, LiveSess
     public Guid UserId => session.Viewer.UserId;
 
     public bool IsAdmin => viewer.IsAdmin;
+
+    /// <summary>The device, once its <c>hello</c> named it (read by the hub from other threads).</summary>
+    public Guid? ClientId => device?.Id;
+
+    private sealed record Device(Guid Id);
 
     public Task Completion => completion.Task;
 
@@ -165,6 +172,8 @@ internal sealed class LiveConnection(LiveSyncHub hub, WebSocket socket, LiveSess
                     events.Reader.TryRead(out _);
                 }
                 return await PullAsync(ct);
+            case var _ when ReferenceEquals(e, ResetDevice):
+                return await ResetAsync(ct);
             case var _ when ReferenceEquals(e, Revalidate):
                 return await CheckSessionAsync(ct);
             case var _ when ReferenceEquals(e, Shutdown):
@@ -248,6 +257,7 @@ internal sealed class LiveConnection(LiveSyncHub hub, WebSocket socket, LiveSess
             }
         }
         live = true;
+        device = clientId is { } named ? new Device(named) : null;
         cursor = since;
         await SendAsync(new JsonObject { ["type"] = "welcome", ["head"] = head }, ct);
         await SendEditingAsync(ct);
@@ -366,7 +376,8 @@ internal sealed class LiveConnection(LiveSyncHub hub, WebSocket socket, LiveSess
             || !now.GroupIds.Order().SequenceEqual(entry.GroupIds.Order()))
         {
             entry = now;
-            viewer = viewer with { GroupIds = now.GroupIds };
+            // The rights too: a map template's access follows Configuration: Manage (S-11, docs/06).
+            viewer = viewer with { GroupIds = now.GroupIds, Rights = now.Rights };
             await SendAsync(new JsonObject { ["type"] = "session", ["state"] = "rights_changed" }, ct);
         }
         return true;

@@ -1,3 +1,4 @@
+import Dexie from 'dexie'
 import type { Eviction, FieldConflict, MutationResult } from '@/api/sync'
 import type { ConflictEntry, ConflictField } from './conflicts'
 import { withoutLocal, type PgpmDb, type StoredRow } from './db'
@@ -75,16 +76,62 @@ export async function applyServerRow(db: PgpmDb, table: string, incoming: Row): 
   const id = incoming.id
   if (typeof id !== 'string' || !tableDef(table)) return false
   const stored = await db.synced(table).get(id)
+  const settled = settledRow(incoming, stored)
+  if (!settled) return false
+  await settle(db, table, settled.server, settled.rev)
+  return true
+}
+
+/** What {@link applyServerRow} stores for a row (before the pending entries): the server's side and its rev; null: kept. */
+function settledRow(
+  incoming: Row,
+  stored: StoredRow | undefined,
+): { server: Row & { id: string }; rev: number | null } | null {
+  const id = incoming.id as string
   const meta = stored ? metaOf(stored) : null
   const rev = typeof incoming.rev === 'number' ? incoming.rev : null
-  if (meta?.serverRev !== null && meta?.serverRev !== undefined && rev !== null && rev < meta.serverRev) return false
+  if (meta?.serverRev !== null && meta?.serverRev !== undefined && rev !== null && rev < meta.serverRev) return null
   if (incoming.deleted === true) {
-    if (!stored) return false
-    await settle(db, table, { ...serverSide(stored), ...incoming, id }, rev)
-    return true
+    if (!stored) return null
+    return { server: { ...serverSide(stored), ...incoming, id }, rev }
   }
-  await settle(db, table, { ...incoming, id }, rev)
-  return true
+  return { server: { ...incoming, id }, rev }
+}
+
+/**
+ * {@link applyServerRow} for a page's rows of one table, in three operations however many rows (docs/07 §2): the stored
+ * rows read at once, the table's pending outbox entries once, the results written at once. A first sync of 10,000 rows
+ * took one read, one outbox query and one write per row before.
+ */
+async function applyServerRows(db: PgpmDb, table: string, list: readonly Row[]): Promise<number> {
+  const rows = list.filter((r): r is Row & { id: string } => typeof r.id === 'string')
+  if (!rows.length) return 0
+  const store = db.synced(table)
+  const stored = await store.bulkGet(rows.map((r) => r.id))
+  const waiting = await db.outbox.where('[table+id]').between([table, Dexie.minKey], [table, Dexie.maxKey]).toArray()
+  const pendingById = new Map<string, OutboxEntry[]>()
+  for (const entry of waiting.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))) {
+    const list = pendingById.get(entry.id) ?? []
+    list.push(entry)
+    pendingById.set(entry.id, list)
+  }
+  const puts: StoredRow[] = []
+  rows.forEach((incoming, i) => {
+    const settled = settledRow(incoming, stored[i] as StoredRow | undefined)
+    if (!settled) return
+    const pending = pendingById.get(incoming.id) ?? []
+    const local = rebase(settled.server, pending)
+    puts.push({
+      ...local,
+      _local: {
+        serverRev: settled.rev,
+        pending: pending.length > 0,
+        base: pending.length ? settled.server : undefined,
+      },
+    } as StoredRow)
+  })
+  await store.bulkPut(puts)
+  return puts.length
 }
 
 /** A root that was evicted, for the toast. */
@@ -133,7 +180,7 @@ export async function applyChanges(
   let rows = 0
   for (const [table, list] of Object.entries(changes ?? {})) {
     if (!tableDef(table)) continue
-    for (const row of list) if (await applyServerRow(db, table, row)) rows++
+    rows += await applyServerRows(db, table, list)
   }
   // A root that came back in the same page was not lost after all.
   const back = await Promise.all(

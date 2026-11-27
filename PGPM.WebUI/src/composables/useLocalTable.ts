@@ -69,13 +69,33 @@ interface Options<T> {
   repo?: Repo
 }
 
-/** Lower case, without diacritics: "Zürich" is found by "zurich". */
+/**
+ * The last texts normalised (a list's search runs over the same texts on every keystroke), up to this many characters
+ * (about 16 MB); then it starts afresh.
+ */
+const NORMALISED_MAX_CHARS = 8_000_000
+let normalised = new Map<string, string>()
+let normalisedChars = 0
+
+/** Lower case, without diacritics: "Zürich" is found by "zurich". Remembered for the texts seen last (docs/07 §2). */
 export function normalise(text: string): string {
-  return text
+  const known = normalised.get(text)
+  if (known !== undefined) return known
+  const result = text
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
+  if (normalisedChars + 2 * text.length > NORMALISED_MAX_CHARS) {
+    normalised = new Map()
+    normalisedChars = 0
+  }
+  normalised.set(text, result)
+  normalisedChars += text.length + result.length
+  return result
 }
+
+/** `localeCompare(…, undefined, { numeric, sensitivity: 'base' })`, made once: a collator per call is slow (docs/07 §2). */
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
 /** Order of two values: numbers and dates as such, text by the locale, empty values last. */
 export function compareValues(a: unknown, b: unknown): number {
@@ -83,7 +103,7 @@ export function compareValues(a: unknown, b: unknown): number {
   if (empty(a) || empty(b)) return empty(a) === empty(b) ? 0 : empty(a) ? 1 : -1
   if (typeof a === 'number' && typeof b === 'number') return a - b
   if (typeof a === 'boolean' && typeof b === 'boolean') return a === b ? 0 : a ? -1 : 1
-  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
+  return collator.compare(String(a), String(b))
 }
 
 /** The sort keys of a sort string: `"status,-updated_at"` → `["status", "-updated_at"]`. */
@@ -92,6 +112,48 @@ export function sortKeys(sort: string): string[] {
     .split(',')
     .map((k) => k.trim())
     .filter((k) => k && k !== '-')
+}
+
+/** What {@link matchRows} filters and sorts by: `useLocalTable`'s options and its state. */
+export interface MatchSpec<T> {
+  /** The search's words, normalised. */
+  words: readonly string[]
+  filters: Record<string, unknown>
+  match?: (row: T, filters: Record<string, unknown>) => boolean
+  text: (row: T) => string
+  /** The sort keys (`title`, `-updated_at`). */
+  keys: readonly string[]
+  sortValue?: (row: T, field: string) => unknown
+  lead?: (a: T, b: T) => number
+}
+
+/**
+ * The rows that pass the filters and contain every word, sorted (ties by id): the list's work on every change of the
+ * data, the search, the filters or the sort – in memory, for 10,000 rows (docs/07 §2).
+ */
+export function matchRows<T extends { id: string }>(all: readonly T[], spec: MatchSpec<T>): T[] {
+  const { words, filters, match, text } = spec
+  const rows = all.filter((row) => {
+    if (match && !match(row, filters)) return false
+    if (!words.length) return true
+    const found = normalise(text(row))
+    return words.every((w) => found.includes(w))
+  })
+  const order = spec.keys.map((k) => ({ field: k.replace(/^-/, ''), direction: k.startsWith('-') ? -1 : 1 }))
+  const value = spec.sortValue ?? ((row: T, f: string) => (row as Record<string, unknown>)[f])
+  const lead = spec.lead
+  // Each row's sort values once, not twice per comparison (a person's name, a score: docs/07 §2).
+  const keyed = rows.map((row) => ({ row, values: order.map((o) => value(row, o.field)) }))
+  keyed.sort((a, b) => {
+    const first = lead?.(a.row, b.row) ?? 0
+    if (first) return first
+    for (let i = 0; i < order.length; i++) {
+      const c = order[i]!.direction * compareValues(a.values[i], b.values[i])
+      if (c) return c
+    }
+    return a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0
+  })
+  return keyed.map((k) => k.row)
 }
 
 export type SortEvent = {
@@ -145,27 +207,17 @@ export function useLocalTable<T extends { id: string }>(
     return options.multiSort ? all : all.slice(0, 1)
   })
 
-  const matching = computed(() => {
-    const words = normalise(debounced.value.trim()).split(/\s+/).filter(Boolean)
-    const filters = options.filters?.value ?? {}
-    let rows = live.value.value.filter(
-      (row) =>
-        (!options.match || options.match(row, filters)) &&
-        (!words.length || words.every((w) => normalise(options.text(row)).includes(w))),
-    )
-    const order = keys.value.map((k) => ({ field: k.replace(/^-/, ''), direction: k.startsWith('-') ? -1 : 1 }))
-    const value = options.sortValue ?? ((row: T, f: string) => (row as Record<string, unknown>)[f])
-    rows = [...rows].sort((a, b) => {
-      const lead = options.lead?.(a, b) ?? 0
-      if (lead) return lead
-      for (const { field, direction } of order) {
-        const c = direction * compareValues(value(a, field), value(b, field))
-        if (c) return c
-      }
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-    })
-    return rows
-  })
+  const matching = computed(() =>
+    matchRows(live.value.value, {
+      words: normalise(debounced.value.trim()).split(/\s+/).filter(Boolean),
+      filters: options.filters?.value ?? {},
+      match: options.match,
+      text: options.text,
+      keys: keys.value,
+      sortValue: options.sortValue,
+      lead: options.lead,
+    }),
+  )
   const total = computed(() => matching.value.length)
   const pages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
   watch(pages, (n) => {

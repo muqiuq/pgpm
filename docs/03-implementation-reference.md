@@ -196,7 +196,8 @@ with `KeepAliveInterval = 25 s`); add the `wss://<host>` origin to `connect-src`
 explicitly (older Safari versions don't match `ws(s)` with `'self'`): taken from
 `PublicUrl` when set, else from the request's own host (`PGPM/Hosting/HostingSetup.cs`).
 The UI's CSP goes on every response but `/api` and `/healthz` (API CSP
-`default-src 'none'` + `no-store`). The
+`default-src 'none'` + `no-store`). `Strict-Transport-Security: max-age=31536000` goes on every response of an https
+request and, with an https `PublicUrl`, on all of them (the browser saw the proxy's https; docs/06 S-04). The
 reverse proxy must forward `Upgrade`/`Connection` headers and allow idle
 connections ≥ 60 s.
 
@@ -278,6 +279,8 @@ with `errors` by field.
 | `PUT /api/v1/files/{id}/chunks/{n}` | edit on the file's item/map | raw bytes (≤ 4 MiB) → `{received}` (§10.2) |
 | `POST /api/v1/files/{id}/commit` | 〃 | `{sha256, size}` → `{id, status: "available", sha256, sizeBytes, contentType, width, height, fileName, rev, seq}` |
 | `GET /api/v1/files/{id}/{name}` | read on the file's item/map | the bytes |
+| `GET /api/v1/system` (phase 7) | System: View | → `SystemStatusItem {instance {name, version, startedAt, uptimeSeconds, environment, publicUrl, backgroundTasks}, database {sizeBytes, serverVersion}, files {storedBytes, storedFiles, pendingUploads, freeBytes, minFreeBytes, problem}, sync {head, tombstoneHorizon, clients, liveConnections, liveUsers, pending, conflicts, liveEnabled, maxConnectionsPerUser}, clients: [{id, userId, userName, appVersion, userAgent, lastSeenAt, cursor, behind, pending, conflicts, live}] (newest 500), tasks: [{key, name, summary, lastRunAt, intervalMinutes, stale}] (§9), directory {enabled, configured, lastStatus, lastFinishedAt, lastError}, mcp {enabled, tokensOn, calls24h, errors24h}}` – *Administration → System* (`views/admin/SystemView.vue`, refreshed every 15 s) |
+| `DELETE /api/v1/system/clients/{id}` | System: View | → 204: the device's `sync_clients` row deleted (its next sync resets, §11.6), its live connections get `reset` + 4409 at once; audit `system.client_reset` (subject: the device's user); 404 for an unknown device |
 
 The Trash lists maps too (`rootKind: "map"`, `rootType: canvas\|matrix`, `title` = the map's name).
 
@@ -328,6 +331,11 @@ changes) live in the `detail` jsonb.
   conflicting patches, rights revoked mid-way, tombstone horizon).
 - `FakeEntra` from GGITSV (§5.2).
 - Playwright e2e incl. offline mode (`context.setOffline(true)`).
+- Measurements are opt-in (docs/07): the live feed's load test (`PGPM_LOAD=1 dotnet test … --filter TestCategory=Load`),
+  the list's timings (`tools/npm.sh run bench`), the map's frame times and the 10,000-notes first sync
+  (`E2E_PERF=1 tools/e2e.sh perf.spec.ts`). Every e2e spec leaves shared configuration as it found it (`statuses.spec.ts`
+  restores order and default in `afterEach`), so the specs after the first admin's (`identity.spec.ts`, §15 #69) pass in
+  any order and again on a used stack.
 
 ---
 
@@ -357,6 +365,10 @@ chars without look-alikes. Temporary passwords valid 7 days, must be changed.
 })
 ```
 
+- `Secure` as the request came – and **always** once `PublicUrl` is https (session, `pgpm.2fa`, `XSRF-TOKEN`, the SSO's
+  correlation and nonce cookies; `AuthSetup.SecureCookies`), so a reverse proxy without the `Proxy` setting still gets
+  Secure cookies; the antiforgery cookie token stays as the request came (the framework refuses `Always` on plain http) –
+  §15 #85, docs/06 S-03.
 - Data-Protection key ring persisted to `/var/lib/pgpm/keys`, application name `PGPM`.
 - Claims (`SessionClaims.Create`): user id, name, `pgpm:display_name`,
   `pgpm:stamp`, `pgpm:signed_in`, `pgpm:totp_at`, **new** `pgpm:auth_method` (`password` \| `microsoft`).
@@ -735,24 +747,28 @@ app.MapMcp("/mcp").RequireAuthorization("mcp");   // only when Mcp:Enabled
   Without `expectedRev` the change is applied as a normal patch whose `old`
   values are the ones the tool read in the same call.
 - Scores are returned computed (same spec as the client, §16).
-- Tool catalogue v1:
+- Tool catalogue v1 (as built in phase 7; items by id or key `I-12`, maps and milestones by id, persons by id, e-mail or `me`,
+  statuses and templates by id or name, fields by key or label – of the sections the user sees):
 
-  | Tool | Kind | Requires |
-  |---|---|---|
-  | `search_items` (type, text, status, owner, person, field/score ranges, quadrant of a matrix map) | Read | item *read* |
-  | `get_item` (fields incl. scores, status, milestones/gates, DoD, persons, links, attachment list) | Read | item *read* |
-  | `list_config` (statuses, sections, fields incl. score definitions, templates) | Read | – |
-  | `search_persons` | Read | – |
-  | `list_maps`, `get_map` (layers, elements summary; matrix maps: positions and quadrants) | Read | map *read* |
-  | `create_note`, `create_idea`, `create_lead` (`share_with`) | Write | type `Create` |
-  | `create_project` (template, field values, `share_with`) | Write | `Projects:Create` |
-  | `update_item` (title, description, color, status, type fields, field values, ratings) | Write | item *edit* |
-  | `assign_person`, `unassign_person` | Write | item *edit* |
-  | `link_items`, `unlink_items` | Write | *edit* on source, *read* on target |
-  | `add_milestone`, `update_milestone`, `set_dod_item` (state, note) | Write | item *edit* |
-  | `record_gate_decision` (decision, note, optional status change) | Write | item *edit* |
-  | `add_item_to_map` (map, item, position or near element) | Write | map *edit*, item *read* |
-  | `convert_to_project` (idea/lead, template) | Action | source *edit* + `Projects:Create` |
+  | Tool | Arguments | Kind | Requires |
+  |---|---|---|---|
+  | `search_items` | `type`, `text`, `status`, `owner` (`me`/user id), `person`, `sharedWith` (group), `fields: [{field, min, max}]` (numbers, ratings, a select's points, scores – computed), `map` + `quadrant` (`tl`/`tr`/`bl`/`br` of a matrix map), `limit`, `cursor` | Read | item *read* |
+  | `get_item` | `id` → the item with status, template, origin/conversion, shares, `persons`, `links` (out, and in from readable items), `attachments`, `sections` (visible ones: fields, values, option labels, computed scores, `canEdit`), `milestones` (gates with decision, suggestions, DoD criteria, persons) | Read | item *read* |
+  | `list_config` | `include` ⊆ `groups`, `itemTypes`, `statuses`, `sections` (visible, with fields incl. score definitions, `canEdit`), `templates` (statuses, sections, milestones, DoD, default shares), `roles` | Read | – |
+  | `search_persons` | `text`, `userType`, `source`, `includeInactive`, paging | Read | – |
+  | `list_maps` | `kind`, `text`, `templates`, paging → access (capped), element count | Read | map *read* |
+  | `get_map` | `id`, `limit` → layers, element counts, elements (cards with their items – an unreadable one only its id –, texts, milestones); matrix maps: axes, quadrants, `cards` (values, `position` 0–1 per axis, world `point`, quadrant and label), `tray` | Read | map *read* |
+  | `create_note`, `create_idea`, `create_lead` | `title`, `description`, `color`, the type's fields (note `pinned`; lead `organisation`, `value`, `currency`, `probability`, `decisionDate`, `nextAction`, `nextActionDue`, `source`), `status`, `fields` (ideas), `share_with: [{group, access read\|edit}]` | Write | type `Create` |
+  | `create_project` | as above with `startDate`, `endDate`, `template` (applied as the client does: allowed/default status, sections, field defaults, milestones and gates due start + offset with DoD and status suggestions, default shares – at most edit – unless `share_with`), `fields` | Write | `Projects:Create` |
+  | `update_item` | `id`, `title`, `description`, `color`, type fields, `status`, `fields` (null removes a value; the field's section is added to the item), `expectedRev` | Write | item *edit*, section edit |
+  | `assign_person`, `unassign_person` | `item` or `milestone`, `person`, `role` (a gate's default *Review board*) | Write | item *edit* |
+  | `link_items`, `unlink_items` | `from`, `to`, `relation` (`contributes_to`, `learning_of`, `depends_on`, `related`) | Write | *edit* on source, *read* on target |
+  | `add_milestone` | `project`, `kind`, `title`, `description`, `dueDate`, `dod: [""]`, `onGoStatus`, `onNoGoStatus` | Write | item *edit* |
+  | `update_milestone` | `id`, `title`, `description`, `dueDate`, `status`, `color`, `onGoStatus`, `onNoGoStatus`, `expectedRev` → `dodOpen` | Write | item *edit* |
+  | `set_dod_item` | `id`, or `milestone` + `text` (found by its text, else added), `state` (`open`/`done`/`na` – n/a needs a note), `note` | Write | item *edit* |
+  | `record_gate_decision` | `id`, `decision`, `note`, `applyStatus` (the suggestion: go → on-go, no-go → on-no-go, allowed by the template) or `status` → `suggestedStatus`, `statusChanged` | Write | item *edit* |
+  | `add_item_to_map` | `map`, `item`, `x`+`y` or `near` (an element: to its right) or the map's centre, `layer` (default the top visible, unlocked one) – canvas maps only | Write | map *edit*, item *read* |
+  | `convert_to_project` | `id` (idea/lead), `title`, `template`, `status`, `startDate` – as the client converts (shares at most edit, cover and attachments sharing the stored bytes, sections and values for projects the user may edit, persons, outgoing links to readable items, a *related* link back, source → *Selected*/*Won*); `already_converted` once done | Action | source *edit* + `Projects:Create` |
 
   Delete, sharing and owner tools are not offered in v1.
 
@@ -764,8 +780,9 @@ app.MapMcp("/mcp").RequireAuthorization("mcp");   // only when Mcp:Enabled
 `AccessCap`: read → *read*, write → *edit*), `McpPrincipal`, `McpTokenHandler`, `McpCalls` (`CatalogTool`, `ListFilter`,
 `CallFilter`, `InvokeAsync`), `McpLimits` + `McpStrikes`, `McpLog`, `McpTokenExpiryTask`, `McpSetup` (`AddPgpmMcp`,
 `UseMcpOriginCheck`, `MapPgpmMcp`, `McpInstructions`). Tools in `PGPM/Mcp/Tools/` (namespace `PGPM.Mcp.Tools`): `ToolSpec`,
-`ToolArgs`, `ToolContext` (+ `ToolPaging`), `ToolResults`, `ToolCatalog`, `ItemKinds`, `ItemTools`, `LookupTools`.
-Endpoints: `AccountMcpController` (`/api/v1/account/mcp`: `GET`; `POST {read|write}/on|off|regenerate` – *on* and
+`ToolArgs`, `ToolContext` (+ `ToolPaging`), `ToolResults`, `ToolCatalog`, `ToolWrites`, `ToolConfig`, `ItemKinds`, `ItemTools` (+
+`ItemViews`), `ItemDetails`, `ItemSetup`, `PersonTools`, `LinkTools`, `MilestoneTools`, `MapTools` (+ `MatrixView`), `ConvertTools`,
+`LookupTools` (+ `ConfigParts`); the catalogue is complete in phase 7 (§7.3). Endpoints: `AccountMcpController` (`/api/v1/account/mcp`: `GET`; `POST {read|write}/on|off|regenerate` – *on* and
 *regenerate* need `Mcp:Use`, *off* never; the value only in that response, `no-store`), `McpAdminController` (`/api/v1/mcp`:
 `catalog` for everyone, `status`, `log`, `tokens` with `Mcp:View`, `log/{id}` with `Mcp:View` or one's own, `tokens/{id}/off`
 with a reason and `tokens/revoke-all` with `Mcp:Manage`).
@@ -782,6 +799,21 @@ with a reason and `tokens/revoke-all` with `Mcp:Manage`).
   `mcp.item_updated`, actor `mcp`, `actor_ref token:{id}:rw`) through an `AuditScope`; the change log has the fields with source
   `mcp`; the MCP log entry, the audit entry and the change-log rows share the request's correlation id (shown together in
   *Administration → MCP → Log*).
+- **Capped map access** (phase 7): `AccessService.MapAccessAsync` is capped by `Viewer.MaxAccess` as items are – a read token never
+  edits a map, a write token never manages one (it had not been: no map tool existed before).
+- **What the user sees** (phase 7, `ToolConfig`, read once per call): the statuses, the sections the user may view and which of them
+  they may edit, the fields of those sections. Values are read only for those fields, scores are computed by `ScoreEvaluator` from
+  them (an input of a hidden section makes the score null, as on the device), matrix maps place items by them (`MatrixView`: the
+  client's `numericValue`, `quadrantOf`, `axisPosition`, `matrixPoint`; the nudging apart is the device's), and `fields` arguments
+  resolve only to them (`not_found` otherwise; `missing_access` for a section the user may not edit, before anything is written).
+- **Server-side set-up** (phase 7, `ItemSetup`): `create_idea`/`create_project`/`convert_to_project` do in their write unit what
+  the client's `setUp`/`fillDefaults`/`addMilestone` do in the create dialog's batch – the item, its shares, its sections, values
+  (given or carried, then the template's defaults, then the fields' own; only in editable sections, never scores, archived fields,
+  empty or invalid values), milestones (`FractionalKey.After`, the npm package's `generateKeyBetween(key, null)`) and DoD criteria –
+  all in one batch. Every write call is all or nothing (an exception rolls the unit back) except the conversion's copied links,
+  which go in as `ToolWrites.TryInsertAsync` (a refused one stays behind, as the device's outbox entry would).
+- **Audit events** (phase 7): `mcp.item_updated` for the item tools (persons, links, milestones, DoD, gate decisions – the target is
+  the item or project), `mcp.item_converted` (target the new project), `mcp.map_changed` (`add_item_to_map`, target the map).
 - **Isolation**: cookie authentication is not run for `/mcp`; the `mcp` policy names only the `McpToken` scheme; `/mcp` gets the
   API's CSP and `no-store`. Tested both ways (a token on `/api/v1` → 401, a session cookie or the tests' sign-in on `/mcp` → 401).
 - **Token states**: `on`, `off`, `no_value`, `expired`, `blocked`, `stamp`, `inactive`, `totp` (write token without TOTP and
@@ -796,9 +828,10 @@ with a reason and `tokens/revoke-all` with `Mcp:Manage`).
    ToolContext.ApplyAsync(write, mutation, ct))` – never directly. Set `ctx.Summary` / `ctx.Target(...)` and, for writes,
    `AuditLog.Target/Summary`.
 2. Add a new `mcp.*` audit event to `AuditEvents` and `AuditCatalog` if none fits.
-3. Add the list to `ToolCatalog.All` (one `…Tools.All` per area: `PersonTools` with `assign_person`/`unassign_person`,
-   `LinkTools`, `MilestoneTools`, `MapTools` with `list_maps`/`get_map`/`add_item_to_map`, `convert_to_project` as `Action`
-   with `Requires = [(Projects, Create)]`).
+3. Add the list to `ToolCatalog.All` (one `…Tools.All` per area: `ItemTools`, `PersonTools`, `LinkTools`, `MilestoneTools`,
+   `MapTools`, `ConvertTools` – `convert_to_project` is an `Action` with `Requires = [(Projects, Create)]` –, `LookupTools`).
+   Build mutations with `ToolWrites` (`InsertAsync`, `PatchAsync` with `old` from the row read inside the unit, `DeleteAsync`),
+   read configuration through `ctx.ConfigAsync(db, ct)` (never a hidden section's fields).
 4. New item types need no new tools: add an `ItemKind` (fields as `ItemField`s with their wire key, `HasStatus`) to
    `ItemKinds.All`; `create_idea` / `create_lead` / `create_project` appear once `ItemsTable.Creatable` contains the type, and
    `search_items`' type and status filters, `update_item`'s fields and `list_config`'s item types follow. More detail for
@@ -929,6 +962,11 @@ protected override async Task ExecuteAsync(CancellationToken stop)
 
 All: `BackgroundService` + `PeriodicTimer` or signal, own DI scope per run,
 catch-and-log, task health timestamp in `key_values`.
+
+*Administration → System* (phase 7, `GET /api/v1/system`, *System: View*) lists every `task.*` key with its last run and
+summary, *overdue* when the background tasks are on and the last run is older than twice the task's interval (plus the
+start's minute): tombstone pruner 1 h, log pruner 1 d, file cleanup 1 h, file check 1 h, MCP token expiry 5 min, directory
+sync `Directory:IntervalHours` (listed only while it is on or has run). A failed run writes no key, so it shows as overdue.
 
 Health keys (phase 2 and 6): `task.tombstone_pruner`, `task.log_pruner`, `task.mcp_token_expiry`, `task.directory_sync` (value:
 the last run's summary). `McpTokenExpiryTask` and `DirectorySyncTask` are singletons registered always and hosted with the
@@ -1281,8 +1319,9 @@ messages (only `hello`, `ack`, `pong`), so it adds no CSRF surface.
   totalCount}`; `POST /api/v1/trash/{batchId}/restore` → `{batchId, restored, skipped}`; `DELETE /api/v1/trash/{batchId}`
   (admin) → 204 (the list also takes `search` – in the title – and `sort` = `-deletedAt` (default), `deletedAt`,
   `title`, `-title`); `GET /api/v1/history?itemId&page&pageSize` → `{items: [{id, at, userId, userName, source, entity,
-  entityId, action, changes, clientChangedAt}], …}`; `POST` / `DELETE /api/v1/editing {itemId, target}` (edit access; the
-  `DELETE` carries the body too) → 204. Errors are ProblemDetails with `code` (`missing_access` + `level`, `item_deleted`).
+  entityId, action, changes, clientChangedAt}], …}` – without the entries of `field_values` and `item_sections` of
+  sections the user may not view, as the pull leaves out their rows (docs/06 S-01); `POST` / `DELETE /api/v1/editing
+  {itemId, target}` (edit access; the `DELETE` carries the body too) → 204. Errors are ProblemDetails with `code` (`missing_access` + `level`, `item_deleted`).
 
 ```jsonc
 // POST /api/v1/sync – a note with its initial share, offline-created
@@ -1419,6 +1458,9 @@ and round-trips every whitelisted key. A patch whose keys all conflict (or are n
   changed → `session/expired` + close 4401; `access_epoch` changed → `reset`;
   rights changed → `session/rights_changed`.
 - On deploy: `app/version` broadcast before shutdown; clients reconnect.
+- **Phase 7**: the pull reads the head, the horizon and every table's highest seq in one statement first and leaves out
+  the tables (and the evictions) without anything above the cursor – the same answer (`SyncReaderTests` compares it
+  with reading every table from every cursor), a fraction of the queries (§15 #80, docs/07 §1).
 - One server instance (as PNMTD/GGITSV). For scale-out the in-process
   `ChangeFeed` becomes Postgres `LISTEN/NOTIFY` (payload = head) – nothing else
   changes.
@@ -2250,7 +2292,7 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | `Directory:IntervalHours` / `FullSyncDays` | 6 / 7 | NEW |
 | `Files:Path` | `/var/lib/pgpm/files` | PNMTD |
 | `Files:MaxAttachmentBytes` / `MaxImageBytes` | 25 MB / 2 MB | PNMTD |
-| `Files:BlockedExtensions` / `UploadsPerHour` / `MinFreeMb` | see §10 / 200 / 1024 | PNMTD |
+| `Files:BlockedExtensions` / `UploadsPerHour` / `MinFreeMb` | see §10 / 200 / 1024 (an upload's chunk 0 that would leave less is 507 `file_storage_full`, §15 #86) | PNMTD |
 | `Sync:PageLimit` / `MaxMutations` / `MaxBodyBytes` | 500 / 200 / 8 MB | PLM / NEW |
 | `Sync:TombstoneDays` | 90 (non-trash tombstones only) | PLM |
 | `Sync:Live:Enabled` | true | NEW |
@@ -2338,6 +2380,19 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | 68 | The commit's answer also carries `fileName` (an image's name gets its type's extension) | the client lays the answer over its row: the name must not lag behind the bytes |
 | 69 | Playwright runs `identity.spec.ts` as a project of its own (`first-admin`) that every other spec depends on (phase 2: first by file name) | it needs the fresh stack's initial password; later specs' names must not change the order |
 | 70 | `maps.preview` is last writer wins (no `old` check, never a conflict) and not recorded in the History (`SyncTable.LastWriterWins`, `NotInHistory`; §11.5) | a derived picture nobody decides between; 256 KB per visit would swamp the History |
+| 71 | MCP `create_project` from a template and `convert_to_project` give the template's default shares and the source's shares at most *edit* (the browser copies them as they are) | a token grants no more than it may do itself (§7.2 capped access, #60) |
+| 72 | MCP `update_item`/`create_*` `fields` add the field's section to the item when it doesn't show it yet | the browser edits only fields of sections on the item; a value in a section the item doesn't show would be hidden there |
+| 73 | `get_map` gives a matrix card's values, axis positions (0–1) and the world point it aims at, not the nudged card frame | the spiral nudging depends on every card's size and the device's layout; the position and the quadrant are what an assistant reasons about |
+| 74 | MCP field ranges and quadrant filters weigh at most 5,000 candidate items in memory (`invalid_argument` beyond: narrow the search) | scores are never stored (data model §7.4): they are computed per item as on the devices |
+| 75 | `update_item`'s `expectedRev` guards the item row only; field values are patched with `old` = the value read in the same unit, milestones have `update_milestone`'s own `expectedRev` | each row has its own rev (§11.5) |
+| 80 | The pull reads every table's highest seq first (one statement with the head and the horizon, an index lookup each) and skips the tables without a row above the cursor (§11.6) | a live feed's pull after a commit reads one or two tables instead of 26: 50 live clients' delivery p95 101 ms instead of 8 s at 20 pushes/s (docs/07 §1) |
+| 81 | *Administration → System*'s stored file bytes are summed from `files` rows (each `storage_path` once), not by walking the folder | an instance with many files; the folder's own check is `FileCheckTask` |
+| 82 | Deleting a device on the System page also tells its live channel (`reset`, close 4409), not only its next HTTP sync | the device starts over at once, as an access change does |
+| 83 | At most 50 open editors (*… is editing*) per user; a new one ends the user's least recently seen (`EditingRegistry.MaxPerUser`) | the registry is in memory (docs/06 S-12) |
+| 84 | The list's text comparisons use one `Intl.Collator` (numeric, base) and the search remembers normalised texts (`useLocalTable.ts`); each row's sort values are read once per sort (`matchRows`); a pull page is applied per table with one `bulkGet`, one outbox query and one `bulkPut` (`local/apply.ts`; PLM: row by row) | 10,000 items: the default sort 232 → 16 ms, a first sync of ~10,000 rows 12.2 → 2.8 s (docs/07 §2) |
+| 85 | Cookies are `Secure` and HSTS is sent once `PublicUrl` is https, whatever the request's scheme (PNMTD: as the request came); the antiforgery cookie token stays as the request came | behind a TLS proxy without the `Proxy` setting the app sees plain http (docs/06 S-03, S-04) |
+| 86 | An upload's first chunk is refused with 507 `file_storage_full` when it would leave less than `Files:MinFreeMb` free (PNMTD's `FileCheckTask` only warns) | a full disk takes the database with it (docs/06 S-06) |
+| 87 | A file of an image purpose (cover, map image, embedded) shares stored bytes only with another image-purpose file, never with an attachment that says `image/*` (§15 #43) | an attachment's bytes are never checked or stripped (docs/06 S-07) |
 
 ## 16. Score evaluation [NEW]
 

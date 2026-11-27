@@ -51,6 +51,12 @@ public sealed partial class FileService(PgpmDbContext db, FileStore store, SyncW
         if (n == 0)
         {
             var settings = store.Options;
+            // The disk keeps its reserve (docs/06 S-06): FileCheckTask only warns, an upload that would eat into it is refused.
+            if (store.FreeBytes() is { } free && free - file.SizeBytes < settings.MinFreeMb * 1024L * 1024)
+            {
+                throw new ApiException(StatusCodes.Status507InsufficientStorage, FileErrors.StorageFull,
+                    $"The file storage is almost full (Files:MinFreeMb {settings.MinFreeMb}): ask an administrator.");
+            }
             if (!uploads.TryEnter(viewer.UserId, settings.UploadsPerHour, out var retryAfter))
             {
                 accessor.HttpContext?.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);

@@ -82,7 +82,9 @@ public sealed partial class FilesTable() : SyncTable<FileEntity>("files")
         foreach (var candidate in candidates)
         {
             if (await OwnerAccessAsync(w.Access, w.Viewer, candidate, ct) >= ItemAccess.Read && store.Locate(candidate.StoragePath) is not null
-                && (!FilesOptions.IsImage(row.Purpose) || candidate.ContentType.StartsWith("image/", StringComparison.Ordinal)))
+                // An image's bytes only from an image (checked and stripped at its commit), never from an attachment that
+                // merely says image/png (docs/06 S-07).
+                && (!FilesOptions.IsImage(row.Purpose) || FilesOptions.IsImage(candidate.Purpose)))
             {
                 row.Status = FileStatus.Available;
                 row.StoragePath = candidate.StoragePath;

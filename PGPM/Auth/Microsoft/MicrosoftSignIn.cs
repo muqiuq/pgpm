@@ -88,7 +88,7 @@ public static partial class MicrosoftSignIn
         foreach (var cookie in new[] { options.CorrelationCookie, options.NonceCookie })
         {
             cookie.SameSite = SameSiteMode.Lax;
-            cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            cookie.SecurePolicy = publicUrl?.Scheme == Uri.UriSchemeHttps ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
             cookie.HttpOnly = true;
         }
         options.CorrelationCookie.Name = "pgpm.oidc.correlation.";

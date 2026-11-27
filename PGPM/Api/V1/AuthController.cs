@@ -123,7 +123,7 @@ public sealed class AuthController(AuthService auth, UserAccounts accounts, Totp
     {
         HttpOnly = true,
         SameSite = SameSiteMode.Strict,
-        Secure = Request.IsHttps,
+        Secure = AuthSetup.SecureCookie(HttpContext),
         Path = AuthSetup.TwoFactorCookiePath,
         MaxAge = maxAge,
     };

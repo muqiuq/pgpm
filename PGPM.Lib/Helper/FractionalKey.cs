@@ -62,6 +62,43 @@ public static class FractionalKey
         return keys;
     }
 
+    /// <summary>
+    /// The key right after <paramref name="key"/> (none: the first key, <c>a0</c>), as the package's
+    /// <c>generateKeyBetween(key, null)</c>: the integer part incremented (<c>a0</c> → <c>a1</c>, <c>az</c> → <c>b00</c>);
+    /// past the largest integer a fraction after it. For rows the server appends (an MCP tool's milestone, card, criterion).
+    /// </summary>
+    public static string After(string? key)
+    {
+        if (key is null)
+        {
+            return "a0";
+        }
+        if (!IsValid(key))
+        {
+            throw new ArgumentException("Not a fractional index key.", nameof(key));
+        }
+        var integerLength = key[0] >= 'a' ? key[0] - 'a' + 2 : 'Z' - key[0] + 2;
+        var integer = key[..integerLength];
+        var digits = integer[1..].ToCharArray();
+        for (var i = digits.Length - 1; i >= 0; i--)
+        {
+            var d = Digits.IndexOf(digits[i], StringComparison.Ordinal) + 1;
+            if (d < Digits.Length)
+            {
+                digits[i] = Digits[d];
+                return integer[0] + new string(digits);
+            }
+            digits[i] = '0';
+        }
+        // Every digit carried: the next head letter, one digit more (a…z) or less (A…Z).
+        return integer[0] switch
+        {
+            'Z' => "a0",
+            'z' => key + "V",
+            var head => (char)(head + 1) is var next && next > 'a' ? next + new string(digits) + "0" : (char)(head + 1) + new string(digits[..^1]),
+        };
+    }
+
     /// <summary>The order of two rows: by key (ordinal), then by id.</summary>
     public static int Compare(string aKey, Guid aId, string bKey, Guid bId)
     {

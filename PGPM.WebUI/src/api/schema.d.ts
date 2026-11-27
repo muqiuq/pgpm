@@ -3119,6 +3119,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SystemStatusItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/clients/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -4342,6 +4414,111 @@ export interface components {
         };
         /** @enum {unknown} */
         SyncStatus: "accepted" | "partial" | "conflict" | "rejected";
+        SystemClientItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            userName: null | string;
+            appVersion: null | string;
+            userAgent: null | string;
+            /** Format: date-time */
+            lastSeenAt: string;
+            /** Format: int64 */
+            cursor: number;
+            /** Format: int64 */
+            behind: number;
+            /** Format: int32 */
+            pending: number;
+            /** Format: int32 */
+            conflicts: number;
+            live: boolean;
+        };
+        SystemDatabaseItem: {
+            /** Format: int64 */
+            sizeBytes: number;
+            serverVersion: null | string;
+        };
+        SystemDirectoryItem: {
+            enabled: boolean;
+            configured: boolean;
+            lastStatus: null | string;
+            /** Format: date-time */
+            lastFinishedAt: null | string;
+            lastError: null | string;
+        };
+        SystemFilesItem: {
+            /** Format: int64 */
+            storedBytes: number;
+            /** Format: int32 */
+            storedFiles: number;
+            /** Format: int32 */
+            pendingUploads: number;
+            /** Format: int64 */
+            freeBytes: null | number;
+            /** Format: int64 */
+            minFreeBytes: number;
+            problem: null | string;
+        };
+        SystemInstanceItem: {
+            name: string;
+            version: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: int64 */
+            uptimeSeconds: number;
+            environment: string;
+            publicUrl: null | string;
+            backgroundTasks: boolean;
+        };
+        SystemMcpItem: {
+            enabled: boolean;
+            /** Format: int32 */
+            tokensOn: number;
+            /** Format: int32 */
+            calls24h: number;
+            /** Format: int32 */
+            errors24h: number;
+        };
+        SystemStatusItem: {
+            instance: components["schemas"]["SystemInstanceItem"];
+            database: components["schemas"]["SystemDatabaseItem"];
+            files: components["schemas"]["SystemFilesItem"];
+            sync: components["schemas"]["SystemSyncItem"];
+            clients: components["schemas"]["SystemClientItem"][];
+            tasks: components["schemas"]["SystemTaskItem"][];
+            directory: components["schemas"]["SystemDirectoryItem"];
+            mcp: components["schemas"]["SystemMcpItem"];
+        };
+        SystemSyncItem: {
+            /** Format: int64 */
+            head: number;
+            /** Format: int64 */
+            tombstoneHorizon: number;
+            /** Format: int32 */
+            clients: number;
+            /** Format: int32 */
+            liveConnections: number;
+            /** Format: int32 */
+            liveUsers: number;
+            /** Format: int32 */
+            pending: number;
+            /** Format: int32 */
+            conflicts: number;
+            liveEnabled: boolean;
+            /** Format: int32 */
+            maxConnectionsPerUser: number;
+        };
+        SystemTaskItem: {
+            key: string;
+            name: string;
+            summary: null | string;
+            /** Format: date-time */
+            lastRunAt: null | string;
+            /** Format: int32 */
+            intervalMinutes: null | number;
+            stale: boolean;
+        };
         TemplateDetail: {
             /** Format: uuid */
             id: string;

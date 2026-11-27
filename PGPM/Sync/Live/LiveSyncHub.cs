@@ -77,6 +77,39 @@ public sealed class LiveSyncHub : BackgroundService
         }
     }
 
+    /// <summary>The users with a live connection now.</summary>
+    public int LiveUsers()
+    {
+        lock (gate)
+        {
+            return connections.Select(c => c.UserId).Distinct().Count();
+        }
+    }
+
+    /// <summary>The devices (<c>sync_clients.id</c>) whose live channel is open now (after their <c>hello</c>).</summary>
+    public IReadOnlySet<Guid> LiveClients()
+    {
+        lock (gate)
+        {
+            return connections.Select(c => c.ClientId).OfType<Guid>().ToHashSet();
+        }
+    }
+
+    /// <summary>
+    /// A device's row was deleted (Administration → System): its live connections get <c>reset</c> and close 4409, so it
+    /// starts over at once. Answers how many were told.
+    /// </summary>
+    public int ResetClient(Guid clientId)
+    {
+        List<LiveConnection> matching;
+        lock (gate)
+        {
+            matching = [.. connections.Where(c => c.ClientId == clientId)];
+        }
+        matching.ForEach(c => c.Post(LiveConnection.ResetDevice));
+        return matching.Count;
+    }
+
     /// <summary>Serves one accepted WebSocket until it closes.</summary>
     public async Task RunAsync(WebSocket socket, LiveSession session, CancellationToken aborted)
     {

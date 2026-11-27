@@ -66,13 +66,23 @@ public sealed class TrashController(TrashService trash) : V1ControllerBase
 [Route("api/v1/history")]
 public sealed class HistoryController(PgpmDbContext db) : V1ControllerBase
 {
-    /// <summary>Newest first; needs read access to the item.</summary>
+    /// <summary>
+    /// Newest first; needs read access to the item. The entries of field values and item sections the user may not see (a
+    /// section restricted to other groups' view) are left out, as the sync leaves out the rows (docs/06 S-01).
+    /// </summary>
     [HttpGet]
     public async Task<Paged<HistoryEntryItem>> List([FromQuery] HistoryQuery query, CancellationToken ct)
     {
         var itemId = query.ItemId ?? throw ApiException.Invalid("itemId", "The item.");
-        await new AccessService(db).RequireItemAsync(await Viewer.OfAsync(HttpContext, ct), itemId, ItemAccess.Read, ct);
-        var entries = db.ChangeLog.AsNoTracking().Where(c => c.ItemId == itemId).OrderByDescending(c => c.At).ThenByDescending(c => c.Id)
+        var viewer = await Viewer.OfAsync(HttpContext, ct);
+        var access = new AccessService(db);
+        await access.RequireItemAsync(viewer, itemId, ItemAccess.Read, ct);
+        var fields = access.VisibleFields(db.FieldDefinitions, viewer);
+        var sections = access.VisibleSections(db.Sections, viewer);
+        var entries = db.ChangeLog.AsNoTracking().Where(c => c.ItemId == itemId)
+            .Where(c => c.Entity != "field_values" || db.FieldValues.Any(v => v.Id == c.EntityId && fields.Any(f => f.Id == v.FieldId)))
+            .Where(c => c.Entity != "item_sections" || db.ItemSections.Any(s => s.Id == c.EntityId && sections.Any(x => x.Id == s.SectionId)))
+            .OrderByDescending(c => c.At).ThenByDescending(c => c.Id)
             .Select(c => new
             {
                 c.Id, c.At, c.UserId, UserName = db.Users.Where(u => u.Id == c.UserId).Select(u => u.DisplayName).FirstOrDefault(), c.Source, c.Entity,

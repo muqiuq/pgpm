@@ -82,6 +82,24 @@ public static class ToolArgs
 
     public static Field Bool(string name, string description, bool required = false) => new(name, "boolean", description, required);
 
+    public static Field Number(string name, string description, bool required = false) => new(name, "number", description, required);
+
+    /// <summary>An object of the caller's own keys, as <c>fields</c> (a field's key or label → its value).</summary>
+    public static Field Map(string name, string description) => new(name, "object", description)
+    {
+        Extra = new JsonObject { ["additionalProperties"] = true },
+    };
+
+    /// <summary>A list of texts, from <paramref name="values"/> when given.</summary>
+    public static Field Texts(string name, string description, IEnumerable<string>? values = null) => new(name, "array", description)
+    {
+        Extra = new JsonObject
+        {
+            ["items"] = values is null ? new JsonObject { ["type"] = "string" }
+                : new JsonObject { ["type"] = "string", ["enum"] = new JsonArray([.. values.Select(v => (JsonNode)v)]) },
+        },
+    };
+
     public static Field Id(string name, string description, bool required = true) => new(name, "string", description, required)
     {
         Extra = new JsonObject { ["format"] = "uuid" },
@@ -178,6 +196,38 @@ public static class ToolArgs
             ? values.FirstOrDefault(v => string.Equals(v, text, StringComparison.OrdinalIgnoreCase))
                 ?? throw ToolException.Invalid($"{name} is one of {string.Join(", ", values)}.")
             : null;
+
+    public static decimal? OptionalNumber(JsonElement args, string name) =>
+        Has(args, name) ? args.GetProperty(name) is { ValueKind: JsonValueKind.Number } v && v.TryGetDecimal(out var n) ? n
+            : throw ToolException.Invalid($"{name} must be a number.") : null;
+
+    /// <summary>A date yyyy-MM-dd, or null when left out.</summary>
+    public static DateOnly? OptionalDate(JsonElement args, string name)
+    {
+        if (OptionalText(args, name, 32) is not { } text)
+        {
+            return null;
+        }
+        return DateOnly.TryParseExact(text, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None,
+            out var date) ? date : throw ToolException.Invalid($"{name} is a date yyyy-MM-dd.");
+    }
+
+    /// <summary>The texts of a list argument (a single text counts as a list of one), or none when left out.</summary>
+    public static IReadOnlyList<string> TextsOf(JsonElement args, string name, int max, int maxLength = 500)
+    {
+        if (!Has(args, name))
+        {
+            return [];
+        }
+        var value = args.GetProperty(name);
+        var items = value.ValueKind == JsonValueKind.String ? [value] : value.ValueKind == JsonValueKind.Array ? value.EnumerateArray().ToList()
+            : throw ToolException.Invalid($"{name} must be a list of texts.");
+        if (items.Count > max || items.Any(i => i.ValueKind != JsonValueKind.String || i.GetString()!.Length > maxLength))
+        {
+            throw ToolException.Invalid($"{name} is a list of at most {max} texts of at most {maxLength} characters.");
+        }
+        return [.. items.Select(i => i.GetString()!)];
+    }
 
     /// <summary>The objects of a list argument, or none when left out.</summary>
     public static IReadOnlyList<JsonElement> ObjectsOf(JsonElement args, string name, int max)

@@ -191,6 +191,37 @@ public sealed class LiveSyncTests
         }
     }
 
+    /// <summary>S-11 (docs/06): after a rights change the connection computes access with the new rights (a map template's).</summary>
+    [TestMethod]
+    public async Task ARightsChangeReachesTheConnectionsComputedAccess()
+    {
+        var group = await GroupAsync(app, "live-rights");
+        var user = await UserAsync(app, "rita", group);
+        var admin = TestUsers.IdOf(TestUsers.Admin);
+        var configurer = new SyncClient(app.ClientFor(admin, "Maps:Create,Configuration:Manage"));
+        var template = Ids.New();
+        await configurer.SyncAllAsync([Insert("maps", template, new JsonObject
+        {
+            ["kind"] = "canvas", ["name"] = "Workshop", ["settings"] = new JsonObject(), ["isTemplate"] = true,
+        })]);
+        var client = new SyncClient(app.ClientFor(user));
+        await client.SyncAllAsync();
+        Assert.AreEqual("read", client.Row("maps", template).Str("access"));
+        await using var socket = await LiveAsync(client, user);
+
+        using (var granted = await app.Client(TestUsers.Admin).PutJsonAsync($"/api/v1/groups/{group}/rights",
+                   new JsonObject { ["rights"] = new JsonObject { ["Configuration"] = "Manage" } }))
+        {
+            Assert.AreEqual(System.Net.HttpStatusCode.OK, granted.StatusCode, await granted.Content.ReadAsStringAsync());
+        }
+        Assert.IsNotNull(await socket.WaitForAsync(m => m.Str("type") == "session" && m.Str("state") == "rights_changed", Wait));
+        await configurer.SyncAllAsync([Patch("maps", template, 1, ("name", "Workshop", "Workshop 2027"))]);
+        var delivered = await socket.WaitForAsync(m => m.Str("type") == "changes" && m["changes"]!["maps"] is JsonArray maps
+            && maps.Any(r => r.Str("id") == template.ToString()), Wait);
+        Assert.IsNotNull(delivered);
+        Assert.AreEqual("manage", delivered["changes"]!["maps"]!.AsArray().Single(r => r.Str("id") == template.ToString()).Str("access"));
+    }
+
     [TestMethod]
     public async Task EditingIsAnnouncedToTheReaders()
     {

@@ -48,6 +48,9 @@ public static class FileErrors
     /// <summary>429: Files:UploadsPerHour used up.</summary>
     public const string TooManyUploads = "too_many_uploads";
 
+    /// <summary>507: an upload would leave less than Files:MinFreeMb on the files folder's disk.</summary>
+    public const string StorageFull = "file_storage_full";
+
     /// <summary>503: the folder is missing or not writable.</summary>
     public const string StorageUnavailable = "file_storage_unavailable";
 

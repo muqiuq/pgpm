@@ -15,7 +15,7 @@ test.beforeEach(async ({ page }) => {
   await signInAsAdmin(page)
 })
 
-test('the shell shows the PGPM menu, folded administration and the placeholders', async ({ page }) => {
+test('the shell shows the PGPM menu, folded administration and the System page', async ({ page }) => {
   const seen = problems(page)
   await page.goto('/')
   await expect(page).toHaveURL(/\/maps$/)
@@ -50,12 +50,15 @@ test('the shell shows the PGPM menu, folded administration and the placeholders'
   await nav.getByRole('link', { name: 'System', exact: true }).click()
   await expect(page).toHaveURL(/\/admin\/system$/)
   await expect(page.getByRole('heading', { level: 1, name: 'System' })).toBeVisible()
-  await expect(page.getByText('Coming in phase 7')).toBeVisible()
+  // Administration → System (phase 7): the instance and this browser among the devices.
+  await expect(page.getByRole('region', { name: 'Instance' })).toContainText(/PGPM \d+\.\d+\.\d+/)
+  await expect(page.getByRole('region', { name: 'Devices' })).toBeVisible()
 
   // The app bar: the global search (a combobox, phase 3), sync indicator, theme toggle, the drawer's footer with the
   // server's version.
   await expect(page.getByRole('combobox', { name: 'Search' })).toBeVisible()
-  await expect(page.getByTestId('sync-indicator')).toContainText('Live')
+  // The admin's first sync carries what every spec before made (a used stack: thousands of rows).
+  await expect(page.getByTestId('sync-indicator')).toContainText('Live', { timeout: 30_000 })
   await page.getByRole('button', { name: 'Dark theme' }).click()
   await expect(page.locator('html')).toHaveClass(/pgpm-dark/)
   await expect(page.locator('.drawer-footer')).toHaveText(/PGPM \d+\.\d+\.\d+/)

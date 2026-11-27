@@ -187,7 +187,8 @@ test('funnel: idea → assessment 58 / 65 → review board → AI use case proje
   expect(robSeen).toEqual([])
 })
 
-// After the walkthrough (and before statuses.spec.ts reorders the statuses, which an import then reports as a conflict).
+// Using the configuration (the walkthrough, every other spec) changes none of it; statuses.spec.ts, which reorders the
+// statuses, puts them back after itself, so this holds whichever ran first.
 test('re-importing the built-in packages changes nothing (dry run all unchanged)', async () => {
   for (const name of ['core', 'innovation-ai']) {
     const diff = await admin.call<{ counts: { create: number; update: number; conflict: number } }>(

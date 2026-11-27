@@ -30,13 +30,38 @@ public sealed record PullPage(long Head, long Cursor, bool More, bool Reset, Dic
 /// head resets, and one below the tombstone horizon if the horizon rose since the device last pulled from 0
 /// (<paramref name="deviceHorizon"/>: <see cref="SyncClientEntity.HorizonSeq"/>).
 /// </summary>
+/// <para>
+/// Before the tables, one statement reads the head, the horizon and every table's highest seq (an index lookup each, the
+/// seq indexes are unique): a table without a row above the cursor is not queried at all. A live feed's pull after a
+/// commit so reads the one or two tables that changed instead of all of them (docs/07 §1).
+/// </para>
 public static class SyncReader
 {
-    public static async Task<PullPage> PullAsync(PgpmDbContext db, Viewer viewer, long since, int limit, long deviceHorizon, CancellationToken ct)
+    /// <summary>What the pulls did since the start (docs/07, the load test): pulls, tables read, tables skipped.</summary>
+    public static readonly PullCounters Counters = new();
+
+    /// <summary>Off: every table is read (the load test's baseline).</summary>
+    internal static bool SkipUnchangedTables { get; set; } = true;
+
+    private static string? headsSql;
+
+    /// <summary>The head, the horizon, the highest seq of every table (in registry order) and of the evictions.</summary>
+    private static string HeadsSql(PgpmDbContext db) => headsSql ??= string.Join(" UNION ALL ",
+        new[] { "SELECT -2 AS i, (SELECT value FROM sync_counter WHERE id = 1) AS seq", "SELECT -1, (SELECT tombstone_horizon_seq FROM sync_state WHERE id = 1)" }
+            .Concat(SyncTables.All.Select((t, i) => $"SELECT {i}, (SELECT max(seq) FROM {t.SqlTable(db)})"))
+            .Append($"SELECT {SyncTables.All.Count}, (SELECT max(seq) FROM sync_evictions)"));
+
+    private sealed record TableHead(int I, long? Seq);
+
+    public static async Task<PullPage> PullAsync(PgpmDbContext db, Viewer viewer, long since, int limit, long deviceHorizon, CancellationToken ct,
+        bool? skipUnchanged = null)
     {
+        var skip = skipUnchanged ?? SkipUnchangedTables;
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
-        var head = await SyncCounter.HeadAsync(db, ct);
-        var horizon = await SyncCounter.HorizonAsync(db, ct);
+        var heads = (await db.Database.SqlQueryRaw<TableHead>(HeadsSql(db)).ToListAsync(ct)).ToDictionary(h => h.I, h => h.Seq ?? 0);
+        var head = heads[-2];
+        var horizon = heads[-1];
+        Counters.Pull();
         if (since > 0 && (since > head || (since < horizon && horizon > deviceHorizon)))
         {
             await transaction.CommitAsync(ct);
@@ -45,8 +70,15 @@ public static class SyncReader
         var scope = new PullScope(db, viewer, new AccessService(db));
         var changes = new Dictionary<string, List<JsonObject>>(StringComparer.Ordinal);
         var full = new List<long>();
-        foreach (var table in SyncTables.All)
+        for (var i = 0; i < SyncTables.All.Count; i++)
         {
+            var table = SyncTables.All[i];
+            if (skip && heads[i] <= since)
+            {
+                Counters.Skip();
+                continue;
+            }
+            Counters.Read();
             var rows = await table.PageAsync(scope, since, limit, ct);
             if (rows.Count > 0)
             {
@@ -57,8 +89,9 @@ public static class SyncReader
                 full.Add(rows[^1].Seq);
             }
         }
-        var evictions = await db.SyncEvictions.AsNoTracking().Where(e => e.UserId == viewer.UserId && e.Seq > since).OrderBy(e => e.Seq).Take(limit)
-            .ToListAsync(ct);
+        var evictions = skip && heads[SyncTables.All.Count] <= since ? []
+            : await db.SyncEvictions.AsNoTracking().Where(e => e.UserId == viewer.UserId && e.Seq > since).OrderBy(e => e.Seq).Take(limit)
+                .ToListAsync(ct);
         if (evictions.Count >= limit)
         {
             full.Add(evictions[^1].Seq);
@@ -68,6 +101,28 @@ public static class SyncReader
         return new PullPage(head, more ? Math.Max(since, full.Min()) : head, more, false, changes,
             evictions.Select(e => new SyncEviction(e.RootKind.ToString().ToLowerInvariant(), e.RootId)).ToList(), horizon);
     }
+}
+
+/// <summary>The pulls' counters (thread-safe), for the load test and diagnostics.</summary>
+public sealed class PullCounters
+{
+    private long pulls;
+    private long reads;
+    private long skipped;
+
+    public void Pull() => Interlocked.Increment(ref pulls);
+
+    public void Read() => Interlocked.Increment(ref reads);
+
+    public void Skip() => Interlocked.Increment(ref skipped);
+
+    public PullCounts Snapshot() => new(Interlocked.Read(ref pulls), Interlocked.Read(ref reads), Interlocked.Read(ref skipped));
+}
+
+/// <summary>Pulls, table reads and skipped tables; the difference of two snapshots is what happened between them.</summary>
+public readonly record struct PullCounts(long Pulls, long TableReads, long Skipped)
+{
+    public static PullCounts operator -(PullCounts a, PullCounts b) => new(a.Pulls - b.Pulls, a.TableReads - b.TableReads, a.Skipped - b.Skipped);
 }
 
 /// <summary>Sync:* (docs/03 §14).</summary>

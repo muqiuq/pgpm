@@ -2978,6 +2978,51 @@
         }
       }
     },
+    "/api/v1/system": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatusItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/clients/{id}": {
+      "delete": {
+        "tags": [
+          "System"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/users": {
       "get": {
         "tags": [
@@ -6774,6 +6819,375 @@
           "rejected"
         ]
       },
+      "SystemClientItem": {
+        "required": [
+          "id",
+          "userId",
+          "userName",
+          "appVersion",
+          "userAgent",
+          "lastSeenAt",
+          "cursor",
+          "behind",
+          "pending",
+          "conflicts",
+          "live"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "userAgent": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cursor": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "behind": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pending": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conflicts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "live": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SystemDatabaseItem": {
+        "required": [
+          "sizeBytes",
+          "serverVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "serverVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SystemDirectoryItem": {
+        "required": [
+          "enabled",
+          "configured",
+          "lastStatus",
+          "lastFinishedAt",
+          "lastError"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "lastStatus": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastFinishedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "lastError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SystemFilesItem": {
+        "required": [
+          "storedBytes",
+          "storedFiles",
+          "pendingUploads",
+          "freeBytes",
+          "minFreeBytes",
+          "problem"
+        ],
+        "type": "object",
+        "properties": {
+          "storedBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "storedFiles": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pendingUploads": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "freeBytes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "minFreeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "problem": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SystemInstanceItem": {
+        "required": [
+          "name",
+          "version",
+          "startedAt",
+          "uptimeSeconds",
+          "environment",
+          "publicUrl",
+          "backgroundTasks"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uptimeSeconds": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "publicUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "backgroundTasks": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SystemMcpItem": {
+        "required": [
+          "enabled",
+          "tokensOn",
+          "calls24h",
+          "errors24h"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "tokensOn": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "calls24h": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "errors24h": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SystemStatusItem": {
+        "required": [
+          "instance",
+          "database",
+          "files",
+          "sync",
+          "clients",
+          "tasks",
+          "directory",
+          "mcp"
+        ],
+        "type": "object",
+        "properties": {
+          "instance": {
+            "$ref": "#/components/schemas/SystemInstanceItem"
+          },
+          "database": {
+            "$ref": "#/components/schemas/SystemDatabaseItem"
+          },
+          "files": {
+            "$ref": "#/components/schemas/SystemFilesItem"
+          },
+          "sync": {
+            "$ref": "#/components/schemas/SystemSyncItem"
+          },
+          "clients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemClientItem"
+            }
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemTaskItem"
+            }
+          },
+          "directory": {
+            "$ref": "#/components/schemas/SystemDirectoryItem"
+          },
+          "mcp": {
+            "$ref": "#/components/schemas/SystemMcpItem"
+          }
+        }
+      },
+      "SystemSyncItem": {
+        "required": [
+          "head",
+          "tombstoneHorizon",
+          "clients",
+          "liveConnections",
+          "liveUsers",
+          "pending",
+          "conflicts",
+          "liveEnabled",
+          "maxConnectionsPerUser"
+        ],
+        "type": "object",
+        "properties": {
+          "head": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tombstoneHorizon": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "clients": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "liveConnections": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "liveUsers": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pending": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conflicts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "liveEnabled": {
+            "type": "boolean"
+          },
+          "maxConnectionsPerUser": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SystemTaskItem": {
+        "required": [
+          "key",
+          "name",
+          "summary",
+          "lastRunAt",
+          "intervalMinutes",
+          "stale"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "summary": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastRunAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "intervalMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "stale": {
+            "type": "boolean"
+          }
+        }
+      },
       "TemplateDetail": {
         "required": [
           "id",
@@ -7553,6 +7967,9 @@
     },
     {
       "name": "Sync"
+    },
+    {
+      "name": "System"
     },
     {
       "name": "Users"

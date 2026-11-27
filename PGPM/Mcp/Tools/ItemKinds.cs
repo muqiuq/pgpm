@@ -27,9 +27,9 @@ public sealed record ItemKind(ItemType Type, string Name, string Page, string De
 }
 
 /// <summary>
-/// The item types the tools offer, and the fields they share. Phase 2 has notes only. Phase 3 adds ideas, leads and
-/// projects (with their own fields – a lead's organisation, value and next action – and <c>HasStatus</c>, which brings the
-/// <c>status</c> filter and field); phase 4 the dynamic fields and ratings.
+/// The item types the tools offer, and the fields they share: notes, ideas, leads (their organisation, value and next
+/// action) and projects (their dates); <c>HasStatus</c> brings the <c>status</c> filter and argument. The configured fields
+/// of ideas and projects (ratings, scores) are <see cref="ToolConfig"/>'s.
 /// </summary>
 public static partial class ItemKinds
 {
@@ -54,11 +54,53 @@ public static partial class ItemKinds
     /// <summary>What every item has.</summary>
     public static readonly IReadOnlyList<ItemField> Common = [Title, Description, Color];
 
+    /// <summary>A text field of a type (at most 500 characters); an empty text removes it.</summary>
+    private static ItemField TextField(string arg, string wireKey, string description) => new(arg, wireKey, ToolArgs.Text(arg, description),
+        (args, name) => ToolArgs.OptionalText(args, name, 500) is { Length: > 0 } text ? JsonValue.Create(text) : null);
+
+    private static ItemField DateField(string arg, string wireKey, string description) => new(arg, wireKey,
+        ToolArgs.Text(arg, description + ", yyyy-MM-dd; an empty text removes it"),
+        (args, name) => ToolArgs.OptionalText(args, name, 32) is { Length: > 0 }
+            ? JsonValue.Create(ToolArgs.OptionalDate(args, name)!.Value.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))
+            : null);
+
     public static readonly ItemKind Note = new(ItemType.Note, "note", "notes",
         "A note: a quick capture or a learning, with a Markdown text; pinned notes come first.", [Pinned], HasStatus: false);
 
-    /// <summary>Every kind the tools know. Phase 3: Idea, Lead and Project here.</summary>
-    public static readonly IReadOnlyList<ItemKind> All = [Note];
+    public static readonly ItemKind Idea = new(ItemType.Idea, "idea", "ideas",
+        "An idea: a candidate use case with a status, assessed in its sections (ratings, scores) and decided by a review board; " +
+        "convert_to_project turns it into a project.", [], HasStatus: true);
+
+    public static readonly ItemKind Lead = new(ItemType.Lead, "lead", "leads",
+        "A lead: an external opportunity with a status, its organisation, value, probability and next action.",
+        [
+            TextField("organisation", "leadOrganisation", "The organisation"),
+            new("value", "leadValue", ToolArgs.Number("value", "The expected value (at most two decimals); null removes it"),
+                (args, name) => ToolArgs.OptionalNumber(args, name) is { } n ? JsonValue.Create(n) : null),
+            new("currency", "leadCurrency", ToolArgs.Text("currency", "The value's currency, ISO 4217 (CHF); an empty text removes it"),
+                (args, name) => ToolArgs.OptionalText(args, name, 8) is { Length: > 0 } c
+                    ? JsonValue.Create(c.ToUpperInvariant()) : null),
+            new("probability", "leadProbability", ToolArgs.Int("probability", "The probability of winning it, 0 to 100 (%)"),
+                (args, name) => ToolArgs.OptionalInt(args, name) is { } p
+                    ? p is >= 0 and <= 100 ? JsonValue.Create(p) : throw ToolException.Invalid($"{name} is 0 to 100.") : null),
+            DateField("decisionDate", "leadDecisionDate", "When the customer decides"),
+            TextField("nextAction", "leadNextAction", "The next action"),
+            DateField("nextActionDue", "leadNextActionDue", "When the next action is due"),
+            TextField("source", "leadSource", "Where the lead came from"),
+        ], HasStatus: true);
+
+    public static readonly ItemKind Project = new(ItemType.Project, "project", "projects",
+        "A project with a status, from a project template (its sections, field defaults, milestones and gates, default shares) or blank.",
+        [
+            DateField("startDate", "projectStartDate", "The planned start"),
+            DateField("endDate", "projectEndDate", "The planned end"),
+        ], HasStatus: true);
+
+    /// <summary>Every kind the tools know.</summary>
+    public static readonly IReadOnlyList<ItemKind> All = [Note, Idea, Lead, Project];
+
+    /// <summary>The types whose items have sections and field values (docs/01 §6).</summary>
+    public static bool HasSections(ItemType type) => type is ItemType.Idea or ItemType.Project;
 
     public static IReadOnlyList<string> Names => [.. All.Select(k => k.Name)];
 

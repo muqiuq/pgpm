@@ -1,10 +1,68 @@
 import { expect, test } from '@playwright/test'
-import { problems, signInAsAdmin } from './helpers'
+import { adminApi, problems, pullAll, signInAsAdmin, type Api, type WireRow } from './helpers'
 
 /**
  * *Administration → Statuses* (docs/01 §5, docs/05 §3 phase 3): an admin creates an idea status, moves it, makes it the
  * default and back, archives it – through the statuses endpoints; every change comes back through the sync.
+ *
+ * The test leaves the seeded statuses as it found them, whatever happens in it (afterEach): their order, the default,
+ * and its own status archived – so another spec's package re-import (funnel.spec.ts) finds nothing changed, in any order.
  */
+type StatusWire = WireRow & {
+  itemType: string
+  name: string
+  sortOrder: number
+  isDefault: boolean
+  isArchived: boolean
+}
+
+let admin: Api
+let before: StatusWire[] = []
+let created: string | null = null
+
+async function ideaStatuses(): Promise<StatusWire[]> {
+  const rows = ((await pullAll(admin)).statuses ?? []) as StatusWire[]
+  return rows.filter((s) => !s.deleted && s.itemType === 'idea').sort((a, b) => a.sortOrder - b.sortOrder)
+}
+
+test.beforeEach(async ({ baseURL }) => {
+  admin = await adminApi(baseURL)
+  before = await ideaStatuses()
+  created = null
+})
+
+test.afterEach(async () => {
+  try {
+    const now = await ideaStatuses()
+    const formerDefault = before.find((s) => s.isDefault)
+    const current = now.find((s) => s.isDefault)
+    if (formerDefault && current?.id !== formerDefault.id) {
+      const { id, itemType, name, color, icon, category, maxDays } = formerDefault
+      await admin.call('PUT', `/api/v1/config/statuses/${id}`, {
+        itemType,
+        name,
+        color,
+        icon,
+        category,
+        maxDays,
+        isDefault: true,
+      })
+    }
+    const mine = created ? now.find((s) => s.id === created) : undefined
+    if (mine && !mine.isArchived) await admin.call('POST', `/api/v1/config/statuses/${mine.id}/archive`)
+    // The order as before, the statuses made meanwhile after it.
+    const known = new Set(before.map((s) => s.id))
+    const ids = [...before.map((s) => s.id), ...now.filter((s) => !known.has(s.id)).map((s) => s.id)]
+    await admin.call('PUT', '/api/v1/config/statuses/order', { itemType: 'idea', ids })
+    const restored = await ideaStatuses()
+    for (const s of before) {
+      expect(restored.find((r) => r.id === s.id)).toMatchObject({ sortOrder: s.sortOrder, isDefault: s.isDefault })
+    }
+  } finally {
+    await admin.dispose()
+  }
+})
+
 test('statuses: new, reorder, default, archive – back through the sync', async ({ page }) => {
   const seen = problems(page)
   const name = `E2E status ${Date.now().toString(36)}`
@@ -22,6 +80,7 @@ test('statuses: new, reorder, default, archive – back through the sync', async
   await dialog.getByRole('button', { name: 'Create status' }).click()
   const row = page.locator('li', { hasText: name })
   await expect(row).toBeVisible()
+  created = (await ideaStatuses()).find((s) => s.name === name)?.id ?? null
   await expect(row).toContainText('max. 5 days')
 
   // Last in the list: one up.

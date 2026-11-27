@@ -200,10 +200,10 @@ create ideas with ratings, record a gate decision and add an item to a map, and
 the changes appear live in the browser.
 
 **Status (pulled forward after phase 2):** the directory sync, the token model, the
-server, the admin and account pages are built (doc 03 §7.4, §8.3); the tools work
-on notes (`search_items`, `get_item`, `create_note`, `update_item`,
-`search_persons`, `list_config`). Phases 3–5 add their tools as specs (doc 03 §7.4
-"Adding a tool"); the dev-tenant check (P1) is still by hand.
+server, the admin and account pages are built (doc 03 §7.4, §8.3). Phase 7 completed
+the tool catalogue of doc 03 §7.3 (all item types, templates applied on the server,
+fields and scores, persons, links, milestones and gates, maps incl. matrix quadrants,
+conversion); the dev-tenant check (P1) is still by hand.
 
 ### Phase 7 – Hardening and release 1.0
 
@@ -217,6 +217,10 @@ on notes (`search_items`, `get_item`, `create_note`, `update_item`,
 - Admin guide and a short user guide; production deployment (P2).
 
 **Done when** the release checklist is complete and PGPM runs in production.
+
+**Status (track H1):** System page, security review ([06](06-security-review.md)) and
+performance ([07](07-performance.md)) done; the e2e specs leave the configuration as
+they found it.
 
 ### Later (version 1.x)
 

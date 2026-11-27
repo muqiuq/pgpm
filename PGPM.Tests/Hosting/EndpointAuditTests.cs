@@ -143,6 +143,9 @@ public sealed class EndpointAuditTests
         // The directory sync (docs/03 §8).
         ["GET /api/v1/directory/status"] = "Directory:Manage",
         ["POST /api/v1/directory/sync"] = "Directory:Manage",
+        // Administration → System (docs/03 §9): the status, and making a device start over.
+        ["GET /api/v1/system"] = "System:View",
+        ["DELETE /api/v1/system/clients/{id:guid}"] = "System:View",
     };
 
     /// <summary>Writes that need no right because the object's access decides (docs/03 §6.3): manage for sharing, edit for presence.</summary>

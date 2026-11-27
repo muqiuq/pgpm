@@ -45,11 +45,12 @@ public static partial class HostingSetup
 
     private const string ApiCsp = "default-src 'none'; frame-ancestors 'none'";
 
-    /// <summary>Security headers on every response; the UI's CSP everywhere but /api, /mcp and /healthz.</summary>
+    /// <summary>Security headers on every response (HSTS on https); the UI's CSP everywhere but /api, /mcp and /healthz.</summary>
     public static IApplicationBuilder UseSecurityHeaders(this IApplicationBuilder app)
     {
         var publicUrl = app.ApplicationServices.GetRequiredService<IConfiguration>()["PublicUrl"];
         var publicWebSocketOrigin = WebSocketOrigin(publicUrl);
+        var httpsPublicUrl = Uri.TryCreate(publicUrl, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps;
         return app.Use((context, next) =>
         {
             var path = context.Request.Path;
@@ -63,6 +64,12 @@ public static partial class HostingSetup
                 headers["Cross-Origin-Opener-Policy"] = "same-origin";
                 headers["Cross-Origin-Resource-Policy"] = "same-origin";
                 headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
+                // HSTS (docs/06 S-04): on https, and with an https PublicUrl (the proxy's https is what the browser saw). A
+                // browser ignores it on plain http.
+                if (context.Request.IsHttps || httpsPublicUrl)
+                {
+                    headers.StrictTransportSecurity = "max-age=31536000";
+                }
                 if (isApi)
                 {
                     headers.ContentSecurityPolicy = ApiCsp;

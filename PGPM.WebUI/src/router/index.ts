@@ -44,12 +44,11 @@ const views: Record<string, () => Promise<RouteComponent>> = {
   templates: () => import('@/views/admin/templates/TemplatesView.vue'),
   packages: () => import('@/views/admin/packages/PackagesView.vue'),
   maps: () => import('@/views/maps/MapsView.vue'),
+  system: () => import('@/views/admin/SystemView.vue'),
 }
 
 /** Each menu entry's placeholder until its phase replaces the component (docs/05 §3). */
-const pages: Record<string, { phase: number; summary: string }> = {
-  system: { phase: 7, summary: 'Sync clients, live connections, storage and versions.' },
-}
+const pages: Record<string, { phase: number; summary: string }> = {}
 
 /** Configuration: Manage (docs/03 §6.2): the configuration pages besides the menu's. */
 const configuration: Right = ['Configuration', 'Manage']

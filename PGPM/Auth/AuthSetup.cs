@@ -51,9 +51,26 @@ public static class AuthSetup
             .SetApplicationName("PGPM")
             .PersistKeysToFileSystem(new DirectoryInfo(configuration["DataProtection:KeysPath"] ?? DefaultKeysPath));
 
+    /// <summary>
+    /// Whether every cookie is <c>Secure</c> whatever the request looked like: when <c>PublicUrl</c> is https. Behind a
+    /// reverse proxy without the <c>Proxy</c> setting the app sees plain http and would otherwise send its session cookie
+    /// without the flag (docs/06 S-03).
+    /// </summary>
+    public static bool SecureCookies(IConfiguration configuration) =>
+        Microsoft.MicrosoftSignIn.PublicUrl(configuration)?.Scheme == Uri.UriSchemeHttps;
+
+    /// <summary>The cookies' Secure policy: always with an https PublicUrl, else as the request came.</summary>
+    public static CookieSecurePolicy SecurePolicy(IConfiguration configuration) =>
+        SecureCookies(configuration) ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
+
+    /// <summary>A cookie set by hand is Secure on https, or with an https PublicUrl.</summary>
+    public static bool SecureCookie(HttpContext http) =>
+        http.Request.IsHttps || SecureCookies(http.RequestServices.GetRequiredService<IConfiguration>());
+
     public static IServiceCollection AddPgpmAuth(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddPgpmDataProtection(configuration);
+        var securePolicy = SecurePolicy(configuration);
 
         // Settings a server can't work with stop the start: a bad network, SSO without its registration, nobody able to sign in.
         var localLogin = LocalLoginRule.Parse(configuration["Auth:LocalLoginNetworks"]);
@@ -72,7 +89,7 @@ public static class AuthSetup
                 options.Cookie.Name = CookieName;
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SameSite = SameSiteMode.Strict;
-                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                options.Cookie.SecurePolicy = securePolicy;
                 options.Cookie.Path = "/";
                 options.ExpireTimeSpan = TimeSpan.FromDays(configuration.GetValue("Auth:SessionDays", 7));
                 options.SlidingExpiration = true;
@@ -108,6 +125,8 @@ public static class AuthSetup
             options.HeaderName = CsrfHeaderName;
             options.Cookie.Name = AntiforgeryCookieName;
             options.Cookie.SameSite = SameSiteMode.Strict;
+            // As the request came, even with an https PublicUrl: antiforgery refuses Always on a plain-http request (a proxy
+            // without the Proxy setting). The cookie token is worth nothing without the session cookie, which is Secure then.
             options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
             options.Cookie.Path = "/";
             // The security headers set X-Frame-Options already.
@@ -206,7 +225,7 @@ public static class CsrfTokens
         {
             HttpOnly = false,
             SameSite = SameSiteMode.Strict,
-            Secure = http.Request.IsHttps,
+            Secure = AuthSetup.SecureCookie(http),
             Path = "/",
         });
     }

@@ -242,16 +242,32 @@ export function pngWithMetadata(): Buffer {
 /** A row of the sync's wire format (camelCase, as the devices store them). */
 export type WireRow = Record<string, unknown> & { id: string }
 
-/** Every row the user's device would get: `POST /api/v1/sync` from 0 until nothing more is pending, by table. */
+/**
+ * Every row the user's device would get: `POST /api/v1/sync` from 0 until nothing more is pending, by table – as one
+ * device (a new device id after the first page would be reset to 0, and only the first page came back).
+ */
 export async function pullAll(api: Api): Promise<Record<string, WireRow[]>> {
   const tables: Record<string, WireRow[]> = {}
+  const clientId = crypto.randomUUID()
   let since = 0
+  let accessEpoch: number | undefined
   for (;;) {
-    const answer = await api.call<{ cursor: number; more: boolean; changes: Record<string, WireRow[]> }>(
-      'POST',
-      '/api/v1/sync',
-      { clientId: crypto.randomUUID(), appVersion: 'e2e', since, limit: 1000, mutations: [], resolved: [], pull: true },
-    )
+    const answer = await api.call<{
+      cursor: number
+      more: boolean
+      accessEpoch: number
+      changes: Record<string, WireRow[]>
+    }>('POST', '/api/v1/sync', {
+      clientId,
+      appVersion: 'e2e',
+      since,
+      accessEpoch,
+      limit: 1000,
+      mutations: [],
+      resolved: [],
+      pull: true,
+    })
+    accessEpoch = answer.accessEpoch
     for (const [table, rows] of Object.entries(answer.changes)) (tables[table] ??= []).push(...rows)
     since = answer.cursor
     if (!answer.more) return tables

@@ -32,6 +32,11 @@ public sealed class ToolContext(IServiceProvider services, McpCallInfo call, Vie
 
     public AccessService Access(PgpmDbContext db) => new(db);
 
+    private ToolConfig? config;
+
+    /// <summary>The configuration as the user sees it (statuses, visible sections and fields), read once per call.</summary>
+    public async Task<ToolConfig> ConfigAsync(PgpmDbContext db, CancellationToken ct) => config ??= await ToolConfig.LoadAsync(this, db, ct);
+
     /// <summary>The objects a call was about, for the MCP log.</summary>
     public List<(string Type, string Id, string? Name)> Targets { get; } = [];
 

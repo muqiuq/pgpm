@@ -45,10 +45,21 @@ public sealed class McpServerTests
         Assert.IsTrue(all.All(t => System.Text.RegularExpressions.Regex.IsMatch(t.Name, "^[a-z][a-z0-9_]*$")), "snake case");
         Assert.IsTrue(all.Where(t => t.Writes).All(t => t.AuditEvents.Count > 0 && t.AuditEvents.All(AuditCatalog.Contains)), "a change names its audit events");
         Assert.IsTrue(all.All(t => t.InputSchema["type"]?.GetValue<string>() == "object"));
-        CollectionAssert.IsSubsetOf(new[] { "search_items", "get_item", "create_note", "update_item", "search_persons", "list_config" },
-            all.Select(t => t.Name).ToList());
+        // docs/03 §7.3: the catalogue v1.
+        CollectionAssert.AreEquivalent(new[]
+        {
+            "search_items", "get_item", "create_note", "create_idea", "create_lead", "create_project", "update_item", "assign_person", "unassign_person",
+            "link_items", "unlink_items", "add_milestone", "update_milestone", "set_dod_item", "record_gate_decision", "list_maps", "get_map",
+            "add_item_to_map", "convert_to_project", "search_persons", "list_config",
+        }, all.Select(t => t.Name).ToList());
         Assert.AreEqual(Area.Notes, ToolCatalog.Find("create_note")!.Area, "creating needs the type's right");
+        Assert.AreEqual(Area.Projects, ToolCatalog.Find("create_project")!.Area);
         Assert.IsFalse(ToolCatalog.KindAllows(ToolCatalog.Find("update_item")!, McpTokenKind.Read));
+        var convert = ToolCatalog.Find("convert_to_project")!;
+        Assert.AreEqual((ToolKind.Action, Area.Projects, Level.Create), (convert.Kind, convert.Requires.Single().Area, convert.Requires.Single().Level));
+        CollectionAssert.AreEquivalent(new[] { "search_items", "get_item", "list_maps", "get_map", "search_persons", "list_config" },
+            all.Where(t => ToolCatalog.KindAllows(t, McpTokenKind.Read)).Select(t => t.Name).ToList(), "the read token reads, nothing else");
+        Assert.IsFalse(all.Any(t => t.Kind == ToolKind.Delete || t.Destructive), "no delete tools in v1");
     }
 
     [TestMethod]
@@ -64,7 +75,8 @@ public sealed class McpServerTests
         await using var client = await ClientAsync(app, token);
 
         var tools = (await client.ListToolsAsync()).Select(t => t.ProtocolTool).ToList();
-        CollectionAssert.AreEquivalent(new[] { "search_items", "get_item", "search_persons", "list_config" }, tools.Select(t => t.Name).ToList());
+        CollectionAssert.AreEquivalent(new[] { "search_items", "get_item", "search_persons", "list_config", "list_maps", "get_map" },
+            tools.Select(t => t.Name).ToList());
         Assert.IsTrue(tools.All(t => t.Annotations!.ReadOnlyHint == true));
         StringAssert.Contains(client.ServerInstructions, "PGPM");
 

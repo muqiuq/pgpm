@@ -36,7 +36,10 @@ public sealed class UserSettingsTable() : SyncTable<UserSettingEntity>("user_set
         return Task.CompletedTask;
     }
 
-    protected override Task AuthorizeDeleteAsync(SyncWrite w, UserSettingEntity row, CancellationToken ct) => Task.CompletedTask;
+    /// <summary>Own rows only – also for a restore from the Trash, which finds the row without the pull's filter (docs/06 S-05).</summary>
+    protected override Task AuthorizeDeleteAsync(SyncWrite w, UserSettingEntity row, CancellationToken ct) =>
+        row.UserId == w.Viewer.UserId ? Task.CompletedTask
+            : throw new SyncRejection(SyncCodes.MissingAccess, "Only its user changes a setting.");
 
     protected override void Validate(UserSettingEntity row, ApiValidator v) =>
         v.Check(row.Key.Length is >= 1 and <= 200, "key", "1 to 200 characters.")

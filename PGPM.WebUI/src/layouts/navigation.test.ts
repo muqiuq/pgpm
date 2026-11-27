@@ -75,6 +75,7 @@ describe('the menu (docs/01 §3)', () => {
       'admin-mcp',
       'microsoft',
       'maps',
+      'system',
     ]
     for (const item of navigation.flatMap((g) => g.items)) {
       const route = routes.find((r) => r.name === item.name)
