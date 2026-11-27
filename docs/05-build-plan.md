@@ -14,7 +14,7 @@
 | 4 Configuration and method | done (server and client; packages `core`, `innovation-ai`) |
 | 5 Maps | done (canvas, matrix, templates, wired to the local database) |
 | 6 Directory and MCP | done, pulled forward after phase 2 (the dev-tenant check, P1, is by hand) |
-| 7 Hardening and release 1.0 | in progress in three tracks: H1 MCP tools, System page, security review, performance, e2e robustness · H2 client polish and accessibility · H3 deploy scripts (`init`, `backup`, `restore`, `update`, `info`), the `deploy` test group, CI with caches and the image release on tags, README, [admin guide](admin-guide.md), [user guide](user-guide.md), [release notes](release-notes-1.0.md), version 1.0.0 |
+| 7 Hardening and release 1.0 | done (version 1.0.0): H1 MCP tools, System page, security review ([06](06-security-review.md)), performance ([07](07-performance.md)), e2e robustness · H2 client polish, accessibility (axe WCAG 2.1 A/AA green on every audited page), phone layout · H3 deploy scripts (`init`, `backup`, `restore`, `update`, `info`), the `deploy` test group, CI with caches and the image release on tags, README, [admin guide](admin-guide.md), [user guide](user-guide.md), [release notes](release-notes-1.0.md). Running in production needs P2 and P3 |
 
 Open before production: P2 (host, domain, TLS, proxy) and P3 (image name, registry and its secrets).
 
@@ -233,9 +233,11 @@ conversion); the dev-tenant check (P1) is still by hand.
 
 **Done when** the release checklist is complete and PGPM runs in production.
 
-**Status (track H1):** System page, security review ([06](06-security-review.md)) and
-performance ([07](07-performance.md)) done; the e2e specs leave the configuration as
-they found it.
+**Status:** built and tested (all `./run-tests.sh` groups green). System page, security
+review ([06](06-security-review.md): no open finding above Low) and performance
+([07](07-performance.md)) done; the e2e specs leave the configuration as they found it;
+axe-core finds nothing on the audited pages in either theme or at phone width. Open: the
+production deployment (P2, P3) and the dev-tenant check of SSO and the directory (P1).
 
 ### Later (version 1.x)
 

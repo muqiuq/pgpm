@@ -91,7 +91,7 @@ public sealed class TwoFactorLoginTests
     [TestInitialize]
     public void Freeze()
     {
-        time = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        time = new FakeTimeProvider(TestClock.AwayFromReset());
         Clock.Provider = time;
     }
 
@@ -422,7 +422,7 @@ public sealed class TotpPolicyTests
     public static void Stop() => forAdmins.Dispose();
 
     [TestInitialize]
-    public void Freeze() => Clock.Provider = new FakeTimeProvider(DateTimeOffset.UtcNow);
+    public void Freeze() => Clock.Provider = new FakeTimeProvider(TestClock.AwayFromReset());
 
     [TestCleanup]
     public void Thaw() => Clock.Provider = TimeProvider.System;
