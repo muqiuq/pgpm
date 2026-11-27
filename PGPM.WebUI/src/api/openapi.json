@@ -486,6 +486,49 @@
         }
       }
     },
+    "/api/v1/directory/status": {
+      "get": {
+        "tags": [
+          "Directory"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryStatusItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/directory/sync": {
+      "post": {
+        "tags": [
+          "Directory"
+        ],
+        "parameters": [
+          {
+            "name": "full",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/groups": {
       "get": {
         "tags": [
@@ -1125,6 +1168,395 @@
             "description": "OK",
             "content": {
               "application/json": { }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/mcp": {
+      "get": {
+        "tags": [
+          "AccountMcp"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpAccountItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/mcp/{kind}/on": {
+      "post": {
+        "tags": [
+          "AccountMcp"
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpTokenIssued"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/mcp/{kind}/off": {
+      "post": {
+        "tags": [
+          "AccountMcp"
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpTokenItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/mcp/{kind}/regenerate": {
+      "post": {
+        "tags": [
+          "AccountMcp"
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpTokenIssued"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/catalog": {
+      "get": {
+        "tags": [
+          "McpAdmin"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpCatalog"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/status": {
+      "get": {
+        "tags": [
+          "McpAdmin"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/log": {
+      "get": {
+        "tags": [
+          "McpAdmin"
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tokenId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/McpTokenKind"
+            }
+          },
+          {
+            "name": "tool",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedOfMcpLogItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/log/{id}": {
+      "get": {
+        "tags": [
+          "McpAdmin"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpLogDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/tokens": {
+      "get": {
+        "tags": [
+          "McpAdmin"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/McpAdminTokenItem"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/tokens/{id}/off": {
+      "post": {
+        "tags": [
+          "McpAdmin"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpTurnOffRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpTurnOffRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpTurnOffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpAdminTokenItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/tokens/revoke-all": {
+      "post": {
+        "tags": [
+          "McpAdmin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpRevokeAllRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpRevokeAllRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpRevokeAllRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpRevokeAllResult"
+                }
+              }
             }
           }
         }
@@ -2018,6 +2450,207 @@
           }
         }
       },
+      "DirectoryCountsItem": {
+        "required": [
+          "microsoft",
+          "active",
+          "inactive",
+          "guests",
+          "linked",
+          "manual"
+        ],
+        "type": "object",
+        "properties": {
+          "microsoft": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "active": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inactive": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "guests": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "linked": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "manual": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "DirectoryRunItem": {
+        "required": [
+          "startedAt",
+          "finishedAt",
+          "status",
+          "mode",
+          "error",
+          "created",
+          "updated",
+          "deactivated",
+          "seen",
+          "linked",
+          "lastFullAt",
+          "lastSucceededAt"
+        ],
+        "type": "object",
+        "properties": {
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "created": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "deactivated": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "seen": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "linked": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastFullAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "lastSucceededAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "DirectorySettingsItem": {
+        "required": [
+          "enabled",
+          "configured",
+          "intervalHours",
+          "fullSyncDays",
+          "running",
+          "pending",
+          "nextRunAt",
+          "nextFullRunAt"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "intervalHours": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fullSyncDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "nextRunAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "nextFullRunAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "DirectoryStatusItem": {
+        "required": [
+          "sso",
+          "directory",
+          "lastRun",
+          "persons"
+        ],
+        "type": "object",
+        "properties": {
+          "sso": {
+            "$ref": "#/components/schemas/SsoSettingsItem"
+          },
+          "directory": {
+            "$ref": "#/components/schemas/DirectorySettingsItem"
+          },
+          "lastRun": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DirectoryRunItem"
+              }
+            ]
+          },
+          "persons": {
+            "$ref": "#/components/schemas/DirectoryCountsItem"
+          }
+        }
+      },
       "EditingRequest": {
         "type": "object",
         "properties": {
@@ -2395,6 +3028,702 @@
           }
         }
       },
+      "McpAccountItem": {
+        "required": [
+          "enabled",
+          "url",
+          "writeHours",
+          "readDaysAfterOnline",
+          "writeRequiresTotp",
+          "hasSecondFactor",
+          "canUse",
+          "read",
+          "write"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": "string"
+          },
+          "writeHours": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "readDaysAfterOnline": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "writeRequiresTotp": {
+            "type": "boolean"
+          },
+          "hasSecondFactor": {
+            "type": "boolean"
+          },
+          "canUse": {
+            "type": "boolean"
+          },
+          "read": {
+            "$ref": "#/components/schemas/McpTokenItem"
+          },
+          "write": {
+            "$ref": "#/components/schemas/McpTokenItem"
+          }
+        }
+      },
+      "McpAdminTokenItem": {
+        "required": [
+          "id",
+          "userId",
+          "username",
+          "displayName",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "username": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "token": {
+            "$ref": "#/components/schemas/McpTokenItem"
+          }
+        }
+      },
+      "McpCatalog": {
+        "required": [
+          "enabled",
+          "url",
+          "instructions",
+          "writeHours",
+          "readDaysAfterOnline",
+          "writeRequiresTotp",
+          "callsPerMinute",
+          "writesPerMinute",
+          "maxResultChars",
+          "strikesToBlock",
+          "logEntries",
+          "ceiling",
+          "tools"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "writeHours": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "readDaysAfterOnline": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "writeRequiresTotp": {
+            "type": "boolean"
+          },
+          "callsPerMinute": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "writesPerMinute": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxResultChars": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "strikesToBlock": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "logEntries": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ceiling": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpCeilingRow"
+            }
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpToolDoc"
+            }
+          }
+        }
+      },
+      "McpCeilingRow": {
+        "required": [
+          "area",
+          "label",
+          "write",
+          "read"
+        ],
+        "type": "object",
+        "properties": {
+          "area": {
+            "$ref": "#/components/schemas/Area"
+          },
+          "label": {
+            "type": "string"
+          },
+          "write": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Level"
+              }
+            ]
+          },
+          "read": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Level"
+              }
+            ]
+          }
+        }
+      },
+      "McpCount": {
+        "required": [
+          "name",
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "McpDay": {
+        "required": [
+          "date",
+          "calls",
+          "failed"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "calls": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "McpLogDetail": {
+        "required": [
+          "item",
+          "correlationId",
+          "userAgent",
+          "arguments",
+          "result",
+          "truncated",
+          "error",
+          "targets",
+          "audit",
+          "history"
+        ],
+        "type": "object",
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/McpLogItem"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "userAgent": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "arguments": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "result": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "targets": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "audit": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEntryItem"
+            }
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryEntryItem"
+            }
+          }
+        }
+      },
+      "McpLogItem": {
+        "required": [
+          "id",
+          "at",
+          "tokenId",
+          "kind",
+          "userId",
+          "username",
+          "ip",
+          "client",
+          "method",
+          "tool",
+          "toolKind",
+          "outcome",
+          "errorCode",
+          "summary",
+          "strike",
+          "durationMs"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tokenId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/McpTokenKind"
+              }
+            ]
+          },
+          "userId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "username": {
+            "type": "string"
+          },
+          "ip": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "client": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "method": {
+            "type": "string"
+          },
+          "tool": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toolKind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "strike": {
+            "type": "boolean"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "McpRevokeAllRequest": {
+        "required": [
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "McpRevokeAllResult": {
+        "required": [
+          "revoked"
+        ],
+        "type": "object",
+        "properties": {
+          "revoked": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "McpStatus": {
+        "required": [
+          "enabled",
+          "readOn",
+          "writeOn",
+          "blocked",
+          "withValue",
+          "calls24h",
+          "calls7d",
+          "strikes24h",
+          "lastCallAt",
+          "outcomes24h",
+          "tools7d",
+          "users7d",
+          "days"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "readOn": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "writeOn": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "blocked": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "withValue": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "calls24h": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "calls7d": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "strikes24h": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastCallAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "outcomes24h": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpCount"
+            }
+          },
+          "tools7d": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpCount"
+            }
+          },
+          "users7d": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpCount"
+            }
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpDay"
+            }
+          }
+        }
+      },
+      "McpTokenIssued": {
+        "required": [
+          "token",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/McpTokenItem"
+          },
+          "value": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "McpTokenItem": {
+        "required": [
+          "kind",
+          "on",
+          "state",
+          "until",
+          "hasValue",
+          "hint",
+          "issuedAt",
+          "lastUsedAt",
+          "lastUsedFrom",
+          "lastClient",
+          "endedAt",
+          "endedWhy",
+          "endedNote",
+          "blockedAt",
+          "strikes",
+          "rights",
+          "access"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/McpTokenKind"
+          },
+          "on": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string"
+          },
+          "until": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "hasValue": {
+            "type": "boolean"
+          },
+          "hint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "issuedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "lastUsedFrom": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastClient": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "endedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "endedWhy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "endedNote": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "blockedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "strikes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rights": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Level"
+            }
+          },
+          "access": {
+            "$ref": "#/components/schemas/ItemAccess"
+          }
+        }
+      },
+      "McpTokenKind": {
+        "enum": [
+          "Read",
+          "Write"
+        ]
+      },
+      "McpToolDoc": {
+        "required": [
+          "name",
+          "title",
+          "description",
+          "kind",
+          "right",
+          "readToken",
+          "destructive",
+          "parameters",
+          "available"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ToolKind"
+          },
+          "right": {
+            "type": "string"
+          },
+          "readToken": {
+            "type": "boolean"
+          },
+          "destructive": {
+            "type": "boolean"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "available": {
+            "type": "boolean"
+          }
+        }
+      },
+      "McpTurnOffRequest": {
+        "required": [
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "MeResponse": {
         "required": [
           "user",
@@ -2504,6 +3833,35 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/HistoryEntryItem"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "PagedOfMcpLogItem": {
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalCount"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpLogItem"
             }
           },
           "page": {
@@ -2685,6 +4043,64 @@
           },
           "local": {
             "type": "boolean"
+          }
+        }
+      },
+      "SsoSettingsItem": {
+        "required": [
+          "enabled",
+          "tenantId",
+          "clientId",
+          "clientSecretSet",
+          "redirectUri",
+          "autoProvision",
+          "defaultGroup",
+          "appRoles"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clientSecretSet": {
+            "type": "boolean"
+          },
+          "redirectUri": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "autoProvision": {
+            "type": "boolean"
+          },
+          "defaultGroup": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Ref"
+              }
+            ]
+          },
+          "appRoles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -3107,6 +4523,15 @@
           }
         }
       },
+      "ToolKind": {
+        "enum": [
+          "Read",
+          "Write",
+          "Action",
+          "Delete",
+          "Ask"
+        ]
+      },
       "TotpCodeRequest": {
         "type": "object",
         "properties": {
@@ -3418,6 +4843,9 @@
       "name": "Auth"
     },
     {
+      "name": "Directory"
+    },
+    {
       "name": "Groups"
     },
     {
@@ -3437,6 +4865,12 @@
     },
     {
       "name": "Editing"
+    },
+    {
+      "name": "AccountMcp"
+    },
+    {
+      "name": "McpAdmin"
     },
     {
       "name": "Sync"

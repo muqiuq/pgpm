@@ -45,7 +45,7 @@ public static partial class HostingSetup
 
     private const string ApiCsp = "default-src 'none'; frame-ancestors 'none'";
 
-    /// <summary>Security headers on every response; the UI's CSP everywhere but /api and /healthz.</summary>
+    /// <summary>Security headers on every response; the UI's CSP everywhere but /api, /mcp and /healthz.</summary>
     public static IApplicationBuilder UseSecurityHeaders(this IApplicationBuilder app)
     {
         var publicUrl = app.ApplicationServices.GetRequiredService<IConfiguration>()["PublicUrl"];
@@ -53,7 +53,7 @@ public static partial class HostingSetup
         return app.Use((context, next) =>
         {
             var path = context.Request.Path;
-            var isApi = ApiPaths.IsApi(path) || path.StartsWithSegments("/healthz", StringComparison.OrdinalIgnoreCase);
+            var isApi = ApiPaths.IsApi(path) || IsMcpPath(path) || path.StartsWithSegments("/healthz", StringComparison.OrdinalIgnoreCase);
             context.Response.OnStarting(() =>
             {
                 var headers = context.Response.Headers;

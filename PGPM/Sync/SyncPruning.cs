@@ -123,13 +123,14 @@ public sealed class TombstonePrunerTask(IDbContextFactory<PgpmDbContext> dbs, IO
         $"{await TombstonePruner.RunOnceAsync(db, options.Value, ct)} tombstones pruned";
 }
 
-/// <summary><see cref="LogPruner"/> daily.</summary>
-public sealed class LogPrunerTask(IDbContextFactory<PgpmDbContext> dbs, ILogger<LogPrunerTask> logger)
+/// <summary><see cref="LogPruner"/> daily, and the MCP log's newest <c>Mcp:LogEntries</c> (docs/03 §9).</summary>
+public sealed class LogPrunerTask(IDbContextFactory<PgpmDbContext> dbs, IOptionsMonitor<Mcp.McpOptions> mcp, ILogger<LogPrunerTask> logger)
     : PeriodicSyncTask(LogPruner.HealthKey, TimeSpan.FromDays(1), dbs, logger)
 {
     protected override async Task<string> RunAsync(PgpmDbContext db, CancellationToken ct)
     {
         var (mutations, evictions) = await LogPruner.RunOnceAsync(db, ct);
-        return $"{mutations} sync mutations, {evictions} evictions pruned";
+        var calls = await Mcp.McpLog.TrimAsync(db, mcp.CurrentValue.LogEntries, ct);
+        return $"{mutations} sync mutations, {evictions} evictions, {calls} MCP log entries pruned";
     }
 }
