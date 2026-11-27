@@ -1,6 +1,16 @@
 import { expect, test, type Page } from '@playwright/test'
 import { generateNKeysBetween } from 'fractional-indexing'
-import { Api, createTeam, pushInserts, signInAs, uuidv7, type Team, type TestUser, type WireRow } from './helpers'
+import {
+  Api,
+  createTeam,
+  pushInserts,
+  signInAs,
+  signOut,
+  uuidv7,
+  type Team,
+  type TestUser,
+  type WireRow,
+} from './helpers'
 
 /**
  * The real app's frame times on a 1,000-element map (docs/05 §3 phase 7, docs/07 §2; spike S2 measured the playground):
@@ -15,7 +25,7 @@ test.setTimeout(180_000)
 let team: Team
 
 test.beforeEach(async ({ baseURL }) => {
-  team = await createTeam(baseURL, ['Pia', 'Quinn'], { Notes: 'Create', Maps: 'Create' })
+  team = await createTeam(baseURL, ['Pia', 'Quinn', 'Rosa'], { Notes: 'Create', Maps: 'Create' })
 })
 
 test.afterEach(async () => {
@@ -256,11 +266,12 @@ const words = [
 /**
  * 10,000 notes (docs/05 §3 phase 7: "10,000 items in lists"), shared with the team through the sync by one user; a
  * teammate's first sign-in: the time until the notes list counts all of them (sign-in, first sync into IndexedDB, the
- * list), then a search typed into the list (its 250 ms debounce included) and cleared again.
+ * list), then a search typed into the list (its 250 ms debounce included) and cleared again. Then a third teammate's
+ * first sign-in with the list closed (docs/07 §2.3): landing on the maps until the sync is live, then the notes list.
  */
 test('10,000 notes: the first sync, the list and its search in the real app', async ({ page, baseURL }) => {
   test.setTimeout(300_000)
-  const [pia, quinn] = team.users as [TestUser, TestUser]
+  const [pia, quinn, rosa] = team.users as [TestUser, TestUser, TestUser]
   const api = await Api.create(baseURL)
   await api.signIn(pia.username, pia.password)
   const count = 10_000
@@ -297,10 +308,22 @@ test('10,000 notes: the first sync, the list and its search in the real app', as
   await expect(report).toHaveText(new RegExp(` of ${count}$`))
   const cleared = Date.now() - started
 
+  // The list closed meanwhile: signing out wipes this browser's data, the next teammate's first sync starts from 0.
+  await signOut(page)
+  started = Date.now()
+  await signInAs(page, rosa, '/maps')
+  await expect(page.getByTestId('sync-indicator')).toContainText('Live', { timeout: 120_000 })
+  const synced = Date.now() - started
+  started = Date.now()
+  await page.getByRole('link', { name: 'Notes', exact: true }).click()
+  await expect(report).toHaveText(new RegExp(` of ${count}$`), { timeout: 60_000 })
+  const opened = Date.now() - started
+
   const text = [
     `${count} notes pushed in ${seeded} ms (${count * 2} rows)`,
     `teammate: sign-in to the list counting ${count}: ${listed} ms`,
     `search "chatbot" (${hits} hits, 250 ms debounce included): ${searched} ms; cleared: ${cleared} ms`,
+    `another teammate, the list closed: sign-in on /maps until Live ${synced} ms, then /notes counting ${count}: ${opened} ms`,
   ].join('\n')
   console.log(text)
   test.info().annotations.push({ type: 'list', description: text })

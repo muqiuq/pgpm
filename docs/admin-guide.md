@@ -199,7 +199,7 @@ ASP.NET configuration: `appsettings.json` in the image, overridden by environmen
 | `Files:Path` | `/var/lib/pgpm/files` | the attachments' folder (mounted from the host) |
 | `Files:MaxAttachmentBytes` / `MaxImageBytes` | 26214400 (25 MiB) / 2097152 (2 MiB) | upload limits |
 | `Files:BlockedExtensions` | `exe msi dll scr com bat cmd ps1 vbs js jar hta lnk` | refused extensions, also as double extensions |
-| `Files:UploadsPerHour` / `MinFreeMb` | 200 / 1024 | uploads per user and hour / the free-disk warning |
+| `Files:UploadsPerHour` / `MinFreeMb` | 200 / 1024 | uploads per user and hour / the disk's reserve: an upload that would leave less is refused, the hourly check warns below it |
 | `Sync:PageLimit` / `MaxMutations` / `MaxBodyBytes` | 500 / 200 / 8388608 (8 MiB) | pull page size (1–1000) / changes per push / push body |
 | `Sync:TombstoneDays` | 90 | how long tombstones outside the trash are kept |
 | `Sync:Live:Enabled` | true | the live WebSocket channel (off: polling only) |
@@ -411,6 +411,10 @@ An upload larger than `Files:MaxAttachmentBytes` (25 MiB) is refused by PGPM its
 
 **Uploads fail with `file_storage_unavailable`.** The files folder is missing or not writable for uid 1654. `./info.sh`
 shows the fix: `sudo chown 1654:1654 files && sudo chmod 0750 files`, or `podman unshare chown …` for rootless Podman.
+
+**Users see *Server storage full* on their attachments.** An upload would leave less than `Files:MinFreeMb` free on the
+files folder's disk (507 `file_storage_full`). *Administration → System* shows the free space. Free space or grow the
+disk: the files stay queued on the users' devices and are tried again every five minutes (or with *Retry*).
 
 **Microsoft sign-in errors.**
 

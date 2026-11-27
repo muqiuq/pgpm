@@ -1088,7 +1088,12 @@ lost or never had the upload) or a wrong `received` starts over from chunk 0 onc
 (`size_mismatch`, `sha256_mismatch` – the server discarded the upload –, `upload_missing`); 422 `blocked_type`, 415
 `not_an_image` and 413 `too_large` are final (*Failed* with the server's `detail`, *Retry*). 409 `file_available` (the
 bytes are stored already: a commit whose answer was lost, or bytes the server shared at the insert) counts as uploaded.
-503 `file_storage_unavailable`, 429 `too_many_uploads` and 5xx stop the run and keep the state. The commit's answer is
+503 `file_storage_unavailable`, 429 `too_many_uploads` and 5xx stop the run and keep the state. 507 `file_storage_full`
+(phase 7, §15 #86) is neither: the file stays queued as *waiting* (`blobs.waiting` = the reason and the time to try again)
+for the sync's longest error backoff (5 min) – no request on every sync run meanwhile, then the pipeline's own timer
+tries it again, and so does *Retry*; an accepted chunk ends the waiting. The run goes on with the next file (the reserve
+depends on the size: a smaller one may still fit). The attachment list says *Server storage full* (tooltip *The server's
+file storage is full – ask an administrator.*, with *Retry*), a toast says it once per file (§15 #88). The commit's answer is
 only part of the row: it is laid over the row as the server had it (item, purpose, thumbnail stay; a newer row from the
 live channel wins by rev). When the commit stripped an image's metadata (the answer's `sha256` differs from the
 uploaded one), the stored bytes are downloaded at once (checked against the new hash) and **replace** the uploader's
@@ -1785,7 +1790,8 @@ filter/sort – then `ListTable.vue`, `FilterBar.vue`, `useColumnWidths` +
 
 Online-only views show an "Available online only" empty state when offline.
 
-Phase 2: `useLive(query, initial, key?)` (`local/useLive.ts`) answers `{value, loaded, error, refresh}`;
+Phase 2: `useLive(query, initial, key?)` (`local/useLive.ts`) answers `{value, loaded, error, refresh}` (while the sync
+pulls, its re-runs come in bursts: §12.10);
 `useLocalTable` (`composables/useLocalTable.ts`) returns the shape of `useServerTable` (typed as
 `TableSource<T>` in `composables/tableSource.ts`, which `ListTable.vue` takes). The phase 2 endpoints
 (sync, sharing, trash, history, editing) are in `openapi.json`; `api/sync.ts` calls them through the openapi-fetch
@@ -2046,6 +2052,14 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
   CodeBlock and Mermaid keep their own print rules.
 - **PWA**: the manifest's shortcuts *New note* / *New idea* and the launch queue (§11.2); *Install app* was in the user
   menu already.
+- **Lists during a pull** (follow-up, docs/07 §2.3): while the engine pulls (`status.syncing`, in every tab – boot.ts
+  hands it to `setLivePulling`), the `useLive` queries re-run together in bursts: a change holds a query back, and the
+  held ones run at once when the last burst has been over for 500 ms – or for twice its length, if longer – and right
+  after the pull. Otherwise every change re-runs a query at once, as before. Dexie still calls the query on a change;
+  then `useLive` reads nothing (it answers the last run's result if Dexie dropped it for a change during that run, so a
+  list still shows the pull's progress; that subscription observes nothing any more) and subscribes anew with the
+  burst – one real run that observes again. A key change and `refresh()` read at once. A burst's end is taken after
+  the task its answers render in (§15 #89).
 - **Conversion** copies the embedded images the description and the carried Markdown values show (`filesToCopy`: the
   copies' ids are chosen first, so the project's insert carries the rewritten text – no extra patch) and rewrites their
   `/api/v1/files/{id}/…` links, attachment chips included (`rewriteFileLinks`, relative or absolute); an embedded image
@@ -2471,6 +2485,8 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | 85 | Cookies are `Secure` and HSTS is sent once `PublicUrl` is https, whatever the request's scheme (PNMTD: as the request came); the antiforgery cookie token stays as the request came | behind a TLS proxy without the `Proxy` setting the app sees plain http (docs/06 S-03, S-04) |
 | 86 | An upload's first chunk is refused with 507 `file_storage_full` when it would leave less than `Files:MinFreeMb` free (PNMTD's `FileCheckTask` only warns) | a full disk takes the database with it (docs/06 S-06) |
 | 87 | A file of an image purpose (cover, map image, embedded) shares stored bytes only with another image-purpose file, never with an attachment that says `image/*` (§15 #43) | an attachment's bytes are never checked or stripped (docs/06 S-07) |
+| 88 | An upload refused with 507 `file_storage_full` stays queued as *waiting* (not *Failed*, not retried on every sync run like 503/429): tried again after the sync's longest error backoff (5 min) by the pipeline's own timer, or on *Retry*; the next files still go (§10.3) | not the person's fault, space may be freed; a full disk must not draw a 4 MiB chunk per sync run |
+| 89 | While the sync pulls, `useLive` queries re-run together in bursts (≥ 500 ms apart, twice a burst's length if longer) and once after the pull (Dexie's `liveQuery`: each after every transaction that touches what it read; §12.10) | a list open during a large first sync re-read its rows (and the list's lookups theirs, each on its own) after every page, and the next page's write waited for those reads: 10,000 notes 11.3–12.8 → 3.3–4.6 s (docs/07 §2.3) |
 
 ## 16. Score evaluation [NEW]
 

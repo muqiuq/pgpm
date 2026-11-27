@@ -11,6 +11,7 @@ import { canvasImages, fromBase64, type ImageInfo, type ImageTools } from './ima
 import type { Row } from './outbox'
 import { metaOf, type Repo, type RepoTransaction } from './repo'
 import type { FilePurpose, FileRow, ItemRow, Stored } from './rows'
+import { defaultTiming } from './sync'
 import { useLive } from './useLive'
 
 /**
@@ -22,7 +23,9 @@ import { useLive } from './useLive'
  * - **Upload** (`flushPendingUploads`, after every sync run that reached the server): the bytes of the rows the server
  *   has accepted, in chunks of 4 MiB, then the commit with sha256 and size; the committed row (`available`) is applied
  *   at once. The next chunk is kept after each one, so an interrupted upload resumes where it stopped; a chunk the
- *   server refuses as out of order (it lost the upload) starts over from chunk 0, once.
+ *   server refuses as out of order (it lost the upload) starts over from chunk 0, once. A file the server's full
+ *   storage refuses (507 `file_storage_full`) stays queued, *waiting*, and is tried again after the sync's longest
+ *   error backoff (5 min).
  * - **Download** (`fileBlob`) on demand, checked against the row's sha256 and cached; covers, map images and images in
  *   texts are **prefetched** (`prefetch`), so cards, maps and texts look complete offline.
  * - **Cache budget** (`enforceCacheBudget`, 200 MB): the oldest downloads go first – attachments before prefetched
@@ -62,6 +65,8 @@ export type FileState =
   | { kind: 'pending' }
   | { kind: 'uploading'; progress: number }
   | { kind: 'failed'; error: string }
+  /** Queued, but the server can't take it for now (its storage is full): tried again later. */
+  | { kind: 'waiting'; reason: string }
   | { kind: 'remote' }
   | { kind: 'elsewhere' }
   | { kind: 'downloading' }
@@ -69,6 +74,8 @@ export type FileState =
 export interface UploadSummary {
   uploaded: number
   failed: number
+  /** Files the server can't take for now (507 `file_storage_full`): still queued, tried again later. */
+  waiting: number
   /** Why the run stopped early: the network, the session, the server. */
   stopped: 'offline' | 'signed-out' | 'server' | null
 }
@@ -97,7 +104,12 @@ export interface FilePipelineOptions {
   chunkSize?: number
   /** A failed upload, once (a toast). */
   notify?: (notice: { severity: 'error' | 'warn' | 'info'; summary: string; detail?: string }) => void
+  /** How long a file the server's full storage refused waits before it is tried again (the sync's longest backoff). */
+  storageFullRetry?: number
 }
+
+/** What a file the server's full storage refused (507 `file_storage_full`) says, in its state and the toast. */
+export const storageFullMessage = "The server's file storage is full – ask an administrator."
 
 /** Files:BlockedExtensions (docs/03 §10.1), checked here first. */
 export const blockedExtensions = [
@@ -214,6 +226,8 @@ async function applyCommitted(db: PgpmDb, committed: Row) {
   await applyServerRow(db, 'files', { ...base, ...committed })
 }
 
+type UploadOutcome = 'uploaded' | 'failed' | 'waiting' | 'skipped' | UploadSummary['stopped']
+
 export class FilePipeline {
   /** Uploads and downloads running now, by file id. */
   readonly transfers: Record<string, Transfer> = reactive({})
@@ -224,7 +238,11 @@ export class FilePipeline {
   private readonly urls: ObjectUrls
   private readonly budget: number
   private readonly chunkSize: number
+  private readonly storageFullRetry: number
   private flushing: Promise<UploadSummary> | null = null
+  /** The next try of waiting files (a timer), and when it is due. */
+  private retryTimer: ReturnType<typeof setTimeout> | undefined
+  private retryDue = Infinity
   private again = false
   private prefetching: Promise<number> | null = null
   private readonly downloads = new Map<string, Promise<Blob>>()
@@ -237,6 +255,7 @@ export class FilePipeline {
     this.urls = options.objectUrls ?? browserUrls
     this.budget = options.budget ?? 200 * 1024 * 1024
     this.chunkSize = options.chunkSize ?? 4 * 1024 * 1024
+    this.storageFullRetry = options.storageFullRetry ?? defaultTiming.errorBackoff.at(-1)!
   }
 
   db(): PgpmDb {
@@ -425,10 +444,25 @@ export class FilePipeline {
 
   // --- uploading ----------------------------------------------------------------------------------------------------
 
-  /** *Retry* of a failed upload: the error goes, the upload starts over. */
+  /** *Retry* of a failed (or waiting) upload: the error goes, the upload starts over. */
   async retry(id: string): Promise<UploadSummary> {
-    await patchBlob(this.db(), id, { error: null, nextChunk: 0 })
+    await patchBlob(this.db(), id, { error: null, nextChunk: 0, waiting: null })
     return this.flushPendingUploads()
+  }
+
+  /** The uploads run again at `at` (ms since the epoch): when the first waiting file may go. An earlier time wins. */
+  private scheduleRetry(at: number) {
+    if (at >= this.retryDue) return
+    clearTimeout(this.retryTimer)
+    this.retryDue = at
+    this.retryTimer = setTimeout(
+      () => {
+        this.retryTimer = undefined
+        this.retryDue = Infinity
+        void this.flushPendingUploads()
+      },
+      Math.max(0, at - Date.now()),
+    )
   }
 
   /** Uploads the bytes the server is waiting for. One run at a time; a call meanwhile runs once more afterwards. */
@@ -455,7 +489,7 @@ export class FilePipeline {
   }
 
   private async flushOnce(): Promise<UploadSummary> {
-    const summary: UploadSummary = { uploaded: 0, failed: 0, stopped: null }
+    const summary: UploadSummary = { uploaded: 0, failed: 0, waiting: 0, stopped: null }
     const db = this.db()
     try {
       await this.sweep()
@@ -477,6 +511,8 @@ export class FilePipeline {
         const outcome = await this.upload(row)
         if (outcome === 'uploaded') summary.uploaded++
         else if (outcome === 'failed') summary.failed++
+        // Not stopping: the reserve the server keeps depends on the file's size, a smaller one may still go.
+        else if (outcome === 'waiting') summary.waiting++
         else if (outcome !== 'skipped') {
           summary.stopped = outcome
           break
@@ -503,10 +539,17 @@ export class FilePipeline {
     return orphans.length
   }
 
-  private async upload(row: Stored<FileRow>): Promise<'uploaded' | 'failed' | 'skipped' | UploadSummary['stopped']> {
+  private async upload(row: Stored<FileRow>): Promise<UploadOutcome> {
     const db = this.db()
     const blob = await db.blobs.get(row.id)
     if (!blob || blob.uploaded || blob.error) return 'skipped'
+    // The server's storage was full: not before its time (no request on every sync run).
+    const retryAt = blob.waiting ? Date.parse(blob.waiting.retryAt) : NaN
+    if (retryAt > Date.now()) {
+      this.scheduleRetry(retryAt)
+      return 'waiting'
+    }
+    let waiting = !!blob.waiting
     const size = blob.bytes.byteLength
     const chunks = Math.max(1, Math.ceil(size / this.chunkSize))
     let next = Math.min(blob.nextChunk ?? 0, chunks)
@@ -544,7 +587,9 @@ export class FilePipeline {
             throw new ApiError(409, { code: 'upload_mismatch', detail: 'The server received other bytes than sent.' })
           }
           next++
-          await patchBlob(db, row.id, { nextChunk: next })
+          // The server took a chunk: there is space again.
+          await patchBlob(db, row.id, { nextChunk: next, ...(waiting ? { waiting: null } : {}) })
+          waiting = false
           progress()
         }
         let committed: Row
@@ -563,7 +608,7 @@ export class FilePipeline {
           if (committed && typeof committed === 'object' && committed.id === row.id) {
             await applyCommitted(db, committed)
           }
-          await patchBlob(db, row.id, { uploaded: true, nextChunk: 0, error: null, cachedAt: nowIso() })
+          await patchBlob(db, row.id, { uploaded: true, nextChunk: 0, error: null, waiting: null, cachedAt: nowIso() })
         })
         if (typeof committed?.sha256 === 'string' && committed.sha256 !== row.sha256) {
           await this.replaceStripped(row, committed)
@@ -571,7 +616,7 @@ export class FilePipeline {
         return 'uploaded'
       }
     } catch (e) {
-      return this.uploadFailed(row, e)
+      return this.uploadFailed(row, e, waiting)
     } finally {
       delete this.transfers[row.id]
     }
@@ -600,10 +645,7 @@ export class FilePipeline {
     }
   }
 
-  private async uploadFailed(
-    row: Stored<FileRow>,
-    error: unknown,
-  ): Promise<'uploaded' | 'failed' | 'skipped' | UploadSummary['stopped']> {
+  private async uploadFailed(row: Stored<FileRow>, error: unknown, waiting: boolean): Promise<UploadOutcome> {
     if (isOffline(error)) return 'offline'
     if (!(error instanceof ApiError)) {
       console.error('PGPM upload failed', error)
@@ -612,11 +654,29 @@ export class FilePipeline {
     if (error.status === 401) return 'signed-out'
     // A commit whose answer was lost (or bytes the server shares already): it has them; `available` comes with the pull.
     if (error.status === 409 && error.code === 'file_available') {
-      await patchBlob(this.db(), row.id, { uploaded: true, nextChunk: 0, error: null })
+      await patchBlob(this.db(), row.id, { uploaded: true, nextChunk: 0, error: null, waiting: null })
       return 'uploaded'
     }
     // The row isn't on the server (yet, or any more): the next run sees.
     if (error.status === 404) return 'skipped'
+    // The server's disk keeps its reserve (507 file_storage_full, docs/03 §10.3): not the person's fault, and space may
+    // be freed – the file stays queued and is tried again after the longest backoff; told once, not on every try.
+    if (error.status === 507 || error.code === 'file_storage_full') {
+      const retryAt = Date.now() + this.storageFullRetry
+      await patchBlob(this.db(), row.id, {
+        nextChunk: 0,
+        waiting: { reason: storageFullMessage, retryAt: new Date(retryAt).toISOString() },
+      })
+      if (!waiting) {
+        this.options.notify?.({
+          severity: 'warn',
+          summary: 'Upload waiting',
+          detail: `${row.fileName}: ${storageFullMessage} It stays on this device and is tried again later.`,
+        })
+      }
+      this.scheduleRetry(retryAt)
+      return 'waiting'
+    }
     if (error.status >= 500 || error.status === 429 || error.status === 408) return 'server'
     const message = error.detail ?? error.message
     await patchBlob(this.db(), row.id, { error: message })
@@ -857,8 +917,11 @@ export class FilePipeline {
     }
   }
 
-  /** After a wipe: no URL of the old data stays. */
+  /** After a wipe: no URL of the old data stays, no retry is due. */
   reset() {
+    clearTimeout(this.retryTimer)
+    this.retryTimer = undefined
+    this.retryDue = Infinity
     for (const url of this.objectUrls.values()) this.urls.revoke(url)
     this.objectUrls.clear()
     this.downloads.clear()
@@ -873,12 +936,14 @@ export class FilePipeline {
     const pendingHere = rows.filter((r) => r.status !== 'available' && local.has(r.id)).map((r) => r.id)
     const blobs = pendingHere.length ? await db.blobs.bulkGet(pendingHere) : []
     const errors = new Map(blobs.filter((b) => b?.error).map((b) => [b!.id, b!.error!]))
+    const waiting = new Map(blobs.filter((b) => b?.waiting).map((b) => [b!.id, b!.waiting!.reason]))
     const states = new Map<string, FileState>()
     for (const row of rows) {
       const transfer = this.transfers[row.id]
       if (transfer?.phase === 'uploading') states.set(row.id, { kind: 'uploading', progress: transfer.progress })
       else if (transfer?.phase === 'downloading') states.set(row.id, { kind: 'downloading' })
       else if (errors.has(row.id)) states.set(row.id, { kind: 'failed', error: errors.get(row.id)! })
+      else if (waiting.has(row.id)) states.set(row.id, { kind: 'waiting', reason: waiting.get(row.id)! })
       else if (row.status !== 'available') states.set(row.id, { kind: local.has(row.id) ? 'pending' : 'elsewhere' })
       else states.set(row.id, { kind: local.has(row.id) ? 'local' : 'remote' })
     }

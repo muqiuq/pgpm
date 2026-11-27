@@ -19,8 +19,8 @@ import FilePreviewDialog from './FilePreviewDialog.vue'
  * An item's (or map's) attachments (docs/01 §4.5): name, size, who added it and when; download, preview of images and
  * PDFs, rename, delete. Files come by the picker, by drag and drop onto the panel or by pasting (while no text field
  * has the focus), several at once. Everything works offline: a new file is stored on this device and shown as
- * *Pending upload* until the sync has sent it; a file never downloaded is *Not available offline*. Read-only without
- * edit access.
+ * *Pending upload* until the sync has sent it (*Server storage full* while the server's disk can't take it: it stays
+ * queued); a file never downloaded is *Not available offline*. Read-only without edit access.
  */
 const props = defineProps<{ itemId?: string; mapId?: string; canEdit: boolean }>()
 
@@ -40,6 +40,12 @@ const dragging = ref(false)
 const adding = ref(false)
 
 const stateOf = (row: Stored<FileRow>): FileState => states.value.get(row.id) ?? { kind: 'remote' }
+
+/** Why a queued file waits (the server's storage is full), and that it is tried again. */
+function waitingTip(row: Stored<FileRow>): string {
+  const state = stateOf(row)
+  return `${state.kind === 'waiting' ? state.reason : ''} It stays on this device and is tried again later.`.trim()
+}
 
 /** The bytes can be had now: on this device, or downloadable. */
 function canOpen(row: Stored<FileRow>): boolean {
@@ -262,6 +268,17 @@ async function retry(row: Stored<FileRow>) {
                 value="Failed"
                 severity="danger"
               />
+              <Button
+                v-if="canEdit"
+                label="Retry"
+                size="small"
+                text
+                :aria-label="`Retry the upload of ${row.fileName}`"
+                @click="retry(row)"
+              />
+            </template>
+            <template v-else-if="stateOf(row).kind === 'waiting'">
+              <Tag v-tooltip.top="waitingTip(row)" icon="pi pi-clock" value="Server storage full" severity="warn" />
               <Button
                 v-if="canEdit"
                 label="Retry"

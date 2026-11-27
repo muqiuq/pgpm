@@ -11,6 +11,7 @@ import { conflictActions } from './resolve'
 import type { SocketLike } from './live'
 import { SyncEngine, type Notice } from './sync'
 import { tableDef } from './tables'
+import { setLivePulling } from './useLive'
 
 /**
  * The app's sync, wired to the session (docs/03 §11.7, docs/01 §14.5): it runs while a user is signed in and no gate
@@ -67,6 +68,9 @@ export const appFiles: FilePipeline = new FilePipeline({
 })
 
 setRepoContext({ changed: () => engine.localChange() })
+// While the engine pulls, the live queries (lists above all) re-run at most twice a second instead of after every
+// page, whose writes would wait for their reads (docs/07 §2.3) – in every tab: a follower has the leader's status.
+watch(() => engine.status.syncing, setLivePulling, { flush: 'sync' })
 onWipe('before', () => engine.stop())
 onWipe('after', () => clearEditing())
 onWipe('after', () => appFiles.reset())

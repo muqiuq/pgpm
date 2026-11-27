@@ -6,7 +6,7 @@ import { FakeSyncServer } from '@/test/fakeSyncServer'
 import { memoryDb, until } from '@/test/memoryDb'
 import { testClient, type TestClient } from '@/test/syncClient'
 import type { PgpmDb } from './db'
-import { FilePipeline, NotDownloaded, isBlocked, sha256Hex, type ObjectUrls } from './files'
+import { FilePipeline, NotDownloaded, isBlocked, sha256Hex, storageFullMessage, type ObjectUrls } from './files'
 import type { ImageTools } from './images'
 import { Repo } from './repo'
 import type { FileRow, ItemRow } from './rows'
@@ -120,6 +120,7 @@ describe('the file pipeline (docs/03 §10.2) against the server’s contract', (
 
   afterEach(async () => {
     vi.unstubAllGlobals()
+    anaFiles.reset()
     for (const c of [ana, ben]) {
       await c.engine.stop()
       await c.db.delete()
@@ -168,9 +169,9 @@ describe('the file pipeline (docs/03 §10.2) against the server’s contract', (
     const n = await note()
     const row = await anaFiles.attachFile({ itemId: n.id }, fileOf(10), 'attachment')
     // The server doesn't know the row yet: nothing goes.
-    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 0, failed: 0, stopped: null })
+    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 0, failed: 0, waiting: 0, stopped: null })
     await ana.engine.sync({ pull: true })
-    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 1, failed: 0, stopped: null })
+    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 1, failed: 0, waiting: 0, stopped: null })
     expect(chunkCalls(row.id)).toEqual(['chunks/0', 'chunks/1', 'chunks/2', 'commit'])
     expect(await ana.db.synced('files').get(row.id)).toMatchObject({ status: 'available' })
     expect(await ana.db.blobs.get(row.id)).toMatchObject({ uploaded: true })
@@ -196,7 +197,7 @@ describe('the file pipeline (docs/03 §10.2) against the server’s contract', (
     ana.network = true
     // Dexie's update would have turned the bytes into a plain object (patchBlob keeps them).
     expect((await ana.db.blobs.get(row.id))!.bytes.byteLength).toBe(14)
-    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 1, failed: 0, stopped: null })
+    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 1, failed: 0, waiting: 0, stopped: null })
     expect(chunkCalls(row.id)).toEqual(['chunks/0', 'chunks/1', 'chunks/2', 'chunks/3', 'commit'])
 
     // A second file whose upload the server forgot meanwhile (stale, restarted): chunk 2 is refused, 0 again.
@@ -239,6 +240,73 @@ describe('the file pipeline (docs/03 §10.2) against the server’s contract', (
     serverRow.sha256 = sha
     expect((await anaFiles.retry(row.id)).uploaded).toBe(1)
     expect(await ana.db.blobs.get(row.id)).toMatchObject({ error: null, uploaded: true })
+  })
+
+  it('keeps a file the server’s full storage refuses (507) queued: waiting, told once, no request on every run', async () => {
+    const n = await note()
+    const big = await anaFiles.attachFile({ itemId: n.id }, fileOf(10), 'attachment')
+    const small = await anaFiles.attachFile({ itemId: n.id }, fileOf(3, 'small.txt', 'text/plain', 2), 'attachment')
+    await ana.engine.sync({ pull: true })
+    // The disk's reserve depends on the file's size: the big one waits, the small one still goes.
+    server.freeFileBytes = 5
+    const before = Date.now()
+    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 1, failed: 0, waiting: 1, stopped: null })
+    expect(chunkCalls(big.id)).toEqual(['chunks/0'])
+    expect(server.fileBytes.get(small.id)?.bytes).toEqual(bytes(3, 2))
+    const blob = (await ana.db.blobs.get(big.id))!
+    expect(blob).toMatchObject({ uploaded: false, error: null, nextChunk: 0, waiting: { reason: storageFullMessage } })
+    // The sync's longest error backoff.
+    expect(Date.parse(blob.waiting!.retryAt) - before).toBeGreaterThanOrEqual(5 * 60_000)
+    const stored = (await ana.db.synced('files').get(big.id)) as unknown as FileRow
+    expect(stored.status).toBe('pending')
+    expect((await anaFiles.states([stored])).get(big.id)).toEqual({ kind: 'waiting', reason: storageFullMessage })
+    expect(notices).toEqual([
+      `Upload waiting: report.pdf: ${storageFullMessage} It stays on this device and is tried again later.`,
+    ])
+
+    // Every sync run calls the pipeline: nothing goes up before the backoff is over.
+    for (let i = 0; i < 3; i++) {
+      expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 0, failed: 0, waiting: 1, stopped: null })
+    }
+    expect(chunkCalls(big.id)).toEqual(['chunks/0'])
+
+    // Its time came: tried again, still full – waiting again, not told again.
+    await ana.db.blobs.put({ ...blob, waiting: { ...blob.waiting!, retryAt: new Date(before - 1).toISOString() } })
+    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 0, failed: 0, waiting: 1, stopped: null })
+    expect(chunkCalls(big.id)).toEqual(['chunks/0', 'chunks/0'])
+    expect(notices).toHaveLength(1)
+
+    // Space freed, *Retry*: up it goes, the waiting is over.
+    server.freeFileBytes = null
+    expect(await anaFiles.retry(big.id)).toEqual({ uploaded: 1, failed: 0, waiting: 0, stopped: null })
+    expect(await ana.db.blobs.get(big.id)).toMatchObject({ uploaded: true, error: null, waiting: null })
+    expect(server.fileBytes.get(big.id)?.bytes).toEqual(bytes(10))
+  })
+
+  it('tries a waiting file again by itself once its backoff is over', async () => {
+    const n = await note()
+    const files = new FilePipeline({
+      db: () => ana.db,
+      repo: ana.repo,
+      online: () => ana.network,
+      images,
+      objectUrls: fakeUrls(),
+      chunkSize: 4,
+      storageFullRetry: 40,
+    })
+    try {
+      const row = await files.attachFile({ itemId: n.id }, fileOf(6), 'attachment')
+      await ana.engine.sync({ pull: true })
+      server.freeFileBytes = 0
+      expect(await files.flushPendingUploads()).toMatchObject({ uploaded: 0, waiting: 1 })
+      server.freeFileBytes = null
+      // No sync run, no click: the pipeline's own retry.
+      await until(async () => (await ana.db.synced('files').get(row.id))?.status === 'available', 'the retried upload')
+      expect(chunkCalls(row.id)).toEqual(['chunks/0', 'chunks/0', 'chunks/1', 'commit'])
+      expect(await ana.db.blobs.get(row.id)).toMatchObject({ uploaded: true, waiting: null })
+    } finally {
+      files.reset()
+    }
   })
 
   it('downloads on demand once, checks the sha256, and offline says NotDownloaded', async () => {
@@ -355,12 +423,12 @@ describe('the file pipeline (docs/03 §10.2) against the server’s contract', (
     const again = await anaFiles.attachFile({ itemId: n.id }, fileOf(10, 'copy.pdf'), 'attachment')
     await ana.engine.sync({ pull: true })
     expect(await ana.db.synced('files').get(again.id)).toMatchObject({ status: 'available' })
-    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 0, failed: 0, stopped: null })
+    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 0, failed: 0, waiting: 0, stopped: null })
     expect(chunkCalls(again.id)).toEqual([])
     expect(server.fileBytes.get(again.id)).toBe(server.fileBytes.get(first.id))
     // A chunk for a stored file (a commit whose answer was lost): 409 file_available, counted as uploaded.
     await ana.db.synced('files').update(again.id, { status: 'pending' })
-    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 1, failed: 0, stopped: null })
+    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 1, failed: 0, waiting: 0, stopped: null })
     expect(chunkCalls(again.id)).toEqual(['chunks/0'])
   })
 
