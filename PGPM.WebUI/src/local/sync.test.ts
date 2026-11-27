@@ -266,6 +266,8 @@ describe('the sync engine against the contract (docs/03 §11.4–§11.8)', () =>
     ben.goOnline()
     await until(async () => (await ben.db.getMeta('accessEpoch', 0)) === 2, 'the new epoch')
     await until(async () => !(await ben.db.synced('items').get('stale')), 'the stale row gone')
+    // The wipe comes first, the re-pull after it: wait for the pushed note to be back.
+    await until(async () => Boolean(await ben.db.synced('items').get(mine.id)), 'the note pulled again')
     expect(server.table('items').get(mine.id)).toBeDefined()
     expect(await ben.db.synced('items').get(mine.id)).toMatchObject({ title: 'Before the reset', number: 1 })
     expect(await ben.db.conflicts.count()).toBe(1)

@@ -27,11 +27,28 @@ export interface DraftRow {
   savedAt: string
 }
 
-/** File bytes (docs/03 §10.2; phase 3 fills it), by the `files` row's id. */
+/**
+ * File bytes (docs/03 §10.2, local/files.ts), by the `files` row's id. The bytes as an ArrayBuffer: every browser's
+ * IndexedDB keeps one (older Safari versions lost Blobs), and so does the tests' fake.
+ */
 export interface BlobRow {
   id: string
-  blob: Blob
+  bytes: ArrayBuffer
+  /** The content type. */
+  type: string
+  size: number
+  /** When stored here: the cache budget evicts the oldest downloads first. */
   cachedAt: string
+  /** `local`: attached on this device; `download`: fetched from the server. */
+  origin: 'local' | 'download'
+  /** The server has the bytes (downloaded, or uploaded and committed): only then may the budget evict them. */
+  uploaded: boolean
+  /** The file's purpose (`attachment`, `cover`, …): prefetched images are evicted last. */
+  purpose?: string
+  /** Uploading: the next chunk to send, so that an interrupted upload resumes. */
+  nextChunk?: number
+  /** The server refused the upload for good (its reason); *Retry* clears it. */
+  error?: string | null
 }
 
 /** The keys of `meta`. */

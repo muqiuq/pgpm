@@ -1,7 +1,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useSyncStore } from '@/stores/sync'
 import { localDb } from './db'
-import type { GroupRow, PersonRow } from './rows'
+import { defaultRoles } from './items'
+import type { AssignmentRoleRow, GroupRow, PersonRow, StatusRow } from './rows'
 import { useLive } from './useLive'
 
 /**
@@ -38,6 +39,45 @@ export function useUserPersons() {
   }
 }
 
+/** Every status (archived ones too: still displayed), by id and in order per type. */
+export function useStatuses() {
+  const live = useLive(
+    async () =>
+      ((await localDb().synced('statuses').toArray()) as unknown as StatusRow[])
+        .filter((s) => !s.deleted)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
+    [] as StatusRow[],
+  )
+  const byId = computed(() => new Map(live.value.value.map((s) => [s.id, s])))
+  return { all: live.value, byId, loaded: live.loaded }
+}
+
+/** Every person (inactive ones too: still shown where assigned), by id. */
+export function usePersons() {
+  const live = useLive(
+    async () =>
+      ((await localDb().synced('persons').toArray()) as unknown as PersonRow[])
+        .filter((p) => !p.deleted)
+        .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    [] as PersonRow[],
+  )
+  const byId = computed(() => new Map(live.value.value.map((p) => [p.id, p])))
+  return { all: live.value, byId }
+}
+
+/** The role suggestions: the configured ones (`assignment_roles`, phase 4), else docs/01 §4.1's defaults. */
+export function useRoleSuggestions() {
+  const live = useLive(
+    async () =>
+      ((await localDb().synced('assignment_roles').toArray()) as unknown as AssignmentRoleRow[])
+        .filter((r) => !r.deleted && !r.isArchived)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((r) => r.name),
+    [] as string[],
+  )
+  return computed(() => (live.value.value.length ? live.value.value : defaultRoles))
+}
+
 /** Whether the server is reachable as far as this tab knows: the browser is online and the sync isn't offline. */
 export function useOnline() {
   const sync = useSyncStore()
@@ -66,6 +106,18 @@ export function fieldLabel(table: string, key: string, type?: string): string {
     value: 'Value',
     notes: 'Notes',
     displayName: 'Name',
+    leadOrganisation: 'Organisation',
+    leadValue: 'Estimated value',
+    leadCurrency: 'Currency',
+    leadProbability: 'Probability',
+    leadDecisionDate: 'Expected decision date',
+    leadNextAction: 'Next action',
+    leadNextActionDue: 'Next action due',
+    leadSource: 'Source',
+    projectStartDate: 'Start date',
+    projectEndDate: 'End date',
+    fileName: 'File name',
+    role: 'Role',
   }
   if (labels[key]) return labels[key]
   const words = key

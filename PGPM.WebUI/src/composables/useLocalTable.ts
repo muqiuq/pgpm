@@ -10,17 +10,31 @@ import type { TableSource } from './tableSource'
  * `ListTable.vue`, `FilterBar.vue` and the column widths work unchanged – but the rows come from IndexedDB (a Dexie
  * `liveQuery`, so they follow every change, in all tabs) and search, filter, sort and paging run in memory, offline.
  *
- * - Sort strings `"field"` / `"-field"`; search debounced 250 ms, normalised (lower case, no diacritics), every word must
- *   occur; a filter or search change goes back to page 1; `rowsPerPageOptions` 25/50/100/200.
+ * - Sort strings `"field"` / `"-field"`, several comma-separated (`status,-updated_at`) with `multiSort`; search
+ *   debounced 250 ms, normalised (lower case, no diacritics), every word must occur; a filter or search change goes back
+ *   to page 1; `rowsPerPageOptions` 25/50/100/200.
  * - `syncUrl`: page, sort and search in the URL (`?page=2&sort=-title&q=web`), plus the view's `urlQuery`.
- * - `settingsKey` (`list:note`): the last search, sort, page size and the view's `remember()` state are kept per user
- *   in `user_settings` and restored when the URL says nothing (data model §13).
+ * - `settingsKey` (`list:note`): the last search, sort, page size, the view's `remember()` filters, the `columns` and
+ *   the saved view (`viewId`) are kept per user in `user_settings` (data model §13) and restored when the URL says
+ *   nothing.
+ * - `applyState` applies a saved view's definition (`{search, filters, sort, columns}`), `currentState` is what a view
+ *   saves.
  */
 export interface ListState {
+  viewId?: string | null
   search: string
   sort: string[]
   pageSize?: number
   filters?: Record<string, unknown>
+  columns?: string[]
+}
+
+/** A saved view's definition (data model §7.8): the list state without page size and view. */
+export interface ViewState {
+  search?: string
+  filters?: Record<string, unknown>
+  sort?: string[]
+  columns?: string[]
 }
 
 interface Options<T> {
@@ -37,14 +51,20 @@ interface Options<T> {
   /** A comparison before the chosen sort (pinned notes first). */
   lead?: (a: T, b: T) => number
   defaultSort?: string
+  /** Sorting by several columns (PrimeVue's `sortMode: 'multiple'`: Ctrl/⌘-click adds a column). */
+  multiSort?: boolean
   pageSize?: number
   syncUrl?: boolean
   urlQuery?: Ref<Record<string, string | undefined>>
   settingsKey?: string
   /** The filters to keep with the list state. */
   remember?: () => Record<string, unknown>
-  /** The kept filters, when the state is restored. */
+  /** The kept filters, when the state is restored (or a view applied). */
   restore?: (filters: Record<string, unknown>) => void
+  /** The shown columns (ids, in order): remembered and set by a view. */
+  columns?: Ref<string[]>
+  /** The saved view the list shows: remembered. */
+  viewId?: Ref<string | null>
   db?: () => PgpmDb
   repo?: Repo
 }
@@ -66,25 +86,49 @@ export function compareValues(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
 }
 
+/** The sort keys of a sort string: `"status,-updated_at"` → `["status", "-updated_at"]`. */
+export function sortKeys(sort: string): string[] {
+  return sort
+    .split(',')
+    .map((k) => k.trim())
+    .filter((k) => k && k !== '-')
+}
+
+export type SortEvent = {
+  sortField?: unknown
+  sortOrder?: number | null
+  multiSortMeta?: { field?: unknown; order?: number | null }[] | null
+}
+
 export function useLocalTable<T extends { id: string }>(
   options: Options<T>,
-): TableSource<T> & {
+): Omit<TableSource<T>, 'onSort'> & {
+  /** PrimeVue's sort event: one column, or several (`multiSortMeta`). */
+  onSort(event: SortEvent): void
   sort: Ref<string>
   search: Ref<string>
   params: Readonly<Ref<Record<string, unknown>>>
   /** Every row that passes search and filters (all pages). */
   matching: Readonly<Ref<T[]>>
   loaded: Readonly<Ref<boolean>>
+  /** The remembered state was restored (or there was none): a view may be applied now. */
+  restored: Readonly<Ref<boolean>>
+  /** A saved view's definition becomes the list's state. */
+  applyState: (state: ViewState) => void
+  /** The state a saved view keeps. */
+  currentState: () => Required<ViewState>
 } {
   const route = options.syncUrl ? useRoute() : null
   const router = options.syncUrl ? useRouter() : null
   const fromUrl = route?.query ?? {}
   const defaultPageSize = options.pageSize ?? 50
+  const defaultSort = options.defaultSort ?? ''
   const page = ref(Number(fromUrl.page) || 1)
   const pageSize = ref(Number(fromUrl.pageSize) || defaultPageSize)
-  const sort = ref(typeof fromUrl.sort === 'string' ? fromUrl.sort : (options.defaultSort ?? ''))
+  const sort = ref(typeof fromUrl.sort === 'string' ? fromUrl.sort : defaultSort)
   const search = ref(typeof fromUrl.q === 'string' ? fromUrl.q : '')
   const debounced = ref(search.value)
+  const restored = ref(!options.settingsKey)
   let timer: ReturnType<typeof setTimeout> | undefined
   watch(search, (value) => {
     clearTimeout(timer)
@@ -96,6 +140,10 @@ export function useLocalTable<T extends { id: string }>(
   if (options.filters) watch(options.filters, () => (page.value = 1), { deep: true })
 
   const live = useLive(options.rows, [] as T[])
+  const keys = computed(() => {
+    const all = sortKeys(sort.value)
+    return options.multiSort ? all : all.slice(0, 1)
+  })
 
   const matching = computed(() => {
     const words = normalise(debounced.value.trim()).split(/\s+/).filter(Boolean)
@@ -105,15 +153,17 @@ export function useLocalTable<T extends { id: string }>(
         (!options.match || options.match(row, filters)) &&
         (!words.length || words.every((w) => normalise(options.text(row)).includes(w))),
     )
-    const field = sort.value.replace(/^-/, '')
-    const direction = sort.value.startsWith('-') ? -1 : 1
+    const order = keys.value.map((k) => ({ field: k.replace(/^-/, ''), direction: k.startsWith('-') ? -1 : 1 }))
     const value = options.sortValue ?? ((row: T, f: string) => (row as Record<string, unknown>)[f])
-    rows = [...rows].sort(
-      (a, b) =>
-        (options.lead?.(a, b) ?? 0) ||
-        (field ? direction * compareValues(value(a, field), value(b, field)) : 0) ||
-        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-    )
+    rows = [...rows].sort((a, b) => {
+      const lead = options.lead?.(a, b) ?? 0
+      if (lead) return lead
+      for (const { field, direction } of order) {
+        const c = direction * compareValues(value(a, field), value(b, field))
+        if (c) return c
+      }
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+    })
     return rows
   })
   const total = computed(() => matching.value.length)
@@ -144,14 +194,39 @@ export function useLocalTable<T extends { id: string }>(
       }
       set('page', page.value, 1)
       set('pageSize', pageSize.value, defaultPageSize)
-      set('sort', sort.value, options.defaultSort ?? '')
+      set('sort', sort.value, defaultSort)
       set('q', debounced.value.trim(), '')
       void router.replace({ query })
     })
   }
 
-  if (options.settingsKey)
-    rememberState(options, { search, debounced, sort, pageSize, page }, !!Object.keys(fromUrl).length)
+  function applyState(state: ViewState) {
+    clearTimeout(timer)
+    search.value = state.search ?? ''
+    debounced.value = search.value
+    sort.value = state.sort?.length ? state.sort.join(',') : defaultSort
+    options.restore?.(state.filters ?? {})
+    if (options.columns && state.columns?.length) options.columns.value = [...state.columns]
+    page.value = 1
+  }
+
+  function currentState(): Required<ViewState> {
+    return {
+      search: search.value.trim(),
+      filters: options.remember?.() ?? {},
+      sort: sortKeys(sort.value),
+      columns: [...(options.columns?.value ?? [])],
+    }
+  }
+
+  if (options.settingsKey) {
+    rememberState(
+      options,
+      { search, debounced, sort, pageSize, page },
+      !!Object.keys(fromUrl).length,
+      () => (restored.value = true),
+    )
+  }
 
   const query = {
     isError: computed(() => live.error.value !== null),
@@ -161,27 +236,47 @@ export function useLocalTable<T extends { id: string }>(
     refetch: () => live.refresh(),
   }
 
-  const tableProps = computed(() => ({
-    value: items.value,
-    lazy: true,
-    paginator: total.value > pageSize.value,
-    rows: pageSize.value,
-    first: (page.value - 1) * pageSize.value,
-    totalRecords: total.value,
-    loading: !live.loaded.value,
-    sortField: sort.value.replace(/^-/, '') || undefined,
-    sortOrder: sort.value ? (sort.value.startsWith('-') ? -1 : 1) : 0,
-    rowsPerPageOptions: [25, 50, 100, 200],
-  }))
+  const tableProps = computed(() => {
+    const shared = {
+      value: items.value,
+      lazy: true,
+      paginator: total.value > pageSize.value,
+      rows: pageSize.value,
+      first: (page.value - 1) * pageSize.value,
+      totalRecords: total.value,
+      loading: !live.loaded.value,
+      rowsPerPageOptions: [25, 50, 100, 200],
+    }
+    if (options.multiSort) {
+      return {
+        ...shared,
+        sortMode: 'multiple',
+        removableSort: true,
+        multiSortMeta: keys.value.map((k) => ({ field: k.replace(/^-/, ''), order: k.startsWith('-') ? -1 : 1 })),
+      }
+    }
+    return {
+      ...shared,
+      sortField: sort.value.replace(/^-/, '') || undefined,
+      sortOrder: sort.value ? (sort.value.startsWith('-') ? -1 : 1) : 0,
+    }
+  })
 
   function onPage(event: { page: number; rows: number }) {
     page.value = event.page + 1
     pageSize.value = event.rows
   }
 
-  function onSort(event: { sortField?: unknown; sortOrder?: number | null }) {
-    const field = typeof event.sortField === 'string' ? event.sortField : ''
-    sort.value = field ? `${event.sortOrder === -1 ? '-' : ''}${field}` : (options.defaultSort ?? '')
+  function onSort(event: SortEvent) {
+    if (options.multiSort && Array.isArray(event.multiSortMeta)) {
+      const next = event.multiSortMeta
+        .filter((m) => typeof m.field === 'string' && m.field && m.order)
+        .map((m) => `${m.order === -1 ? '-' : ''}${String(m.field)}`)
+      sort.value = next.length ? next.join(',') : defaultSort
+    } else {
+      const field = typeof event.sortField === 'string' ? event.sortField : ''
+      sort.value = field ? `${event.sortOrder === -1 ? '-' : ''}${field}` : defaultSort
+    }
     page.value = 1
   }
 
@@ -204,6 +299,9 @@ export function useLocalTable<T extends { id: string }>(
     goTo,
     matching,
     loaded: live.loaded,
+    restored,
+    applyState,
+    currentState,
   }
 }
 
@@ -212,6 +310,7 @@ function rememberState<T>(
   options: Options<T>,
   state: { search: Ref<string>; debounced: Ref<string>; sort: Ref<string>; pageSize: Ref<number>; page: Ref<number> },
   fromUrl: boolean,
+  done: () => void,
 ) {
   const db = options.db ?? localDb
   const repo = options.repo ?? appRepo
@@ -220,10 +319,12 @@ function rememberState<T>(
   let timer: ReturnType<typeof setTimeout> | undefined
 
   const current = (): ListState => ({
+    ...(options.viewId ? { viewId: options.viewId.value } : {}),
     search: state.debounced.value.trim(),
-    sort: state.sort.value ? [state.sort.value] : [],
+    sort: sortKeys(state.sort.value),
     pageSize: state.pageSize.value,
     filters: options.remember?.() ?? {},
+    ...(options.columns ? { columns: [...options.columns.value] } : {}),
   })
 
   async function find() {
@@ -234,18 +335,24 @@ function rememberState<T>(
     try {
       const row = await find()
       const value = row?.value as Partial<ListState> | undefined
+      // The columns are never in the URL: they come back either way.
+      if (value && options.columns && Array.isArray(value.columns) && value.columns.length) {
+        options.columns.value = value.columns.filter((c): c is string => typeof c === 'string')
+      }
       if (value && !fromUrl) {
         state.search.value = value.search ?? ''
         state.debounced.value = value.search ?? ''
-        if (value.sort?.length) state.sort.value = value.sort[0]!
+        if (value.sort?.length) state.sort.value = value.sort.join(',')
         if (value.pageSize) state.pageSize.value = value.pageSize
         if (value.filters) options.restore?.(value.filters)
+        if (options.viewId && value.viewId !== undefined) options.viewId.value = value.viewId ?? null
         state.page.value = 1
       }
     } catch {
       // No local data: the defaults.
     }
     restored = true
+    done()
   })()
 
   watch(

@@ -9,6 +9,7 @@ import { useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
 import RelativeTime from '@/components/RelativeTime.vue'
 import { useActions } from '@/composables/useActions'
+import { itemTypes } from '@/domain/itemTypes'
 import { conflicts as actions } from '@/local/boot'
 import type { ConflictEntry } from '@/local/conflicts'
 import { localDb, type StoredRow } from '@/local/db'
@@ -63,8 +64,7 @@ function describe(c: ConflictEntry) {
   const row = rowOf(c)
   if (c.table === 'items' && row) {
     const item = row as unknown as ItemRow
-    const icon = { note: 'pi pi-file-edit', idea: 'pi pi-lightbulb', lead: 'pi pi-flag', project: 'pi pi-briefcase' }
-    return { icon: icon[item.type] ?? 'pi pi-file', key: itemKey(item), type: item.type }
+    return { icon: itemTypes[item.type]?.icon ?? 'pi pi-file', key: itemKey(item), type: item.type }
   }
   const icons: Record<string, string> = { persons: 'pi pi-address-book', user_settings: 'pi pi-cog' }
   return { icon: icons[c.table] ?? 'pi pi-file', key: null, type: undefined }
@@ -98,9 +98,10 @@ const edited = ref<Record<string, unknown>>({})
 
 function startEdit(c: ConflictEntry) {
   const markdown = Object.keys(c.fields).find((k) => markdownFields.has(k))
-  if (markdown && c.table === 'items' && describe(c).type === 'note') {
+  const type = describe(c).type
+  if (markdown && c.table === 'items' && type) {
     emit('navigate')
-    void router.push({ name: 'note-edit', params: { id: c.rowId }, query: { conflict: c.id } })
+    void router.push({ name: itemTypes[type].edit, params: { id: c.rowId }, query: { conflict: c.id } })
     return
   }
   editing.value = c.id

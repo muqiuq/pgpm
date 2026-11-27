@@ -4,6 +4,7 @@ import { requestBackgroundSync } from '@/pwa/register'
 import { useSession } from '@/stores/session'
 import { claimLocalData, localDb, onWipe } from './db'
 import { appDrafts } from './drafts'
+import { FilePipeline } from './files'
 import { clearEditing, receiveEditing } from './presence'
 import { repo, setRepoContext } from './repo'
 import { conflictActions } from './resolve'
@@ -28,7 +29,7 @@ export function onSyncNotice(listener: (notice: Notice) => void): () => void {
 
 let appVersion = 'unknown'
 
-export const engine = new SyncEngine({
+export const engine: SyncEngine = new SyncEngine({
   post: postSync,
   socket: typeof WebSocket === 'undefined' ? null : (url) => new WebSocket(url) as unknown as SocketLike,
   liveUrl,
@@ -36,6 +37,9 @@ export const engine = new SyncEngine({
   backgroundSync: requestBackgroundSync,
   notify: (notice) => noticeListeners.forEach((l) => l(notice)),
   onEditing: receiveEditing,
+  // The file pipeline after each run that reached the server: the bytes of the rows it has now, then the images
+  // every device keeps (docs/03 §10.2).
+  afterRun: (): Promise<number> => appFiles.flushPendingUploads().then(() => appFiles.prefetch()),
   onSignedOut: () => void useSession().refresh(),
   onSession: (state) => void (state === 'rights_changed' ? useSession().load(true) : useSession().refresh()),
   onReset: () => void useSession().load(true),
@@ -49,9 +53,23 @@ export const engine = new SyncEngine({
   },
 })
 
+/**
+ * The app's files (docs/03 §10.2, local/files.ts): attachments, covers, images in texts – stored on this device first,
+ * uploaded after the sync, downloaded on demand. Online as far as the browser and the sync know.
+ */
+export const appFiles: FilePipeline = new FilePipeline({
+  repo,
+  online: (): boolean =>
+    (typeof navigator === 'undefined' || navigator.onLine !== false) &&
+    engine.status.connection !== 'offline' &&
+    engine.status.connection !== 'signed-out',
+  notify: (notice) => noticeListeners.forEach((l) => l(notice)),
+})
+
 setRepoContext({ changed: () => engine.localChange() })
 onWipe('before', () => engine.stop())
 onWipe('after', () => clearEditing())
+onWipe('after', () => appFiles.reset())
 
 /** The conflict dialog's decisions on the app's data. */
 export const conflicts = conflictActions({

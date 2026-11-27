@@ -15,7 +15,8 @@ import type { Row } from './outbox'
  * - `serverOwned`: members only the server sets; never pushed in an insert.
  * - `defaults`: the members a new local row starts with before the server has seen it.
  * - `blobs`: the row's id keys file bytes in `blobs` (`files`, phase 3), removed with the row.
- * - `since`: the Dexie version that added the table; `revised`: the version that last changed its indexes.
+ * - `since`: the Dexie version that added the table; `revised`: the version that last changed its indexes, `before`:
+ *   the indexes until then (each version keeps the schema it had, so that an upgrade adds the new index).
  */
 export interface TableDef {
   name: string
@@ -28,10 +29,11 @@ export interface TableDef {
   blobs?: boolean
   since: number
   revised?: number
+  before?: readonly string[]
 }
 
 /** The Dexie version of the schema; raise it with every change of {@link tables} or the local stores. */
-export const dbVersion = 1
+export const dbVersion = 2
 
 /** Members every synced row has that only the server sets (data model §1.1). */
 export const syncedColumns = [
@@ -45,14 +47,28 @@ export const syncedColumns = [
   'updatedBy',
 ] as const
 
+/** Rows below an item (by `itemId`): written with *edit* on the item, evicted with it. */
+const belowItem = { table: 'items', key: 'itemId' } as const
+const belowMap = { table: 'maps', key: 'mapId' } as const
+const belowMilestone = { table: 'milestones', key: 'milestoneId' } as const
+const belowTemplate = { table: 'project_templates', key: 'templateId' } as const
+
+/** Read-only configuration (data model §7), written online through admin endpoints: synced, never pushed. */
+function config(name: string, indexes: readonly string[] = [], parents: TableDef['parents'] = []): TableDef {
+  return { name, indexes, parents, writes: 'none', since: 2 }
+}
+
 export const tables: readonly TableDef[] = [
   {
     name: 'items',
-    indexes: ['type', 'statusId', 'ownerUserId'],
+    // `originItemId`: the projects converted from an idea or lead (the source shows *Converted* before the server's
+    // `convertedToItemId` arrives).
+    indexes: ['type', 'statusId', 'ownerUserId', 'originItemId'],
     parents: [],
     writes: 'all',
     root: 'item',
-    // `access` is computed per user (data model §1.2).
+    // `access` is computed per user (data model §1.2); the server sets the origin's `convertedToItemId` when it accepts
+    // a project with `originItemId` (docs/03 §12.8).
     serverOwned: ['number', 'statusChangedAt', 'convertedToItemId', 'access'],
     defaults: ({ userId }) => ({
       number: null,
@@ -69,11 +85,13 @@ export const tables: readonly TableDef[] = [
       access: 'manage',
     }),
     since: 1,
+    revised: 2,
+    before: ['type', 'statusId', 'ownerUserId'],
   },
   {
     name: 'item_shares',
     indexes: ['itemId', 'groupId'],
-    parents: [{ table: 'items', key: 'itemId' }],
+    parents: [belowItem],
     writes: 'insert',
     since: 1,
   },
@@ -87,6 +105,68 @@ export const tables: readonly TableDef[] = [
     defaults: ({ userId }) => ({ userId }),
     since: 1,
   },
+  // --- phase 3: every other synced table of the data model, so that phases 4 and 5 need no version of their own ---
+  config('statuses', ['itemType']),
+  {
+    name: 'assignments',
+    indexes: ['itemId', 'milestoneId', 'personId'],
+    parents: [belowItem, belowMilestone],
+    writes: 'all',
+    defaults: () => ({ itemId: null, milestoneId: null, role: null }),
+    since: 2,
+  },
+  {
+    name: 'item_links',
+    indexes: ['fromItemId', 'toItemId'],
+    // A link belongs to its source; the target is resolved locally (restricted when it isn't on the device).
+    parents: [{ table: 'items', key: 'fromItemId' }],
+    writes: 'all',
+    since: 2,
+  },
+  {
+    name: 'files',
+    indexes: ['itemId', 'mapId'],
+    parents: [belowItem, belowMap],
+    writes: 'all',
+    // `status` becomes `available` when the server has the bytes (the commit, docs/03 §10.2).
+    serverOwned: ['status'],
+    defaults: () => ({ itemId: null, mapId: null, width: null, height: null, thumbnail: null, status: 'pending' }),
+    blobs: true,
+    since: 2,
+  },
+  config('sections'),
+  config('field_definitions', ['sectionId'], [{ table: 'sections', key: 'sectionId' }]),
+  { name: 'field_values', indexes: ['itemId', 'fieldId'], parents: [belowItem], writes: 'all', since: 2 },
+  { name: 'item_sections', indexes: ['itemId', 'sectionId'], parents: [belowItem], writes: 'all', since: 2 },
+  config('project_templates'),
+  config('template_statuses', ['templateId'], [belowTemplate]),
+  config('template_sections', ['templateId'], [belowTemplate]),
+  config('template_field_defaults', ['templateId'], [belowTemplate]),
+  config('template_milestones', ['templateId'], [belowTemplate]),
+  {
+    name: 'saved_views',
+    indexes: ['itemType'],
+    parents: [],
+    writes: 'all',
+    defaults: ({ userId }) => ({ ownerUserId: userId, isShared: false, sortOrder: 0 }),
+    since: 2,
+  },
+  config('assignment_roles'),
+  { name: 'milestones', indexes: ['itemId'], parents: [belowItem], writes: 'all', since: 2 },
+  { name: 'dod_items', indexes: ['milestoneId'], parents: [belowMilestone], writes: 'all', since: 2 },
+  {
+    name: 'maps',
+    indexes: ['ownerUserId'],
+    parents: [],
+    writes: 'all',
+    root: 'map',
+    serverOwned: ['access'],
+    defaults: ({ userId }) => ({ ownerUserId: userId, description: null, isTemplate: false, access: 'manage' }),
+    since: 2,
+  },
+  { name: 'map_shares', indexes: ['mapId', 'groupId'], parents: [belowMap], writes: 'insert', since: 2 },
+  { name: 'map_layers', indexes: ['mapId'], parents: [belowMap], writes: 'all', since: 2 },
+  { name: 'map_elements', indexes: ['mapId', 'layerId', 'itemId'], parents: [belowMap], writes: 'all', since: 2 },
 ]
 
 const byName = new Map(tables.map((t) => [t.name, t]))
@@ -116,8 +196,9 @@ export const localStores = {
 } as const
 
 /** A table's Dexie schema string: the key, then the indexes. */
-export function storeSpec(table: TableDef): string {
-  return ['id', ...table.indexes].join(', ')
+export function storeSpec(table: TableDef, version = dbVersion): string {
+  const old = table.revised !== undefined && version < table.revised
+  return ['id', ...(old ? (table.before ?? table.indexes) : table.indexes)].join(', ')
 }
 
 /**
@@ -129,7 +210,7 @@ export function schemaVersions(): { version: number; stores: Record<string, stri
   for (let version = 1; version <= dbVersion; version++) {
     const stores: Record<string, string> = version === 1 ? { ...localStores } : {}
     for (const table of tables) {
-      if (table.since === version || table.revised === version) stores[table.name] = storeSpec(table)
+      if (table.since === version || table.revised === version) stores[table.name] = storeSpec(table, version)
     }
     versions.push({ version, stores })
   }

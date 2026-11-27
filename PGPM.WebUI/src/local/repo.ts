@@ -1,3 +1,4 @@
+import Dexie from 'dexie'
 import { localDb, withoutLocal, type PgpmDb, type StoredRow } from './db'
 import { applyPatch, coalesce, getPath, jsonEqual, type Changes, type OutboxEntry, type Row } from './outbox'
 import type { LocalMeta } from './rows'
@@ -97,11 +98,23 @@ export function metaOf(row: StoredRow): LocalMeta {
   return row._local ?? { serverRev: typeof row.rev === 'number' ? row.rev : null, pending: false }
 }
 
+/**
+ * A helper's work inside a repository transaction, as a Dexie promise. Dexie keeps its transaction zone across a
+ * native `await` only for one hop: an async helper that awaits another async helper last (or whose caller does)
+ * loses it, the caller's next write lands outside the transaction and it commits early (PrematureCommitError). Helpers
+ * that take a {@link RepoTransaction} answer through this (`return inTransaction(work())`); the transaction's own
+ * operations do already.
+ */
+export function inTransaction<T>(work: Promise<T>): Promise<T> {
+  return Dexie.Promise.resolve(work)
+}
+
 /** The operations of one transaction, sharing one outbox batch. */
 export class RepoTransaction {
   readonly batch: string
-  private readonly db: PgpmDb
-  private readonly userId: string | null
+  /** The transaction's database: reads, and the bytes of a new file (`blobs`, local/files.ts) – no other writes. */
+  readonly db: PgpmDb
+  readonly userId: string | null
 
   constructor(db: PgpmDb, batch: string, userId: string | null) {
     this.db = db
@@ -120,8 +133,34 @@ export class RepoTransaction {
     }
   }
 
+  // The operations answer Dexie promises (inTransaction), so helpers ending with `await tx.create(…)` keep the zone.
+
   /** A new row: an id (v7) unless given, the table's defaults, the synced columns until the server sets them. */
-  async create<T extends Row>(table: string, values: Partial<T>, options: CreateOptions = {}): Promise<T & StoredRow> {
+  create<T extends Row>(table: string, values: Partial<T>, options: CreateOptions = {}): Promise<T & StoredRow> {
+    return inTransaction(this.createRow<T>(table, values, options))
+  }
+
+  /**
+   * Changes members of a row: `values` maps keys (columns or dotted jsonb members) to their new values; the old ones
+   * come from the local row unless given. Keys whose value doesn't change are left out; nothing left, nothing done.
+   */
+  patch(table: string, id: string, values: Record<string, unknown>, options: PatchOptions = {}): Promise<void> {
+    return inTransaction(this.patchRow(table, id, values, options))
+  }
+
+  /**
+   * Deletes a row: a tombstone until the server confirms (it soft-deletes with its children in a delete batch). A row
+   * the server never had, and nothing else refers to, simply goes.
+   */
+  remove(table: string, id: string, options: RemoveOptions = {}): Promise<void> {
+    return inTransaction(this.removeRow(table, id, options))
+  }
+
+  private async createRow<T extends Row>(
+    table: string,
+    values: Partial<T>,
+    options: CreateOptions,
+  ): Promise<T & StoredRow> {
     const def = definition(table, 'insert')
     const id = options.id ?? (typeof values.id === 'string' ? values.id : uuidv7())
     const now = new Date().toISOString()
@@ -147,11 +186,12 @@ export class RepoTransaction {
     return stored
   }
 
-  /**
-   * Changes members of a row: `values` maps keys (columns or dotted jsonb members) to their new values; the old ones
-   * come from the local row unless given. Keys whose value doesn't change are left out; nothing left, nothing done.
-   */
-  async patch(table: string, id: string, values: Record<string, unknown>, options: PatchOptions = {}): Promise<void> {
+  private async patchRow(
+    table: string,
+    id: string,
+    values: Record<string, unknown>,
+    options: PatchOptions,
+  ): Promise<void> {
     definition(table, 'patch')
     const store = this.db.synced(table)
     const stored = await store.get(id)
@@ -176,11 +216,7 @@ export class RepoTransaction {
     await store.put({ ...next, id, _local: { serverRev: meta.serverRev, pending, base: pending ? base : undefined } })
   }
 
-  /**
-   * Deletes a row: a tombstone until the server confirms (it soft-deletes with its children in a delete batch). A row
-   * the server never had, and nothing else refers to, simply goes.
-   */
-  async remove(table: string, id: string, options: RemoveOptions = {}): Promise<void> {
+  private async removeRow(table: string, id: string, options: RemoveOptions): Promise<void> {
     definition(table, 'delete')
     const store = this.db.synced(table)
     const stored = await store.get(id)
@@ -229,7 +265,9 @@ export class Repo {
   async transaction<R>(run: (tx: RepoTransaction) => Promise<R>, options: { batch?: string } = {}): Promise<R> {
     const db = this.db()
     const tx = new RepoTransaction(db, options.batch ?? uuidv7(), this.options.userId())
-    const result = await db.transaction('rw', [...db.syncedTables(), db.outbox, db.conflicts, db.meta], () => run(tx))
+    const result = await db.transaction('rw', [...db.syncedTables(), db.outbox, db.conflicts, db.meta, db.blobs], () =>
+      run(tx),
+    )
     this.options.changed?.()
     return result
   }

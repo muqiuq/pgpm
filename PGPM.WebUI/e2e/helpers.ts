@@ -137,12 +137,16 @@ export interface Team {
   users: TestUser[]
 }
 
-export async function createTeam(baseURL: string | undefined, names: string[] = ['Ana', 'Ben']): Promise<Team> {
+export async function createTeam(
+  baseURL: string | undefined,
+  names: string[] = ['Ana', 'Ben'],
+  rights: Record<string, string> = { Notes: 'Create' },
+): Promise<Team> {
   const admin = await adminApi(baseURL)
   const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
   const group = await admin.call<{ id: string; name: string }>('POST', '/api/v1/groups', {
     name: `Team ${stamp}`,
-    rights: { Notes: 'Create' },
+    rights,
   })
   const users: TestUser[] = []
   for (const name of names) {

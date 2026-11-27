@@ -253,7 +253,18 @@ internal sealed class LiveSocket : IAsyncDisposable
     public Task SendAsync(JsonObject message) =>
         socket.SendAsync(Encoding.UTF8.GetBytes(message.ToJsonString()), WebSocketMessageType.Text, true, CancellationToken.None);
 
-    public Task AckAsync(JsonObject changes) => SendAsync(new JsonObject { ["type"] = "ack", ["cursor"] = changes.Long("cursor") });
+    /// <summary>Acks a <c>changes</c> message; a socket the server is closing (a shutdown) is not an error here.</summary>
+    public async Task AckAsync(JsonObject changes)
+    {
+        try
+        {
+            await SendAsync(new JsonObject { ["type"] = "ack", ["cursor"] = changes.Long("cursor") });
+        }
+        catch (Exception e) when (e is ObjectDisposedException or WebSocketException)
+        {
+            // The server closed the socket while the message was read: nothing left to ack.
+        }
+    }
 
     /// <summary>The next message, or null after <paramref name="timeout"/> (or when the channel closed and nothing is left).</summary>
     public async Task<JsonObject?> NextAsync(TimeSpan timeout)

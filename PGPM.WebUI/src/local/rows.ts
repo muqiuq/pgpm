@@ -119,6 +119,90 @@ export type UserSettingRow = SyncedColumns & {
   value: unknown
 }
 
+export type StatusCategory = 'open' | 'active' | 'closed'
+
+/** `statuses` (data model §7.1): read-only configuration, one list per item type. `icon`: a PrimeIcons name (`pi-eye`). */
+export type StatusRow = SyncedColumns & {
+  itemType: Exclude<ItemType, 'note'>
+  name: string
+  color: string
+  icon: string | null
+  category: StatusCategory
+  sortOrder: number
+  isDefault: boolean
+  maxDays: number | null
+  isArchived: boolean
+}
+
+/** `assignments` (data model §6): a person on an item (or milestone), with an optional role. */
+export type AssignmentRow = SyncedColumns & {
+  itemId: string | null
+  milestoneId: string | null
+  personId: string
+  role: string | null
+  /** Fractional index (data model §10). */
+  sortOrder: string
+}
+
+export type LinkRelation = 'contributes_to' | 'learning_of' | 'depends_on' | 'related'
+
+/** `item_links` (data model §6): belongs to its source item; the target may be unreadable (*restricted*). */
+export type ItemLinkRow = SyncedColumns & {
+  fromItemId: string
+  toItemId: string
+  relation: LinkRelation
+}
+
+export type FilePurpose = 'attachment' | 'cover' | 'map_image' | 'embedded'
+
+/** `files` (data model §6): metadata; the bytes live on the server and, cached, in IndexedDB `blobs`. */
+export type FileRow = SyncedColumns & {
+  itemId: string | null
+  mapId: string | null
+  purpose: FilePurpose
+  fileName: string
+  contentType: string
+  sizeBytes: number
+  /** Hex, computed by the client, verified by the server. */
+  sha256: string
+  width: number | null
+  height: number | null
+  /** A WebP of ≤ 32 KB, base64, made by the client. */
+  thumbnail: string | null
+  /** `pending` until the server has the bytes (the commit). */
+  status: 'pending' | 'available'
+}
+
+/** `saved_views` (data model §7.8): own views and the shared ones. */
+export type SavedViewRow = SyncedColumns & {
+  ownerUserId: string
+  itemType: ItemType | 'gate'
+  name: string
+  definition: Record<string, unknown>
+  isShared: boolean
+  sortOrder: number
+}
+
+/** `assignment_roles` (phase 4 fills it): suggestions for `assignments.role`. */
+export type AssignmentRoleRow = SyncedColumns & {
+  name: string
+  description?: string | null
+  sortOrder: number
+  isArchived: boolean
+}
+
+/** `project_templates` (data model §7.7), as far as phase 3 reads them (the create dialog's picker slot). */
+export type ProjectTemplateRow = SyncedColumns & {
+  name: string
+  description: string | null
+  color: string | null
+  icon: string | null
+  defaultStatusId: string | null
+  defaultShares: { groupId: string; access: Access }[]
+  sortOrder: number
+  isArchived: boolean
+}
+
 /** A row as stored locally: the row and its bookkeeping. */
 export type Stored<T> = T & { _local?: LocalMeta }
 

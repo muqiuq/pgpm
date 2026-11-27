@@ -34,16 +34,155 @@ interface User {
   groupIds: string[]
   isAdmin: boolean
   accessEpoch: number
+  /** Configuration: Manage (shared saved views, the statuses endpoints). */
+  configManage: boolean
 }
 
 /** The patchable whitelist per table (docs/03 §11.5); others: read-only or insert-only. */
-const patchable: Record<string, readonly string[]> = {
-  items: ['title', 'description', 'color', 'imageFileId', 'statusId', 'pinned', 'tags'],
-  persons: ['notes', 'displayName', 'email', 'jobTitle', 'department', 'companyName', 'phone', 'mobilePhone'],
+export const patchable: Record<string, readonly string[]> = {
+  items: [
+    'title',
+    'description',
+    'color',
+    'imageFileId',
+    'statusId',
+    'pinned',
+    'tags',
+    'leadOrganisation',
+    'leadValue',
+    'leadCurrency',
+    'leadProbability',
+    'leadDecisionDate',
+    'leadNextAction',
+    'leadNextActionDue',
+    'leadSource',
+    'projectStartDate',
+    'projectEndDate',
+  ],
+  persons: [
+    'notes',
+    'displayName',
+    'givenName',
+    'surname',
+    'email',
+    'jobTitle',
+    'department',
+    'companyName',
+    'phone',
+    'mobilePhone',
+    'isActive',
+  ],
   user_settings: ['value'],
+  assignments: ['role', 'sortOrder'],
+  item_links: [],
+  files: ['fileName'],
+  field_values: ['value'],
+  item_sections: ['sortOrder'],
+  saved_views: ['name', 'definition', 'isShared', 'sortOrder'],
+  milestones: [
+    'title',
+    'description',
+    'dueDate',
+    'status',
+    'completedAt',
+    'decision',
+    'decisionNote',
+    'decidedAt',
+    'decidedBy',
+    'onGoStatusId',
+    'onNoGoStatusId',
+    'color',
+    'sortOrder',
+  ],
+  dod_items: ['text', 'state', 'note', 'sortOrder'],
+  maps: ['name', 'description', 'settings', 'matrix', 'defaultView', 'preview'],
+  map_layers: ['name', 'sortOrder', 'isVisible', 'isLocked'],
+  map_elements: [
+    'layerId',
+    'z',
+    'x',
+    'y',
+    'width',
+    'height',
+    'text',
+    'points',
+    'startElementId',
+    'endElementId',
+    'style',
+    'config',
+  ],
 }
 
-const tableNames = ['items', 'item_shares', 'groups', 'persons', 'user_settings']
+/** Every synced table, in the server's order (parents first). */
+export const tableNames = [
+  'groups',
+  'persons',
+  'statuses',
+  'sections',
+  'field_definitions',
+  'project_templates',
+  'template_statuses',
+  'template_sections',
+  'template_field_defaults',
+  'template_milestones',
+  'assignment_roles',
+  'items',
+  'item_shares',
+  'assignments',
+  'item_links',
+  'files',
+  'field_values',
+  'item_sections',
+  'milestones',
+  'dod_items',
+  'saved_views',
+  'maps',
+  'map_shares',
+  'map_layers',
+  'map_elements',
+  'user_settings',
+]
+
+/** Read-only for clients: written by admin endpoints (data model §7). */
+const readOnly = new Set([
+  'groups',
+  'statuses',
+  'sections',
+  'field_definitions',
+  'project_templates',
+  'template_statuses',
+  'template_sections',
+  'template_field_defaults',
+  'template_milestones',
+  'assignment_roles',
+])
+
+/** Tables whose rows hang below an item by `itemId` (access, delete cascade). */
+const itemChildren = ['assignments', 'files', 'field_values', 'item_sections', 'milestones']
+
+/** Tables whose rows hang below a map by `mapId`. */
+const mapChildren = ['map_shares', 'map_layers', 'map_elements', 'files']
+
+/** The pairs that are unique where not deleted; a duplicate insert is merged into the existing row (docs/03 §11.5). */
+const samePair: Record<string, readonly string[]> = {
+  assignments: ['itemId', 'milestoneId', 'personId'],
+  item_links: ['fromItemId', 'toItemId', 'relation'],
+  item_sections: ['itemId', 'sectionId'],
+  item_shares: ['itemId', 'groupId'],
+  map_shares: ['mapId', 'groupId'],
+}
+
+/** The file transfer's chunk size (docs/03 §10.2). */
+export const chunkBytes = 4 * 1024 * 1024
+/** Files:MaxAttachmentBytes, Files:MaxImageBytes, Files:BlockedExtensions (docs/03 §10.1). */
+const maxAttachment = 25 * 1024 * 1024
+const maxImage = 2 * 1024 * 1024
+const blockedExtensions = ['exe', 'msi', 'dll', 'scr', 'com', 'bat', 'cmd', 'ps1', 'vbs', 'js', 'jar', 'hta', 'lnk']
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
@@ -75,8 +214,15 @@ export class FakeSyncServer {
   /** Delay of an HTTP answer in ms (the real one is a network round trip). */
   latency = 0
 
-  addUser(user: { id: string; name: string; groupIds?: string[]; isAdmin?: boolean }): User {
-    const full: User = { groupIds: [], isAdmin: false, accessEpoch: 1, ...user }
+  /** Chunked uploads in progress (`file_uploads`), by file id. */
+  readonly uploads = new Map<string, Uint8Array[]>()
+  /** The stored bytes of committed files. */
+  readonly fileBytes = new Map<string, { bytes: Uint8Array; type: string }>()
+  /** Every REST call of {@link fetch}: method and path. */
+  readonly calls: string[] = []
+
+  addUser(user: { id: string; name: string; groupIds?: string[]; isAdmin?: boolean; configManage?: boolean }): User {
+    const full: User = { groupIds: [], isAdmin: false, accessEpoch: 1, configManage: false, ...user }
     this.users.set(user.id, full)
     return full
   }
@@ -145,25 +291,55 @@ export class FakeSyncServer {
     return best
   }
 
-  private visible(user: User, table: string, row: ServerRow): boolean {
-    switch (table) {
-      case 'items':
-        return this.itemAccess(user, row) !== null
-      case 'item_shares': {
-        const item = this.table('items').get(row.itemId as string)
-        return !!item && this.itemAccess(user, item) !== null
-      }
-      case 'user_settings':
-        return row.userId === user.id
-      default:
-        return true
+  mapAccess(user: User, map: ServerRow): Access | null {
+    if (user.isAdmin || map.ownerUserId === user.id) return 'manage'
+    let best: Access | null = map.isTemplate === true ? 'read' : null
+    for (const share of this.table('map_shares').values()) {
+      if (share.mapId !== map.id || share.deleted || !user.groupIds.includes(share.groupId as string)) continue
+      const level = share.access as Access
+      if (!best || accessRank[level] > accessRank[best]) best = level
     }
+    return best
+  }
+
+  /** The item or map a row hangs below (its access decides), or null for a row of its own. */
+  private ownerOf(table: string, row: Row): { kind: 'item' | 'map'; row: ServerRow | undefined } | null {
+    if (table === 'items') return { kind: 'item', row: row as ServerRow }
+    if (table === 'maps') return { kind: 'map', row: row as ServerRow }
+    if (table === 'item_links') return { kind: 'item', row: this.table('items').get(row.fromItemId as string) }
+    if (table === 'dod_items' || (table === 'assignments' && row.milestoneId)) {
+      const milestone = this.table('milestones').get(row.milestoneId as string)
+      return { kind: 'item', row: milestone ? this.table('items').get(milestone.itemId as string) : undefined }
+    }
+    if (table === 'files' && row.mapId) return { kind: 'map', row: this.table('maps').get(row.mapId as string) }
+    if (table === 'item_shares' || itemChildren.includes(table))
+      return { kind: 'item', row: this.table('items').get(row.itemId as string) }
+    if (mapChildren.includes(table)) return { kind: 'map', row: this.table('maps').get(row.mapId as string) }
+    return null
+  }
+
+  /** The user's access to the item or map a row belongs to (`manage` for rows of their own kind). */
+  private accessTo(user: User, table: string, row: Row): Access | null {
+    const owner = this.ownerOf(table, row)
+    if (!owner) return null
+    if (!owner.row) return null
+    return owner.kind === 'item' ? this.itemAccess(user, owner.row) : this.mapAccess(user, owner.row)
+  }
+
+  private visible(user: User, table: string, row: ServerRow): boolean {
+    if (table === 'user_settings') return row.userId === user.id
+    if (table === 'saved_views') return row.ownerUserId === user.id || row.isShared === true
+    if (!this.ownerOf(table, row)) return true
+    return this.accessTo(user, table, row) !== null
   }
 
   private wireRow(user: User, table: string, row: ServerRow): Row {
     if (row.deleted) return { id: row.id, seq: row.seq, rev: row.rev, deleted: true }
     const out: Row = clone(row)
     if (table === 'items') out.access = this.itemAccess(user, row)
+    if (table === 'maps') out.access = this.mapAccess(user, row)
+    if (table === 'sections') out.canEdit = true
+    delete out.storagePath
     return out
   }
 
@@ -281,19 +457,20 @@ export class FakeSyncServer {
     }
   }
 
-  private canWrite(user: User, table: string, row: ServerRow, level: Access): boolean {
-    if (table === 'items') {
-      const access = this.itemAccess(user, row)
-      return !!access && accessRank[access] >= accessRank[level]
-    }
+  private canWrite(user: User, table: string, row: Row, level: Access): boolean {
     if (table === 'user_settings') return row.userId === user.id
-    return table === 'persons'
+    if (table === 'saved_views') return row.ownerUserId === user.id && (row.isShared !== true || user.configManage)
+    if (table === 'persons') return true
+    const access = this.accessTo(user, table, row)
+    // Children of an item or map are written (and deleted) with edit on it; the item or map itself as asked.
+    const needed: Access = table === 'items' || table === 'maps' ? level : 'edit'
+    return !!access && accessRank[access] >= accessRank[needed]
   }
 
   private apply(user: User, m: WireMutation): Stored {
     const rows = this.rows.get(m.table)
     if (!rows) return this.rejected(m, 'not_supported')
-    if (m.table === 'groups') return this.rejected(m, m.op === 'patch' ? 'not_patchable' : 'not_supported')
+    if (readOnly.has(m.table)) return this.rejected(m, m.op === 'patch' ? 'not_patchable' : 'not_supported')
     const existing = rows.get(m.id)
     if (m.op === 'insert') return this.insert(user, m, existing)
     // A row that doesn't exist and one the user may not see are the same answer: no current, the client drops it.
@@ -305,31 +482,64 @@ export class FakeSyncServer {
   private insert(user: User, m: WireMutation, existing: ServerRow | undefined): Stored {
     if (existing) return this.rejected(m, 'duplicate_id')
     const row: Row & { id: string } = { ...(m.row ?? {}), id: m.id }
-    if (m.table === 'items') {
-      // Computed per user: ignored as the server ignores unknown keys.
-      delete row.access
-      if (row.type !== 'note') return this.rejected(m, 'not_supported')
-      if (typeof row.title !== 'string' || !row.title.trim())
-        return this.rejected(m, 'validation_failed', null, { title: ['A title is needed.'] })
-      const number = (this.numbers.get('note') ?? 0) + 1
-      this.numbers.set('note', number)
-      const stored = this.write('items', { ...row, ownerUserId: user.id, number }, user.id)
-      if (!this.created.has(m.batch)) this.created.set(m.batch, new Set())
-      this.created.get(m.batch)!.add(m.id)
-      return this.accepted(m, stored)
-    }
-    if (m.table === 'item_shares') {
-      const item = this.table('items').get(row.itemId as string)
-      if (!item || item.deleted) return this.rejected(m, 'parent_missing')
-      if (item.ownerUserId !== user.id || !this.created.get(m.batch)?.has(item.id)) {
+    // Computed per user, or the server's own: ignored as the server ignores them.
+    if (m.table === 'items' || m.table === 'maps') delete row.access
+    delete row.storagePath
+    if (m.table === 'items') return this.insertItem(user, m, row)
+    if (m.table === 'item_shares' || m.table === 'map_shares') {
+      const parentTable = m.table === 'item_shares' ? 'items' : 'maps'
+      const parent = this.table(parentTable).get((row.itemId ?? row.mapId) as string)
+      if (!parent || parent.deleted) return this.rejected(m, 'parent_missing')
+      if (parent.ownerUserId !== user.id || !this.created.get(m.batch)?.has(parent.id)) {
         return this.rejected(m, 'missing_access')
       }
-      const duplicate = [...this.table('item_shares').values()].find(
-        (s) => !s.deleted && s.itemId === row.itemId && s.groupId === row.groupId,
-      )
-      // `id` stays the client's, `mergedInto` is the row it became.
-      if (duplicate) return this.accepted(m, duplicate, { id: m.id, mergedInto: duplicate.id })
-      return this.accepted(m, this.write('item_shares', row, user.id))
+      return this.insertPair(user, m, row)
+    }
+    if (m.table === 'maps') {
+      const stored = this.write('maps', { ...row, ownerUserId: user.id }, user.id)
+      this.remember(m.batch, m.id)
+      return this.accepted(m, stored)
+    }
+    if (m.table === 'saved_views') {
+      if (row.isShared === true && !user.configManage) return this.rejected(m, 'missing_right')
+      return this.accepted(m, this.write('saved_views', { ...row, ownerUserId: user.id }, user.id))
+    }
+    if (this.ownerOf(m.table, row)) {
+      const owner = this.ownerOf(m.table, row)!
+      if (!owner.row || owner.row.deleted) return this.rejected(m, 'parent_missing')
+      if (!this.canWrite(user, m.table, row, 'edit')) return this.rejected(m, 'missing_access')
+      if (m.table === 'item_links') {
+        const target = this.table('items').get(row.toItemId as string)
+        if (!target || target.deleted) return this.rejected(m, 'parent_missing')
+        if (!this.itemAccess(user, target)) return this.rejected(m, 'missing_access')
+      }
+      if (m.table === 'files') {
+        const name = String(row.fileName ?? '')
+        const parts = name.toLowerCase().split('.').slice(1)
+        if (parts.some((p) => blockedExtensions.includes(p)))
+          return this.rejected(m, 'validation_failed', null, { fileName: ['This file type is blocked.'] })
+        const image = row.purpose !== 'attachment' && String(row.contentType ?? '').startsWith('image/')
+        if (Number(row.sizeBytes) > (image ? maxImage : maxAttachment))
+          return this.rejected(m, 'validation_failed', null, { sizeBytes: ['Too large.'] })
+        return this.accepted(m, this.write('files', { ...row, status: 'pending' }, user.id))
+      }
+      if (m.table === 'field_values') {
+        const duplicate = [...this.table('field_values').values()].find(
+          (v) => !v.deleted && v.itemId === row.itemId && v.fieldId === row.fieldId,
+        )
+        // A concurrent insert of the same pair becomes a patch of the existing row (docs/03 §11.5).
+        if (duplicate) {
+          const patched = this.patch(
+            user,
+            { ...m, op: 'patch', id: duplicate.id, changes: { value: { old: null, new: row.value } } },
+            duplicate,
+          )
+          if (patched.result.status !== 'accepted') return patched
+          return { ...patched, result: { ...patched.result, id: m.id, mergedInto: duplicate.id } }
+        }
+      }
+      if (samePair[m.table]) return this.insertPair(user, m, row)
+      return this.accepted(m, this.write(m.table, row, user.id))
     }
     if (m.table === 'user_settings') {
       const duplicate = [...this.table('user_settings').values()].find(
@@ -347,6 +557,61 @@ export class FakeSyncServer {
     return this.accepted(m, this.write(m.table, { ...row, source: 'manual' }, user.id))
   }
 
+  private remember(batch: string, id: string) {
+    if (!this.created.has(batch)) this.created.set(batch, new Set())
+    this.created.get(batch)!.add(id)
+  }
+
+  /**
+   * A new item of any type (phase 3): a title, a status of its type for ideas, leads and projects, the per-type number,
+   * the owner; an origin (conversion) must be readable, and the origin's `convertedToItemId` is set in the same
+   * transaction (docs/03 §12.8: the client never patches it).
+   */
+  private insertItem(user: User, m: WireMutation, row: Row & { id: string }): Stored {
+    const type = row.type as string
+    if (!['note', 'idea', 'lead', 'project'].includes(type)) return this.rejected(m, 'validation_failed')
+    if (typeof row.title !== 'string' || !row.title.trim() || row.title.length > 300)
+      return this.rejected(m, 'validation_failed', null, { title: ['A title is needed.'] })
+    const status = row.statusId ? this.table('statuses').get(row.statusId as string) : undefined
+    if (type === 'note' ? !!row.statusId : !status || status.itemType !== type)
+      return this.rejected(m, 'validation_failed', null, { statusId: ['A status of the type is required.'] })
+    if (type !== 'note' && row.pinned === true)
+      return this.rejected(m, 'validation_failed', null, { pinned: ['Only notes are pinned.'] })
+    let origin: ServerRow | undefined
+    if (row.originItemId) {
+      origin = this.table('items').get(row.originItemId as string)
+      if (type !== 'project' || !origin || origin.deleted) return this.rejected(m, 'parent_missing')
+      if (!this.itemAccess(user, origin)) return this.rejected(m, 'missing_access')
+    }
+    const number = (this.numbers.get(type) ?? 0) + 1
+    this.numbers.set(type, number)
+    const stored = this.write(
+      'items',
+      {
+        ...row,
+        ownerUserId: user.id,
+        number,
+        statusChangedAt: row.statusId ? this.now() : null,
+        convertedToItemId: null,
+      },
+      user.id,
+    )
+    if (origin) this.write('items', { ...origin, convertedToItemId: row.id }, user.id)
+    this.remember(m.batch, m.id)
+    return this.accepted(m, stored)
+  }
+
+  /** An insert of a unique pair: a duplicate is merged into the existing row (`mergedInto`, docs/03 §11.5). */
+  private insertPair(user: User, m: WireMutation, row: Row & { id: string }): Stored {
+    const keys = samePair[m.table] ?? []
+    const duplicate = [...this.table(m.table).values()].find(
+      (r) => !r.deleted && keys.every((k) => (r[k] ?? null) === (row[k] ?? null)),
+    )
+    // `id` stays the client's, `mergedInto` is the row it became.
+    if (duplicate) return this.accepted(m, duplicate, { id: m.id, mergedInto: duplicate.id })
+    return this.accepted(m, this.write(m.table, row, user.id))
+  }
+
   private patch(user: User, m: WireMutation, row: ServerRow): Stored {
     if (row.deleted) return this.conflict(m, row, 'deleted_by_other', this.currentRow(user, m.table, row))
     const allowed = patchable[m.table] ?? []
@@ -355,6 +620,17 @@ export class FakeSyncServer {
       return this.rejected(m, 'not_patchable', this.currentRow(user, m.table, row))
     if (!this.canWrite(user, m.table, row, 'edit'))
       return this.rejected(m, 'missing_access', this.currentRow(user, m.table, row))
+    if (m.table === 'persons' && row.source === 'microsoft' && Object.keys(changes).some((k) => k !== 'notes'))
+      return this.rejected(m, 'not_patchable', this.currentRow(user, m.table, row))
+    if (m.table === 'saved_views' && changes.isShared?.new === true && !user.configManage)
+      return this.rejected(m, 'missing_right', this.currentRow(user, m.table, row))
+    if (m.table === 'items' && changes.statusId) {
+      const status = this.table('statuses').get(changes.statusId.new as string)
+      if (!status || status.itemType !== row.type)
+        return this.rejected(m, 'validation_failed', this.currentRow(user, m.table, row), {
+          statusId: ['A status of the type is required.'],
+        })
+    }
     const apply: Record<string, { old: unknown; new: unknown }> = {}
     const conflicts: FieldConflict[] = []
     for (const [key, change] of Object.entries(changes)) {
@@ -376,7 +652,10 @@ export class FakeSyncServer {
     }
     let stored = row
     if (Object.keys(apply).length) {
-      stored = this.write(m.table, applyPatch(row, apply) as ServerRow, user.id)
+      const next = applyPatch(row, apply) as ServerRow
+      // The server ages the status (data model §7.1).
+      if (m.table === 'items' && apply.statusId) next.statusChangedAt = this.now()
+      stored = this.write(m.table, next, user.id)
       for (const key of Object.keys(apply)) {
         this.lastChange.set(`${m.table}:${row.id}:${key}`, { by: user.name, at: stored.updatedAt as string })
       }
@@ -405,7 +684,7 @@ export class FakeSyncServer {
 
   private remove(user: User, m: WireMutation, row: ServerRow): Stored {
     if (row.deleted) return this.accepted(m, row)
-    if (m.table === 'item_shares' || m.table === 'user_settings') return this.rejected(m, 'not_supported')
+    if (['item_shares', 'map_shares', 'user_settings'].includes(m.table)) return this.rejected(m, 'not_supported')
     if (!this.canWrite(user, m.table, row, 'manage'))
       return this.rejected(m, 'missing_access', this.currentRow(user, m.table, row))
     if (!m.force && m.baseRev !== null && row.rev !== m.baseRev) {
@@ -416,7 +695,30 @@ export class FakeSyncServer {
     if (m.table === 'items') {
       this.batches.set(batch, { rootKind: 'item', rootId: row.id, at: this.now(), by: user.id, restored: false })
     }
-    return this.accepted(m, this.write(m.table, { ...row, deleted: true, deleteBatchId: batch }, user.id))
+    const deleted = this.write(m.table, { ...row, deleted: true, deleteBatchId: batch }, user.id)
+    this.cascade(m.table, row.id, batch, user.id)
+    return this.accepted(m, deleted)
+  }
+
+  /** What is deleted with a row, in its batch (docs/01 §4.9): an item's children and the links to it. */
+  private cascade(table: string, id: string, batch: string, by: string) {
+    const gone = (child: string, test: (r: ServerRow) => boolean) => {
+      for (const r of [...this.table(child).values()]) {
+        if (r.deleted || !test(r)) continue
+        this.write(child, { ...r, deleted: true, deleteBatchId: batch }, by)
+        this.cascade(child, r.id, batch, by)
+      }
+    }
+    if (table === 'items') {
+      for (const child of itemChildren) gone(child, (r) => r.itemId === id)
+      gone('item_links', (r) => r.fromItemId === id || r.toItemId === id)
+      gone('map_elements', (r) => r.itemId === id)
+    } else if (table === 'milestones') {
+      gone('dod_items', (r) => r.milestoneId === id)
+      gone('assignments', (r) => r.milestoneId === id)
+    } else if (table === 'maps') {
+      for (const child of ['map_layers', 'map_elements', 'files']) gone(child, (r) => r.mapId === id)
+    }
   }
 
   // --- REST -----------------------------------------------------------------------------------------------------
@@ -504,6 +806,195 @@ export class FakeSyncServer {
     batch.restored = true
     this.publish()
     return { batchId, restored, skipped: 0 }
+  }
+
+  // --- files (docs/03 §10.2) --------------------------------------------------------------------------------------
+
+  /** The files row a transfer is for, if the user may write it (edit on its item or map). */
+  private fileFor(userId: string, id: string, level: 'read' | 'edit'): ServerRow {
+    const user = this.user(userId)
+    const row = this.table('files').get(id)
+    if (!row || row.deleted || !this.visible(user, 'files', row)) throw new ApiError(404, { code: 'not_found' })
+    if (level === 'edit' && !this.canWrite(user, 'files', row, 'edit'))
+      throw new ApiError(403, { code: 'missing_access' })
+    return row
+  }
+
+  /** `PUT /api/v1/files/{id}/chunks/{n}`: chunk 0 starts over; the next chunk must follow the received bytes. */
+  putChunk(userId: string, id: string, index: number, bytes: Uint8Array): { received: number } {
+    if (!this.online) throw new ApiError(0, undefined)
+    const row = this.fileFor(userId, id, 'edit')
+    if (row.status === 'available') throw new ApiError(409, { code: 'already_available' })
+    if (bytes.length > chunkBytes) throw new ApiError(413, { code: 'chunk_too_large' })
+    if (index === 0) this.uploads.set(id, [])
+    const parts = this.uploads.get(id)
+    if (!parts || parts.length !== index) throw new ApiError(409, { code: 'upload_out_of_order' })
+    parts.push(bytes.slice())
+    const received = parts.reduce((n, p) => n + p.length, 0)
+    const limit =
+      row.purpose !== 'attachment' && String(row.contentType).startsWith('image/') ? maxImage : maxAttachment
+    if (received > limit) {
+      this.uploads.delete(id)
+      throw new ApiError(413, { code: 'too_large', detail: 'The file is too large.' })
+    }
+    return { received }
+  }
+
+  /** `POST /api/v1/files/{id}/commit`: size and sha256 checked, the bytes kept, the row `available` (a new seq). */
+  async commit(userId: string, id: string, body: { sha256: string; size: number }): Promise<Row> {
+    if (!this.online) throw new ApiError(0, undefined)
+    const row = this.fileFor(userId, id, 'edit')
+    const parts = this.uploads.get(id)
+    if (!parts) throw new ApiError(409, { code: 'no_upload' })
+    const bytes = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
+    let at = 0
+    for (const p of parts) {
+      bytes.set(p, at)
+      at += p.length
+    }
+    const hash = await sha256Hex(bytes)
+    if (bytes.length !== body.size || hash !== body.sha256 || hash !== row.sha256) {
+      this.uploads.delete(id)
+      throw new ApiError(422, { code: 'checksum_mismatch', detail: 'The file arrived damaged.' })
+    }
+    this.uploads.delete(id)
+    this.fileBytes.set(id, { bytes, type: String(row.contentType) })
+    const stored = this.write('files', { ...row, status: 'available', storagePath: `2026/11/${id}` }, userId)
+    this.publish()
+    return this.wireRow(this.user(userId), 'files', stored)
+  }
+
+  /** `GET /api/v1/files/{id}/{name}`. */
+  download(userId: string, id: string): { bytes: Uint8Array; type: string } {
+    if (!this.online) throw new ApiError(0, undefined)
+    this.fileFor(userId, id, 'read')
+    const stored = this.fileBytes.get(id)
+    if (!stored) throw new ApiError(404, { code: 'not_found' })
+    return stored
+  }
+
+  // --- statuses (Configuration: Manage) ---------------------------------------------------------------------------
+
+  private configUser(userId: string): User {
+    const user = this.user(userId)
+    if (!user.configManage && !user.isAdmin) throw new ApiError(403, { code: 'missing_right' })
+    return user
+  }
+
+  /** Exactly one default per type: setting one clears the others. */
+  private onlyDefault(itemType: string, id: string, by: string) {
+    for (const s of this.table('statuses').values()) {
+      if (s.itemType === itemType && s.id !== id && s.isDefault && !s.deleted)
+        this.write('statuses', { ...s, isDefault: false }, by)
+    }
+  }
+
+  createStatus(userId: string, body: Row): Row {
+    this.configUser(userId)
+    const name = String(body.name ?? '').trim()
+    if (!name) throw new ApiError(400, { code: 'validation_failed', errors: { name: ['A name is needed.'] } })
+    const same = [...this.table('statuses').values()].filter((s) => s.itemType === body.itemType && !s.deleted)
+    if (same.some((s) => !s.isArchived && String(s.name).toLowerCase() === name.toLowerCase()))
+      throw new ApiError(409, { code: 'duplicate_name', errors: { name: ['This name is taken.'] } })
+    const id = uuidv7()
+    const stored = this.write(
+      'statuses',
+      { ...body, id, name, isArchived: false, sortOrder: Math.max(0, ...same.map((s) => Number(s.sortOrder))) + 10 },
+      userId,
+    )
+    if (body.isDefault) this.onlyDefault(String(body.itemType), id, userId)
+    this.publish()
+    return clone(stored)
+  }
+
+  updateStatus(userId: string, id: string, body: Row): Row {
+    this.configUser(userId)
+    const row = this.table('statuses').get(id)
+    if (!row) throw new ApiError(404, { code: 'not_found' })
+    const stored = this.write('statuses', { ...row, ...body, id, itemType: row.itemType }, userId)
+    if (body.isDefault) this.onlyDefault(String(row.itemType), id, userId)
+    this.publish()
+    return clone(stored)
+  }
+
+  archiveStatus(userId: string, id: string, archived: boolean) {
+    this.configUser(userId)
+    const row = this.table('statuses').get(id)
+    if (!row) throw new ApiError(404, { code: 'not_found' })
+    if (archived && row.isDefault)
+      throw new ApiError(409, { code: 'default_status', detail: 'The default status can’t be archived.' })
+    this.write('statuses', { ...row, isArchived: archived }, userId)
+    this.publish()
+  }
+
+  orderStatuses(userId: string, itemType: string, ids: string[]) {
+    this.configUser(userId)
+    ids.forEach((id, i) => {
+      const row = this.table('statuses').get(id)
+      if (row && row.itemType === itemType && row.sortOrder !== (i + 1) * 10)
+        this.write('statuses', { ...row, sortOrder: (i + 1) * 10 }, userId)
+    })
+    this.publish()
+  }
+
+  /**
+   * The REST endpoints above as a `fetch` for a user (tests stub `globalThis.fetch` with it): files and statuses.
+   * Anything else answers 404. Offline: the fetch fails as a real one does (TypeError).
+   */
+  fetchFor(userId: string): typeof fetch {
+    return async (input, init) => {
+      const request = input instanceof Request ? input : new Request(String(input), init)
+      const url = new URL(request.url)
+      const method = request.method.toUpperCase()
+      this.calls.push(`${method} ${url.pathname}`)
+      if (this.latency) await new Promise((r) => setTimeout(r, this.latency))
+      if (!this.online) throw new TypeError('Failed to fetch')
+      const json = (status: number, body?: unknown) =>
+        new Response(body === undefined ? null : JSON.stringify(body), {
+          status,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      try {
+        const path = url.pathname
+        let m: RegExpExecArray | null
+        if ((m = /^\/api\/v1\/files\/([^/]+)\/chunks\/(\d+)$/.exec(path)) && method === 'PUT') {
+          const bytes = new Uint8Array(await request.arrayBuffer())
+          return json(200, this.putChunk(userId, m[1]!, Number(m[2]), bytes))
+        }
+        if ((m = /^\/api\/v1\/files\/([^/]+)\/commit$/.exec(path)) && method === 'POST') {
+          return json(200, await this.commit(userId, m[1]!, (await request.json()) as { sha256: string; size: number }))
+        }
+        if ((m = /^\/api\/v1\/files\/([^/]+)\/[^/]+$/.exec(path)) && method === 'GET') {
+          const file = this.download(userId, m[1]!)
+          return new Response(file.bytes.slice().buffer, {
+            status: 200,
+            headers: { 'Content-Type': file.type, ETag: `"${String(this.table('files').get(m[1]!)?.sha256)}"` },
+          })
+        }
+        if (path === '/api/v1/config/statuses' && method === 'POST') {
+          return json(201, this.createStatus(userId, (await request.json()) as Row))
+        }
+        if (path === '/api/v1/config/statuses/order' && method === 'PUT') {
+          const body = (await request.json()) as { itemType: string; ids: string[] }
+          this.orderStatuses(userId, body.itemType, body.ids)
+          return json(204)
+        }
+        if ((m = /^\/api\/v1\/config\/statuses\/([^/]+)\/(archive|unarchive)$/.exec(path)) && method === 'POST') {
+          this.archiveStatus(userId, m[1]!, m[2] === 'archive')
+          return json(204)
+        }
+        if ((m = /^\/api\/v1\/config\/statuses\/([^/]+)$/.exec(path)) && method === 'PUT') {
+          return json(200, this.updateStatus(userId, m[1]!, (await request.json()) as Row))
+        }
+        return json(404, { code: 'not_found' })
+      } catch (e) {
+        if (e instanceof ApiError) {
+          if (e.status === 0) throw new TypeError('Failed to fetch')
+          return json(e.status, { ...e.body, code: e.code })
+        }
+        throw e
+      }
+    }
   }
 
   /** Group membership changed (an admin): the access epoch goes up; live connections get `reset`, then close 4409. */

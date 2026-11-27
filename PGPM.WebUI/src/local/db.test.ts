@@ -1,3 +1,4 @@
+import Dexie from 'dexie'
 import { afterEach, describe, expect, it } from 'vitest'
 import { memoryDb } from '@/test/memoryDb'
 import { withoutLocal } from './db'
@@ -5,8 +6,37 @@ import { childrenOf, dbVersion, localStores, rootTable, schemaVersions, tableDef
 import { isUuidV7, uuidv7 } from './uuid'
 
 describe('the table registry (data model §14)', () => {
-  it('has the phase 2 tables with their wire names, parents indexed in the child', () => {
-    expect(tables.map((t) => t.name)).toEqual(['items', 'item_shares', 'groups', 'persons', 'user_settings'])
+  it('has every synced table of the data model with its wire name, parents indexed in the child', () => {
+    expect(tables.map((t) => t.name).sort()).toEqual(
+      [
+        'items',
+        'item_shares',
+        'groups',
+        'persons',
+        'user_settings',
+        'statuses',
+        'assignments',
+        'item_links',
+        'files',
+        'sections',
+        'field_definitions',
+        'field_values',
+        'item_sections',
+        'project_templates',
+        'template_statuses',
+        'template_sections',
+        'template_field_defaults',
+        'template_milestones',
+        'saved_views',
+        'assignment_roles',
+        'milestones',
+        'dod_items',
+        'maps',
+        'map_shares',
+        'map_layers',
+        'map_elements',
+      ].sort(),
+    )
     for (const table of tables) {
       expect(table.name).toMatch(/^[a-z_]+$/)
       for (const parent of table.parents) {
@@ -15,17 +45,33 @@ describe('the table registry (data model §14)', () => {
       }
       expect(table.since).toBeLessThanOrEqual(dbVersion)
     }
-    expect(childrenOf('items')).toEqual([{ table: 'item_shares', key: 'itemId' }])
+    expect(childrenOf('items').map((c) => c.table)).toEqual([
+      'item_shares',
+      'assignments',
+      'item_links',
+      'files',
+      'field_values',
+      'item_sections',
+      'milestones',
+    ])
+    expect(childrenOf('milestones').map((c) => c.table)).toEqual(['assignments', 'dod_items'])
     expect(rootTable('item')?.name).toBe('items')
-    expect(tableDef('groups')?.writes).toBe('none')
+    expect(rootTable('map')?.name).toBe('maps')
+    for (const ro of ['groups', 'statuses', 'sections', 'field_definitions', 'project_templates', 'assignment_roles']) {
+      expect(tableDef(ro)?.writes, ro).toBe('none')
+    }
     expect(tableDef('item_shares')?.writes).toBe('insert')
+    expect(tableDef('map_shares')?.writes).toBe('insert')
+    expect(tableDef('files')?.blobs).toBe(true)
   })
 
-  it('declares every store once per version, the local stores in version 1', () => {
+  it('declares every store once per version, the local stores in version 1, each version with its indexes', () => {
     const versions = schemaVersions()
     expect(versions.map((v) => v.version)).toEqual(Array.from({ length: dbVersion }, (_, i) => i + 1))
     expect(versions[0]!.stores).toMatchObject(localStores)
     expect(versions[0]!.stores.items).toBe('id, type, statusId, ownerUserId')
+    expect(versions[1]!.stores.items).toBe('id, type, statusId, ownerUserId, originItemId')
+    expect(versions[1]!.stores.files).toBe('id, itemId, mapId')
     const declared = new Set(versions.flatMap((v) => Object.keys(v.stores)))
     for (const table of tables) expect(declared).toContain(table.name)
   })
@@ -62,6 +108,19 @@ describe('the local database', () => {
       clientChangedAt: new Date().toISOString(),
     })
     expect(await db.outbox.where('[table+id]').equals(['items', 'x']).count()).toBe(1)
+  })
+
+  it('upgrades a version 1 database: the rows stay, the new index and tables are there', async () => {
+    const name = `upgrade-${uuidv7()}`
+    const { indexedDB, IDBKeyRange } = await import('fake-indexeddb')
+    const old = new Dexie(name, { indexedDB, IDBKeyRange })
+    old.version(1).stores(schemaVersions()[0]!.stores)
+    await old.table('items').put({ id: 'p1', type: 'project', title: 'Old', originItemId: 'i1' })
+    old.close()
+    const db = memoryDb(name)
+    dbs.push(db)
+    expect(await db.synced('items').where('originItemId').equals('i1').primaryKeys()).toEqual(['p1'])
+    expect(await db.synced('files').count()).toBe(0)
   })
 
   it('strips the bookkeeping from a row', () => {

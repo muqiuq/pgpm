@@ -23,7 +23,8 @@ const props = withDefaults(
   defineProps<{
     value: Value
     save: (value: Value) => Promise<unknown>
-    type?: 'text' | 'textarea' | 'number' | 'bool' | 'enum' | 'custom'
+    /** `date`: an ISO date (`2026-11-27`) with the browser's date input; empty is null. */
+    type?: 'text' | 'textarea' | 'number' | 'date' | 'bool' | 'enum' | 'custom'
     options?: { label: string; value: string | number }[]
     /** The JSON name of the field in validation errors. */
     field?: string
@@ -32,8 +33,10 @@ const props = withDefaults(
     /** Read-only for this role: shown, not editable. */
     readonly?: boolean
     mono?: boolean
+    /** How the value is shown (a date, an amount with its currency); default the value as text. */
+    format?: ((value: Value) => string) | null
   }>(),
-  { type: 'text', options: () => [], field: undefined, placeholder: '–', readonly: false, mono: false },
+  { type: 'text', options: () => [], field: undefined, placeholder: '–', readonly: false, mono: false, format: null },
 )
 
 const emit = defineEmits<{ edit: [] }>()
@@ -68,7 +71,8 @@ const display = computed(() => {
   if (props.type === 'enum') {
     return props.options.find((o) => o.value === shown.value)?.label ?? String(shown.value ?? '')
   }
-  return shown.value === null || shown.value === '' ? '' : String(shown.value)
+  if (shown.value === null || shown.value === '') return ''
+  return props.format ? props.format(shown.value) : String(shown.value)
 })
 
 const saveHint = computed(() => (props.type === 'textarea' ? 'Save (Ctrl+Enter)' : 'Save (Enter)'))
@@ -128,6 +132,8 @@ function draftValue(): Value {
       const trimmed = text.value.trim()
       return trimmed === '' ? null : Number(trimmed)
     }
+    case 'date':
+      return text.value.trim() || null
     default:
       return text.value
   }
@@ -228,7 +234,7 @@ function onKey(event: KeyboardEvent) {
         size="small"
         class="editor"
         :class="{ mono }"
-        :type="type === 'number' ? 'number' : 'text'"
+        :type="type === 'number' || type === 'date' ? type : 'text'"
         :disabled="saving"
         :aria-label="label"
       />
