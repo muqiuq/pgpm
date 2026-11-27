@@ -31,6 +31,14 @@ public sealed class MapsTable() : SyncTable<MapEntity>("maps")
         "name", "description", "settings", "settings.*", "matrix", "matrix.*", "defaultView", "defaultView.*", "isTemplate", "preview",
     };
 
+    /// <summary>
+    /// The preview is drawn by whoever leaves the map last (docs/03 §13.7): two devices writing one at once is no conflict
+    /// to decide, and it isn't History.
+    /// </summary>
+    public override IReadOnlySet<string> LastWriterWins { get; } = new HashSet<string>(StringComparer.Ordinal) { "preview" };
+
+    public override IReadOnlySet<string> NotInHistory { get; } = new HashSet<string>(StringComparer.Ordinal) { "preview" };
+
     public const int MaxPreviewBytes = 256 * 1024;
 
     protected override MapEntity Create() => new();

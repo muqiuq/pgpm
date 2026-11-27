@@ -3,6 +3,9 @@ import { jsonEqual } from './outbox'
 import type { Repo } from './repo'
 import type { ItemType, SavedViewRow } from './rows'
 
+/** The lists that have saved views: the item types and the gate decisions (data model §7.8). */
+export type ViewType = ItemType | 'gate'
+
 /**
  * Saved list views (docs/01 §4.3, data model §7.8): the current search, filters, sort and columns under a name –
  * personal, or shared with everybody (*Configuration: Manage*). The device has its own views and the shared ones; they
@@ -17,7 +20,7 @@ export interface ViewUser {
 }
 
 /** The views of a list type: own and shared, the shared ones first, then by order and name. */
-export function viewsFor(rows: readonly SavedViewRow[], type: ItemType, userId: string | null): SavedViewRow[] {
+export function viewsFor(rows: readonly SavedViewRow[], type: ViewType, userId: string | null): SavedViewRow[] {
   return rows
     .filter((v) => !v.deleted && v.itemType === type && (v.isShared || v.ownerUserId === userId))
     .sort(
@@ -60,7 +63,7 @@ export function sameDefinition(view: ViewState, current: ViewState): boolean {
 
 export async function createView(
   repo: Repo,
-  input: { type: ItemType; name: string; state: ViewState; shared: boolean },
+  input: { type: ViewType; name: string; state: ViewState; shared: boolean },
   user: ViewUser,
   existing: readonly SavedViewRow[],
 ): Promise<SavedViewRow> {

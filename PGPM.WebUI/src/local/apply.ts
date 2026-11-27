@@ -27,6 +27,25 @@ export function titleOf(row: Row | null | undefined): string | null {
   return null
 }
 
+/**
+ * What the conflict dialog and the toasts name a row by: its own title, else what it belongs to – a field value is
+ * "<item> · <field>", a DoD item its text, other rows of an item the item's title.
+ */
+export async function describeRow(db: PgpmDb, table: string, row: Row | null | undefined): Promise<string | null> {
+  if (!row) return null
+  const titled = async (t: string, id: unknown) =>
+    typeof id === 'string' ? titleOf((await db.synced(t).get(id)) as Row | undefined) : null
+  if (table === 'field_values') {
+    const field = typeof row.fieldId === 'string' ? await db.synced('field_definitions').get(row.fieldId) : undefined
+    const label = typeof field?.label === 'string' ? field.label : null
+    return [await titled('items', row.itemId), label].filter(Boolean).join(' · ') || null
+  }
+  const own = titleOf(row)
+  if (own) return own
+  if (typeof row.text === 'string' && row.text.trim()) return row.text.trim().slice(0, 120)
+  return (await titled('items', row.itemId)) ?? (await titled('milestones', row.milestoneId))
+}
+
 async function pendingOf(db: PgpmDb, table: string, id: string): Promise<OutboxEntry[]> {
   return db.outbox.where('[table+id]').equals([table, id]).sortBy('seq')
 }
@@ -212,8 +231,8 @@ export async function applyResults(
     const base: Row | null = stored ? (meta!.pending ? (meta!.base ?? null) : withoutLocal(stored)) : null
     const rev = typeof result.rev === 'number' ? result.rev : null
     const newer = rev !== null && (meta?.serverRev === null || meta?.serverRev === undefined || rev > meta.serverRev)
-    // Named as the server has it (the dialog shows both versions anyway).
-    const title = titleOf(base ?? stored)
+    // Named as the server has it (the dialog shows both versions anyway); looked up only for what is reported.
+    const title = () => describeRow(db, table, base ?? stored)
 
     if (result.status === 'accepted') {
       summary.accepted++
@@ -244,7 +263,7 @@ export async function applyResults(
       summary.rejected.push({
         table,
         id,
-        title,
+        title: await title(),
         code: result.code ?? 'rejected',
         message: result.message ?? 'The server refused the change.',
       })
@@ -277,7 +296,7 @@ export async function applyResults(
         fields,
         baseRev: typeof current?.rev === 'number' ? current.rev : rev,
         createdAt: now,
-        title,
+        title: await title(),
         deleteBatchId: (current?.deleteBatchId as string | undefined) ?? null,
         op: entry.op,
         row: entry.op === 'insert' ? entry.row : null,
@@ -301,7 +320,7 @@ export async function applyResults(
         fields: {},
         baseRev: typeof current?.rev === 'number' ? current.rev : rev,
         createdAt: now,
-        title: titleOf(current) ?? title,
+        title: (await describeRow(db, table, current)) ?? (await title()),
         op: entry.op,
       })
       if (current) await settle(db, table, { ...current, id }, typeof current.rev === 'number' ? current.rev : null)
@@ -344,7 +363,7 @@ export async function applyResults(
         fields,
         baseRev: theirRev,
         createdAt: now,
-        title,
+        title: await title(),
         op: entry.op,
       })
     } else {

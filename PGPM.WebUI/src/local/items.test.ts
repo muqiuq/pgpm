@@ -253,7 +253,15 @@ describe('idea / lead → project conversion (docs/01 §8, docs/03 §12.8)', () 
     const result = await convertToProject(ana.repo, idea.id, statuses)
     const project = result.project
     expect(result.sourceStatus?.name).toBe('Selected')
-    expect(result.copied).toEqual({ shares: 1, assignments: 1, links: 1, files: 2 })
+    expect(result.copied).toEqual({
+      shares: 1,
+      assignments: 1,
+      links: 1,
+      files: 2,
+      sections: 0,
+      values: 0,
+      milestones: 0,
+    })
     // The cover and the stored attachment as files of the project (new rows, the same bytes).
     const copies = (await ana.db.synced('files').where('itemId').equals(project.id).toArray()) as unknown as FileRow[]
     expect(copies.map((f) => [f.purpose, f.sha256.slice(0, 2), f.status]).sort()).toEqual([

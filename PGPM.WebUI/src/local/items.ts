@@ -1,6 +1,8 @@
 import type { ShareSpec } from '@/api/sync'
 import { keyBetween } from '@/domain/fractional'
+import { loadCatalogue, loadTemplates } from './catalogue'
 import { withoutLocal, type PgpmDb } from './db'
+import { fieldValuesOf, itemSectionsOf } from './fields'
 import { inTransaction, type Repo, type RepoTransaction } from './repo'
 import {
   allowsAccess,
@@ -14,6 +16,7 @@ import {
   type StatusRow,
   type Stored,
 } from './rows'
+import { setUpItem, templateStatus } from './templates'
 
 /**
  * The item rules the views share (docs/01 §4–§10), on the local data: statuses and their aging, creating an item with
@@ -233,10 +236,14 @@ export interface BulkResult {
   skipped: number
 }
 
-/** The same change on several items, one batch; items without *edit* access are skipped. */
+/**
+ * The same change on several items, one batch; items without *edit* access are skipped, so are projects whose template
+ * doesn't allow the status (the server would refuse it).
+ */
 export async function bulkPatch(repo: Repo, ids: readonly string[], values: Partial<ItemRow>): Promise<BulkResult> {
   return repo.transaction(async (tx) => {
     const result: BulkResult = { changed: 0, skipped: 0 }
+    const templates = values.statusId ? await loadTemplates(tx.db) : null
     for (const id of ids) {
       const item = (await tx.db.synced('items').get(id)) as Stored<ItemRow> | undefined
       if (!item || item.deleted || !allowsAccess(item.access, 'edit')) {
@@ -245,6 +252,11 @@ export async function bulkPatch(repo: Repo, ids: readonly string[], values: Part
       }
       // A status of another type (a mixed selection) doesn't fit.
       if (values.statusId !== undefined && item.type === 'note') {
+        result.skipped++
+        continue
+      }
+      const allowed = item.projectTemplateId ? templates?.byId.get(item.projectTemplateId)?.statusIds : undefined
+      if (values.statusId && allowed?.length && !allowed.includes(values.statusId)) {
         result.skipped++
         continue
       }
@@ -299,17 +311,27 @@ export async function bulkRemove(repo: Repo, ids: readonly string[]): Promise<Bu
 export interface ConversionOptions {
   /** The project's title; default the source's. */
   title?: string
-  /** The project's status; default the project default. */
+  /** The project's status; default the template's (or the project default). */
   statusId?: string | null
-  /** Phase 4: the template, its sections and field values. */
+  /** The template applied to the project (its sections, field defaults, milestones); null: blank. */
   templateId?: string | null
+  /** The project's start (anchors the template's milestones; default today with a template). */
+  startDate?: string | null
 }
 
 export interface Conversion {
   project: Stored<ItemRow>
   /** The source's new status (*Selected*, *Won*), if one was found. */
   sourceStatus: StatusRow | null
-  copied: { shares: number; assignments: number; links: number; files: number }
+  copied: {
+    shares: number
+    assignments: number
+    links: number
+    files: number
+    sections: number
+    values: number
+    milestones: number
+  }
 }
 
 /** The project the item was converted into: the server's `convertedToItemId`, or a local project naming it as origin. */
@@ -399,8 +421,11 @@ async function copyEach(
  * title, description and colour, its cover image and attachments (copies sharing the stored bytes, {@link copyFiles}),
  * its shares, its assignments and its outgoing links, `originItemId` = the source (the server sets the source's
  * `convertedToItemId`), a `related` link from the project to the source, and the source moved to *Selected* / *Won*
- * where such a status exists. Needs *edit* on the source (its status changes). The cover is set by a patch after the
- * copy's insert: the server takes only an image file of the project itself as its `imageFileId`.
+ * where such a status exists. With a template the project gets its sections, defaults and milestones
+ * (local/templates.ts); either way the source's sections that apply to projects come along, and the values of every
+ * field that applies to projects (same field = same value, docs/01 §6.2) – except in sections the user may not edit (the
+ * server would refuse those values). Needs *edit* on the source (its status changes). The cover is set by a patch after
+ * the copy's insert: the server takes only an image file of the project itself as its `imageFileId`.
  */
 export async function convertToProject(
   repo: Repo,
@@ -415,8 +440,14 @@ export async function convertToProject(
     if (source.type !== 'idea' && source.type !== 'lead') throw new Error('Only ideas and leads are converted.')
     if (!allowsAccess(source.access, 'edit')) throw new Error('You can read this item, not convert it.')
     if (await convertedProject(db, source)) throw new Error('It was converted already.')
-    const statusId = options.statusId ?? defaultStatus(statuses, 'project')?.id
+    const catalogue = await loadCatalogue(db)
+    const templates = await loadTemplates(db)
+    const template = options.templateId ? (templates.byId.get(options.templateId) ?? null) : null
+    if (options.templateId && !template) throw new Error('The template is not on this device (any more).')
+    const statusId =
+      options.statusId ?? templateStatus(statuses, template)?.id ?? defaultStatus(statuses, 'project')?.id
     if (!statusId) throw new Error('There is no project status yet.')
+    const startDate = options.startDate || (template ? today() : null)
 
     const shares = (
       (await db.synced('item_shares').where('itemId').equals(sourceId).toArray()) as unknown as ItemShareRow[]
@@ -430,11 +461,23 @@ export async function convertToProject(
         description: source.description,
         color: source.color,
         originItemId: source.id,
-        projectTemplateId: options.templateId ?? null,
+        projectTemplateId: template?.template.id ?? null,
+        ...(startDate ? { projectStartDate: startDate } : {}),
       },
     })
     const copies = await copyFiles(tx, source, project.id)
     if (copies.cover) await tx.patch('items', project.id, { imageFileId: copies.cover })
+
+    // The sections and values that apply to projects (ideas only; leads have no sections).
+    const appliesToProjects = (sectionId: string | undefined) =>
+      !!sectionId && !!catalogue.sectionById.get(sectionId)?.appliesTo.includes('project')
+    const sectionIds = (await itemSectionsOf(db, sourceId)).map((s) => s.sectionId).filter(appliesToProjects)
+    const values = new Map<string, unknown>()
+    for (const v of await fieldValuesOf(db, sourceId)) {
+      const field = catalogue.fieldById.get(v.fieldId)
+      if (field && field.type !== 'score' && appliesToProjects(field.sectionId)) values.set(v.fieldId, v.value)
+    }
+    const setup = await setUpItem(tx, project, catalogue, { template, startDate, carried: { sectionIds, values } })
 
     let assignments = 0
     for (const a of await assignmentsOf(db, sourceId)) {
@@ -456,7 +499,15 @@ export async function convertToProject(
     return {
       project: withoutLocal(stored) as Stored<ItemRow>,
       sourceStatus: next,
-      copied: { shares: shares.length, assignments, links, files: copies.files },
+      copied: {
+        shares: shares.length,
+        assignments,
+        links,
+        files: copies.files,
+        sections: setup.sections,
+        values: setup.values,
+        milestones: setup.milestones,
+      },
     }
   })
 }

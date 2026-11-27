@@ -238,3 +238,58 @@ export function pngWithMetadata(): Buffer {
     chunk('IEND', Buffer.alloc(0)),
   ])
 }
+
+/** A row of the sync's wire format (camelCase, as the devices store them). */
+export type WireRow = Record<string, unknown> & { id: string }
+
+/** Every row the user's device would get: `POST /api/v1/sync` from 0 until nothing more is pending, by table. */
+export async function pullAll(api: Api): Promise<Record<string, WireRow[]>> {
+  const tables: Record<string, WireRow[]> = {}
+  let since = 0
+  for (;;) {
+    const answer = await api.call<{ cursor: number; more: boolean; changes: Record<string, WireRow[]> }>(
+      'POST',
+      '/api/v1/sync',
+      { clientId: crypto.randomUUID(), appVersion: 'e2e', since, limit: 1000, mutations: [], resolved: [], pull: true },
+    )
+    for (const [table, rows] of Object.entries(answer.changes)) (tables[table] ??= []).push(...rows)
+    since = answer.cursor
+    if (!answer.more) return tables
+  }
+}
+
+/** Inserts rows as one batch of the user's device (shares only go in their item's batch); answers the result codes. */
+export async function pushInserts(api: Api, rows: { table: string; row: WireRow }[]): Promise<string[]> {
+  const batch = crypto.randomUUID()
+  const answer = await api.call<{ results: { status: string; code?: string }[] }>('POST', '/api/v1/sync', {
+    clientId: crypto.randomUUID(),
+    appVersion: 'e2e',
+    since: 0,
+    limit: 1,
+    pull: false,
+    resolved: [],
+    mutations: rows.map(({ table, row }) => ({
+      mutationId: crypto.randomUUID(),
+      batch,
+      table,
+      id: row.id,
+      op: 'insert',
+      baseRev: null,
+      changes: null,
+      row,
+      clientChangedAt: new Date().toISOString(),
+    })),
+  })
+  return answer.results.map((r) => r.code ?? r.status)
+}
+
+/** A UUID v7 (the server takes no other id for a new row). */
+export function uuidv7(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  const ms = Date.now()
+  for (let i = 0; i < 6; i++) bytes[i] = Math.floor(ms / 2 ** (8 * (5 - i))) % 256
+  bytes[6] = (bytes[6]! & 0x0f) | 0x70
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80
+  const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}

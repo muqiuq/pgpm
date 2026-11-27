@@ -20,7 +20,7 @@ test('the shell shows the PGPM menu, folded administration and the placeholders'
   await page.goto('/')
   await expect(page).toHaveURL(/\/maps$/)
   await expect(page.getByRole('heading', { level: 1, name: 'Maps' })).toBeVisible()
-  await expect(page.getByText('Coming in phase 5')).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Maps' }).getByRole('link', { name: 'Templates' })).toBeVisible()
   await expect(page).toHaveTitle('Maps · PGPM')
 
   const nav = page.getByRole('navigation', { name: 'Navigation' }).or(page.locator('nav.drawer-nav'))
@@ -47,10 +47,10 @@ test('the shell shows the PGPM menu, folded administration and the placeholders'
     await expect(nav.getByRole('link', { name: entry, exact: true })).toBeVisible()
   }
 
-  await nav.getByRole('link', { name: 'Project Templates', exact: true }).click()
-  await expect(page).toHaveURL(/\/admin\/templates$/)
-  await expect(page.getByRole('heading', { level: 1, name: 'Project Templates' })).toBeVisible()
-  await expect(page.getByText('Coming in phase 4')).toBeVisible()
+  await nav.getByRole('link', { name: 'System', exact: true }).click()
+  await expect(page).toHaveURL(/\/admin\/system$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'System' })).toBeVisible()
+  await expect(page.getByText('Coming in phase 7')).toBeVisible()
 
   // The app bar: the global search (a combobox, phase 3), sync indicator, theme toggle, the drawer's footer with the
   // server's version.

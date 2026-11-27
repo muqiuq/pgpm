@@ -119,6 +119,14 @@ public sealed class ConfigEndpointTests
         Assert.IsNull(member.Row("sections", id));
         await viewer.SyncAllAsync();
         Assert.IsNotNull(viewer.Row("sections", id));
+        // The groups aren't synced: the admin reads them from the list and the single section.
+        var listed = (await SendAsync(m, HttpMethod.Get, "/api/v1/config/sections")).Arr("list").Single(s => s.Str("id") == id.ToString())!;
+        Assert.AreEqual("view", listed.Arr("access").Single().Str("level"));
+        Assert.AreEqual(GroupEntity.ViewersId.ToString(), listed.Arr("access").Single().Str("groupId"));
+        var single = await SendAsync(m, HttpMethod.Get, $"/api/v1/config/sections/{id}");
+        Assert.AreEqual(listed.ToJsonString(), single.ToJsonString());
+        await SendAsync(m, HttpMethod.Get, $"/api/v1/config/sections/{Guid.NewGuid()}", expected: HttpStatusCode.NotFound);
+        await SendAsync(app.Client(TestUsers.Member), HttpMethod.Get, "/api/v1/config/sections", expected: HttpStatusCode.Forbidden);
         await SendAsync(m, HttpMethod.Post, "/api/v1/config/sections",
             new JsonObject { ["name"] = "Bad", ["appliesTo"] = new JsonArray("lead") }, HttpStatusCode.BadRequest);
         await SendAsync(m, HttpMethod.Post, "/api/v1/config/sections",

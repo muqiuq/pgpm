@@ -113,6 +113,103 @@ public sealed class ConfigContractTests
         Assert.AreEqual(HttpStatusCode.Forbidden, forbidden.StatusCode);
     }
 
+    /// <summary>
+    /// Sections, fields and templates as the admin pages (SectionDialog, FieldDialog, TemplateEditView) use them: a section
+    /// with a group's edit access – read back through <c>GET /api/v1/config/sections/{id}</c>, since <c>section_groups</c> isn't
+    /// synced –, a rating field in it, a project template with an allowed status, the section, a default and a gate with its
+    /// Definition of Done; each answer's shape and the rows the devices get (<c>canEdit</c>, the template's parts). Archived at
+    /// the end.
+    /// </summary>
+    [TestMethod]
+    public async Task SectionsFieldsAndTemplatesAreManagedOverRestAndArriveThroughTheSync()
+    {
+        using var admin = await FirstAdmin.SignInAsync();
+        var stamp = Guid.NewGuid().ToString("N")[..8];
+        var groupId = await GroupAsync(admin, $"Contract board {stamp}", new() { ["Ideas"] = "Create" });
+
+        var section = await admin.CallAsync(HttpMethod.Post, "/api/v1/config/sections", new
+        {
+            name = $"Contract section {stamp}", description = (string?)null, appliesTo = new[] { "idea", "project" }, defaultFor = Array.Empty<string>(),
+            collapsedByDefault = true, access = new[] { new { groupId, level = "edit" } },
+        });
+        var sectionId = section.GetProperty("id").GetString()!;
+        var read = await admin.CallAsync(HttpMethod.Get, $"/api/v1/config/sections/{sectionId}");
+        var access = read.GetProperty("access").EnumerateArray().Single();
+        Assert.AreEqual(groupId, access.GetProperty("groupId").GetString());
+        Assert.AreEqual($"Contract board {stamp}", access.GetProperty("groupName").GetString());
+        Assert.AreEqual("edit", access.GetProperty("level").GetString());
+        Assert.IsTrue(read.GetProperty("collapsedByDefault").GetBoolean());
+        var listed = await admin.CallAsync(HttpMethod.Get, "/api/v1/config/sections");
+        Assert.IsTrue(listed.EnumerateArray().Any(s => s.GetProperty("id").GetString() == sectionId));
+
+        var key = $"contract_{stamp}";
+        var field = await admin.CallAsync(HttpMethod.Post, "/api/v1/config/fields", new
+        {
+            sectionId, key, label = "Contract rating", helpText = (string?)null, type = "rating",
+            config = new { min = 0, max = 5, allowNa = true }, required = false, defaultValue = 3,
+        });
+        var fieldId = field.GetProperty("id").GetString()!;
+        Assert.AreEqual("rating", field.GetProperty("type").GetString());
+        Assert.AreEqual(key, field.GetProperty("key").GetString());
+        Assert.AreEqual(3, field.GetProperty("defaultValue").GetInt32());
+        using (var duplicate = await admin.SendAsync(HttpMethod.Post, "/api/v1/config/fields",
+            new { sectionId, key, label = "Again", type = "rating", config = new { max = 5 } }))
+        {
+            Assert.AreEqual(HttpStatusCode.Conflict, duplicate.StatusCode);
+            Assert.AreEqual("duplicate_key", await CodeAsync(duplicate));
+        }
+
+        var device = new AdminDevice(admin);
+        var first = await device.SyncAsync();
+        var projectStatus = Rows(first, "statuses").First(s => s.GetProperty("itemType").GetString() == "project"
+            && !s.GetProperty("isArchived").GetBoolean() && !s.GetProperty("deleted").GetBoolean()).GetProperty("id").GetString()!;
+        var template = await admin.CallAsync(HttpMethod.Post, "/api/v1/config/templates", new
+        {
+            name = $"Contract template {stamp}", description = (string?)null, color = "#2563eb", icon = "pi-bolt", defaultStatusId = projectStatus,
+            statusIds = new[] { projectStatus }, sectionIds = new[] { sectionId }, fieldDefaults = new[] { new { fieldId, value = 4 } },
+            defaultShares = new[] { new { groupId, access = "edit" } },
+            milestones = new[]
+            {
+                new
+                {
+                    id = (string?)null, kind = "gate", title = "G0", description = (string?)null, offsetDays = (int?)14, dod = new[] { "Sponsor named" },
+                    onGoStatusId = (string?)projectStatus, onNoGoStatusId = (string?)null,
+                },
+            },
+        });
+        var templateId = template.GetProperty("id").GetString()!;
+        Assert.AreEqual(projectStatus, template.GetProperty("statusIds")[0].GetString());
+        Assert.AreEqual(4, template.GetProperty("fieldDefaults")[0].GetProperty("value").GetInt32());
+        var gate = template.GetProperty("milestones")[0];
+        Assert.AreEqual("gate", gate.GetProperty("kind").GetString());
+        Assert.AreEqual("Sponsor named", gate.GetProperty("dod")[0].GetString());
+        Assert.IsFalse(string.IsNullOrEmpty(gate.GetProperty("sortOrder").GetString()));
+
+        // The devices: the section – edited by its group's members only –, the field, the template and its parts.
+        var otherGroup = await GroupAsync(admin, $"Contract others {stamp}", new() { ["Ideas"] = "Create" });
+        using (var member = await UserAsync(admin, $"bo-{stamp}", $"Bo {stamp}", groupId))
+        using (var other = await UserAsync(admin, $"oz-{stamp}", $"Oz {stamp}", otherGroup))
+        {
+            bool CanEdit(JsonElement answer) =>
+                Rows(answer, "sections").Single(s => s.GetProperty("id").GetString() == sectionId).GetProperty("canEdit").GetBoolean();
+            Assert.IsTrue(CanEdit(await new Device(member).SyncAsync()));
+            Assert.IsFalse(CanEdit(await new Device(other).SyncAsync()));
+        }
+        var changes = await device.SyncAsync();
+        Assert.AreEqual(key, Rows(first, "field_definitions").Single(f => f.GetProperty("id").GetString() == fieldId).GetProperty("key").GetString());
+        Assert.IsTrue(Rows(changes, "project_templates").Any(t => t.GetProperty("id").GetString() == templateId));
+        Assert.IsTrue(Rows(changes, "template_statuses").Any(t => t.GetProperty("templateId").GetString() == templateId));
+        Assert.IsTrue(Rows(changes, "template_sections").Any(t => t.GetProperty("templateId").GetString() == templateId));
+        Assert.IsTrue(Rows(changes, "template_field_defaults").Any(t => t.GetProperty("templateId").GetString() == templateId));
+        Assert.AreEqual("G0", Rows(changes, "template_milestones").Single(t => t.GetProperty("templateId").GetString() == templateId)
+            .GetProperty("title").GetString());
+
+        // Archived again (a template first: a section a template uses keeps applying to projects).
+        Assert.IsTrue((await admin.CallAsync(HttpMethod.Post, $"/api/v1/config/templates/{templateId}/archive")).GetProperty("isArchived").GetBoolean());
+        Assert.IsTrue((await admin.CallAsync(HttpMethod.Post, $"/api/v1/config/fields/{fieldId}/archive")).GetProperty("isArchived").GetBoolean());
+        Assert.IsTrue((await admin.CallAsync(HttpMethod.Post, $"/api/v1/config/sections/{sectionId}/archive")).GetProperty("isArchived").GetBoolean());
+    }
+
     /// <summary>The admin's device: the sync with the admin's session.</summary>
     private sealed class AdminDevice(ApiSession admin)
     {

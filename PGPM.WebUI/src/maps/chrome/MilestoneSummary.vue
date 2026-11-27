@@ -3,13 +3,20 @@ import { computed } from 'vue'
 import { DECISION_LABELS, dodProgress, formatDay, itemKey, milestoneOverdue, MILESTONE_STATUS_LABELS } from '../cards'
 import type { DodItemRow, ItemRow, MilestoneRow } from '../types'
 
-/** A milestone or gate in the side panel (doc 01 §11, §12.5): details, the Definition of Done, the gate decision. */
-const props = defineProps<{
-  milestone: MilestoneRow
-  project: ItemRow | null
-  dod: readonly DodItemRow[]
-  now: number
-}>()
+/**
+ * A milestone or gate in the side panel (doc 01 §11, §12.5): details, the Definition of Done, the gate decision. Without
+ * `showDod` the checklist is left to the host's `#milestone-panel` (which edits it).
+ */
+const props = withDefaults(
+  defineProps<{
+    milestone: MilestoneRow
+    project: ItemRow | null
+    dod: readonly DodItemRow[]
+    now: number
+    showDod?: boolean
+  }>(),
+  { showDod: true },
+)
 
 const progress = computed(() => dodProgress(props.dod))
 const overdue = computed(() => milestoneOverdue(props.milestone, props.now))
@@ -42,7 +49,7 @@ const STATE_ICONS: Record<DodItemRow['state'], string> = {
       </template>
     </dl>
   </section>
-  <section>
+  <section v-if="showDod">
     <h3>
       Definition of Done <span v-if="dod.length" class="count">{{ progress.done }} / {{ progress.total }}</span>
     </h3>

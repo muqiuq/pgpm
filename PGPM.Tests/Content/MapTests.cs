@@ -154,6 +154,41 @@ public sealed class MapTests
     }
 
     [TestMethod]
+    public async Task ThePreviewIsTheLastWritersAndNoHistory()
+    {
+        var team = await GroupAsync(app, "previews");
+        var (ana, ben) = (await UserAsync(app, "previewana", team), await UserAsync(app, "previewben", team));
+        var (anaClient, benClient) = (new SyncClient(app.ClientFor(ana, Rights)), new SyncClient(app.ClientFor(ben, Rights)));
+        var (map, layer) = (Ids.New(), Ids.New());
+        await anaClient.SyncAllAsync([Insert("maps", map, Map("Previewed")), Insert("map_layers", layer, Layer(map, "Base"))]);
+        using (var shared = await anaClient.Http.PutJsonAsync($"/api/v1/maps/{map}/shares",
+            new JsonArray(new JsonObject { ["groupId"] = team.ToString(), ["access"] = "edit" })))
+        {
+            Assert.AreEqual(HttpStatusCode.OK, shared.StatusCode);
+        }
+        await benClient.SyncAllAsync();
+        var (first, second) = (Convert.ToBase64String([1, 2, 3]), Convert.ToBase64String([4, 5, 6]));
+        // Both left the map at once: each patch's old is the null both had seen – no conflict, the later one stays.
+        Assert.AreEqual("accepted", Codes(await anaClient.SyncAllAsync([Patch("maps", map, 1, ("preview", null, first), ("name", "Previewed", "Renamed"))]))[0]);
+        var answer = await benClient.SyncAllAsync([Patch("maps", map, 1, ("preview", null, second))]);
+        Assert.AreEqual("accepted", Codes(answer)[0], answer.ToJsonString());
+        Assert.AreEqual(0, answer.Arr("conflicts").Count);
+        await anaClient.SyncAllAsync();
+        Assert.AreEqual(second, anaClient.Row("maps", map).Str("preview"));
+        // Too big is refused; the History has the rename, not the pictures.
+        var big = Convert.ToBase64String(new byte[256 * 1024 + 1]);
+        Assert.AreEqual("validation_failed", Codes(await benClient.SyncAllAsync([Patch("maps", map, 3, ("preview", second, big))]))[0]);
+        await using var db = app.NewDb();
+        var history = await db.ChangeLog.Where(c => c.Entity == "maps" && c.EntityId == map).Select(c => c.Changes).ToListAsync();
+        Assert.IsTrue(history.Any(c => c.Contains("Renamed")), string.Join("\n", history));
+        Assert.IsFalse(history.Any(c => c.Contains("\"preview\"")), string.Join("\n", history));
+        // isTemplate is patched with Configuration: Manage only.
+        Assert.AreEqual("missing_right", Codes(await anaClient.SyncAllAsync([Patch("maps", map, 3, ("isTemplate", false, true))]))[0]);
+        var manager = new SyncClient(app.ClientFor(ana, Rights + ",Configuration:Manage"));
+        Assert.AreEqual("accepted", Codes(await manager.SyncAllAsync([Patch("maps", map, 3, ("isTemplate", false, true))]))[0]);
+    }
+
+    [TestMethod]
     public async Task TemplatesReachEverybodyAndDeletedMapsAreInTheTrash()
     {
         var designer = await UserAsync(app, "designer");

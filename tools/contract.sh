@@ -30,7 +30,8 @@ remove_stack() {
 remove_stack
 trap '[[ "$KEEP" == "1" ]] || remove_stack' EXIT
 
-(umask 077 && printf '%s\n' '# tools/contract.sh' >"$ENV_FILE")
+# The tests sign in more users from one address than the 10 a minute a client may try (Auth:LoginRateLimit:PermitLimit).
+(umask 077 && printf '%s\n' '# tools/contract.sh' 'Auth__LoginRateLimit__PermitLimit=1000' >"$ENV_FILE")
 log="$(mktemp "$PWD/.tmpcheck/contract.XXXXXX")"
 echo "Starting ${NAME} on port ${PORT}…"
 ./start.sh >"$log" 2>&1 || { cat "$log" >&2; exit 1; }

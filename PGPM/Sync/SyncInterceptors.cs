@@ -222,7 +222,8 @@ public sealed class ChangeLogInterceptor : SaveChangesInterceptor
             {
                 continue;
             }
-            var columns = table.Columns(db).Where(c => c.Key != "id" && !SyncedEntity.WireColumns.Contains(c.Key) && !table.Hidden.Contains(c.Key));
+            var columns = table.Columns(db).Where(c =>
+                c.Key != "id" && !SyncedEntity.WireColumns.Contains(c.Key) && !table.Hidden.Contains(c.Key) && !table.NotInHistory.Contains(c.Key));
             string action;
             var changes = new JsonArray();
             if (entry.State == EntityState.Added)

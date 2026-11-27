@@ -45,12 +45,13 @@ watch(open, () => {
 })
 
 function report(result: BulkResult, done: string) {
+  const why =
+    open.value === 'status' && props.type === 'project'
+      ? 'no access, or the project’s template doesn’t allow the status'
+      : 'no access, or nothing to change'
   if (result.changed)
-    notify.success(
-      `${done}: ${result.changed}`,
-      result.skipped ? `${result.skipped} not changed (no access, or nothing to change).` : undefined,
-    )
-  else notify.info('Nothing changed', `${result.skipped} not changed (no access, or nothing to change).`)
+    notify.success(`${done}: ${result.changed}`, result.skipped ? `${result.skipped} not changed (${why}).` : undefined)
+  else notify.info('Nothing changed', `${result.skipped} not changed (${why}).`)
 }
 
 async function run(action: () => Promise<BulkResult>, done: string) {

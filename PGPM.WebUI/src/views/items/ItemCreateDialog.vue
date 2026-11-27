@@ -7,20 +7,31 @@ import Select from 'primevue/select'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { ShareSpec } from '@/api/sync'
+import TemplatePicker from '@/components/items/TemplatePicker.vue'
 import ShareEditor from '@/components/share/ShareEditor.vue'
 import { useNotify } from '@/composables/useNotify'
 import { itemTypes } from '@/domain/itemTypes'
-import { createItem, defaultStatus, selectableStatuses, titleError } from '@/local/items'
+import { useTemplates } from '@/local/catalogue'
+import { defaultStatus, selectableStatuses, titleError, today } from '@/local/items'
 import { useGroups, useStatuses } from '@/local/lookups'
 import { repo } from '@/local/repo'
 import type { ItemType } from '@/local/rows'
+import {
+  allowedStatuses,
+  createConfiguredItem,
+  selectableTemplates,
+  templateShares,
+  templateStatus,
+} from '@/local/templates'
 import { useSession } from '@/stores/session'
 
 /**
- * *New note / idea / lead / project* (docs/01 §4.4): a title, the status (ideas, leads, projects: the type's default
- * preselected) and *Share with*, preselected with all groups of the creator at *edit* (docs/01 §18.2). Projects: blank
- * for now – the template picker comes with phase 4 (slot `#template`). Created locally – the item and its shares in one
- * outbox batch, so it works offline – then the item's page opens.
+ * *New note / idea / lead / project* (docs/01 §4.4, §10.2): a title, the status (ideas, leads, projects: the type's
+ * default preselected) and *Share with*, preselected with all groups of the creator at *edit* (docs/01 §18.2). Projects
+ * pick a template (or *Blank project*): its allowed statuses and default status, its default shares and – for its
+ * milestones – the start date (today). Created locally in one outbox batch – the item, its shares, its sections and
+ * field defaults (ideas: the sections *default for ideas*), a template's milestones and gates – so it works offline; then
+ * the item's page opens.
  */
 const props = defineProps<{ type: ItemType }>()
 const visible = defineModel<boolean>('visible', { default: false })
@@ -29,23 +40,40 @@ const session = useSession()
 const notify = useNotify()
 const groups = useGroups()
 const statuses = useStatuses()
+const { templates } = useTemplates()
 
 const info = computed(() => itemTypes[props.type])
 const title = ref('')
 const shares = ref<ShareSpec[]>([])
 const statusId = ref<string | null>(null)
+const templateId = ref<string | null>(null)
+const startDate = ref<string>(today())
 const error = ref<string | null>(null)
 const saving = ref(false)
 const formId = computed(() => `new-${props.type}`)
 
-const defaults = computed<ShareSpec[]>(() =>
-  groups.value.filter((g) => session.groupIds.includes(g.id)).map((g) => ({ groupId: g.id, access: 'edit' })),
+const pickable = computed(() =>
+  props.type === 'project' ? selectableTemplates([...templates.value.byId.values()]) : [],
 )
-const options = computed(() => (info.value.hasStatus ? selectableStatuses(statuses.all.value, props.type) : []))
-const preselected = computed(() =>
-  info.value.hasStatus ? (defaultStatus(statuses.all.value, props.type)?.id ?? null) : null,
-)
+const template = computed(() => (templateId.value ? (templates.value.byId.get(templateId.value) ?? null) : null))
+const groupIds = computed(() => new Set(groups.value.map((g) => g.id)))
+const defaults = computed<ShareSpec[]>(() => {
+  const fromTemplate = templateShares(template.value, groupIds.value)
+  if (fromTemplate.length) return fromTemplate
+  return groups.value.filter((g) => session.groupIds.includes(g.id)).map((g) => ({ groupId: g.id, access: 'edit' }))
+})
+const options = computed(() => {
+  if (!info.value.hasStatus) return []
+  if (props.type === 'project') return allowedStatuses(statuses.all.value, template.value)
+  return selectableStatuses(statuses.all.value, props.type)
+})
+const preselected = computed(() => {
+  if (!info.value.hasStatus) return null
+  if (props.type === 'project') return templateStatus(statuses.all.value, template.value)?.id ?? null
+  return defaultStatus(statuses.all.value, props.type)?.id ?? null
+})
 const noStatus = computed(() => info.value.hasStatus && statuses.loaded.value && !options.value.length)
+const hasMilestones = computed(() => !!template.value?.milestones.length)
 
 watch(
   visible,
@@ -53,17 +81,21 @@ watch(
     if (!open) return
     title.value = ''
     error.value = null
+    templateId.value = null
+    startDate.value = today()
     shares.value = defaults.value
     statusId.value = preselected.value
   },
   { immediate: true },
 )
-// The groups and statuses arrive with the first sync: preselect them then, unless changed meanwhile.
+// The groups and statuses arrive with the first sync, a template changes both: preselect them then, unless changed.
 watch(defaults, (next, before) => {
   if (visible.value && JSON.stringify(shares.value) === JSON.stringify(before ?? [])) shares.value = next
 })
 watch(preselected, (next, before) => {
-  if (visible.value && (statusId.value === null || statusId.value === before)) statusId.value = next
+  if (!visible.value) return
+  const stillAllowed = options.value.some((s) => s.id === statusId.value)
+  if (statusId.value === null || statusId.value === before || !stillAllowed) statusId.value = next
 })
 
 async function create() {
@@ -73,7 +105,14 @@ async function create() {
   saving.value = true
   try {
     const item = await repo.transaction((tx) =>
-      createItem(tx, { type: props.type, title: title.value, statusId: statusId.value, shares: shares.value }),
+      createConfiguredItem(tx, {
+        type: props.type,
+        title: title.value,
+        statusId: statusId.value,
+        shares: shares.value,
+        templateId: props.type === 'project' ? templateId.value : null,
+        startDate: props.type === 'project' && startDate.value ? startDate.value : null,
+      }),
     )
     visible.value = false
     await router.push({ name: info.value.page, params: { id: item.id } })
@@ -92,6 +131,15 @@ async function create() {
         <label :for="`${formId}-title`">Title</label>
         <InputText :id="`${formId}-title`" v-model="title" autofocus maxlength="300" :invalid="!!error" />
         <small v-if="error" class="field-error">{{ error }}</small>
+      </div>
+      <div v-if="type === 'project'" class="field">
+        <label :for="`${formId}-template`">Template</label>
+        <TemplatePicker v-model="templateId" :templates="pickable" :input-id="`${formId}-template`" />
+      </div>
+      <div v-if="type === 'project'" class="field">
+        <label :for="`${formId}-start`">Start date</label>
+        <InputText :id="`${formId}-start`" v-model="startDate" type="date" />
+        <small v-if="hasMilestones" class="field-hint">The template’s milestones are due relative to it.</small>
       </div>
       <div v-if="info.hasStatus" class="field">
         <label :id="`${formId}-status-label`" :for="`${formId}-status`">Status</label>
@@ -114,12 +162,6 @@ async function create() {
             </span>
           </template>
         </Select>
-      </div>
-      <div v-if="type === 'project'" class="field">
-        <span class="label">Template</span>
-        <slot name="template">
-          <small class="muted">A blank project. Templates come with phase 4.</small>
-        </slot>
       </div>
       <div class="field">
         <span class="label">Share with</span>

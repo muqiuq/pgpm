@@ -678,6 +678,26 @@
       }
     },
     "/api/v1/config/sections": {
+      "get": {
+        "tags": [
+          "ConfigSections"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SectionItem"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "ConfigSections"
@@ -717,6 +737,34 @@
       }
     },
     "/api/v1/config/sections/{id}": {
+      "get": {
+        "tags": [
+          "ConfigSections"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionItem"
+                }
+              }
+            }
+          }
+        }
+      },
       "put": {
         "tags": [
           "ConfigSections"

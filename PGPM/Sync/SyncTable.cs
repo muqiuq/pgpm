@@ -92,6 +92,15 @@ public abstract class SyncTable(string name, Type entityType)
     /// <summary>The patch whitelist: wire keys, and <c>key.*</c> for the members of a jsonb column.</summary>
     public virtual IReadOnlySet<string> Patchable => None;
 
+    /// <summary>
+    /// Patchable keys without the conflict check: the latest patch wins whatever <c>old</c> says (derived values such as a
+    /// map's preview, which nobody decides between).
+    /// </summary>
+    public virtual IReadOnlySet<string> LastWriterWins => None;
+
+    /// <summary>Wire keys left out of the History (derived values; a change of nothing else is not recorded).</summary>
+    public virtual IReadOnlySet<string> NotInHistory => None;
+
     public virtual IReadOnlyList<ParentRef> Parents => [];
 
     private static readonly ConcurrentDictionary<Type, IReadOnlyList<WireColumn>> ColumnCache = new();
@@ -486,7 +495,7 @@ public abstract class SyncTable<T>(string name) : SyncTable(name, typeof(T)) whe
                 continue;
             }
             var seen = path is null ? WireJson.Normalize(oldNode, column) : oldNode;
-            if (!WireJson.Same(current, seen))
+            if (!LastWriterWins.Contains(key) && !WireJson.Same(current, seen))
             {
                 conflicts.Add((key, current));
                 continue;

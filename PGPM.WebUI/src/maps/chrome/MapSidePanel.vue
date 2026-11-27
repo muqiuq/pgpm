@@ -30,6 +30,8 @@ const props = defineProps<{
   editor: MapEditor
   quadrants: ReadonlyMap<string, string> | null
   now: number
+  /** The host's `#milestone-panel` edits the Definition of Done: the summary leaves it out. */
+  milestoneEditor?: boolean
 }>()
 const emit = defineEmits<{ close: []; select: [ids: string[]]; openItem: [itemId: string] }>()
 
@@ -324,6 +326,7 @@ const spacings = [
               :project="model.itemsById.value.get(milestone.item_id) ?? null"
               :dod="model.dodByMilestone.value.get(milestone.id) ?? []"
               :now="now"
+              :show-dod="!milestoneEditor"
             />
           </template>
           <template v-else-if="content?.kind === 'map' && map">

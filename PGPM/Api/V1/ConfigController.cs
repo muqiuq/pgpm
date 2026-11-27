@@ -50,6 +50,13 @@ public sealed class ConfigStatusesController(ConfigService config) : V1Controlle
 [RequireRight(Area.Configuration, Level.Manage)]
 public sealed class ConfigSectionsController(ConfigService config) : V1ControllerBase
 {
+    /// <summary>Every section (archived ones too) in order, with the groups that may view or edit it.</summary>
+    [HttpGet]
+    public async Task<IReadOnlyList<SectionItem>> List(CancellationToken ct) => await config.ListSectionsAsync(ct);
+
+    [HttpGet("{id:guid}")]
+    public async Task<SectionItem> Get(Guid id, CancellationToken ct) => await config.GetSectionAsync(id, ct);
+
     [HttpPost]
     [Audit(AuditEvents.ConfigCreated)]
     public async Task<SectionItem> Create(SectionRequest request, CancellationToken ct) =>

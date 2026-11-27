@@ -343,6 +343,25 @@ public sealed partial class ConfigService(PgpmDbContext db, SyncWriter writer, S
         return await db.UserGroups.Where(m => changed.Contains(m.GroupId)).Select(m => m.UserId).Distinct().ToListAsync(ct);
     }
 
+    /// <summary>
+    /// The sections with their groups (<c>section_groups</c> isn't synced, so the admin's section dialog reads them here).
+    /// </summary>
+    public async Task<IReadOnlyList<SectionItem>> ListSectionsAsync(CancellationToken ct)
+    {
+        var sections = await db.Sections.AsNoTracking().Where(s => !s.Deleted).OrderBy(s => s.SortOrder).ThenBy(s => s.Name).ToListAsync(ct);
+        var access = (await db.SectionGroups.AsNoTracking()
+                .Join(db.Groups, g => g.GroupId, x => x.Id, (g, x) => new { g.SectionId, g.GroupId, x.Name, g.Access }).ToListAsync(ct))
+            .ToLookup(a => a.SectionId);
+        return sections.Select(s => new SectionItem(s.Id, s.Name, s.Description, s.AppliesTo, s.DefaultFor, s.SortOrder, s.CollapsedByDefault,
+            s.IsArchived, access[s.Id].OrderBy(a => a.Name).Select(a => new SectionAccessItem(a.GroupId, a.Name, a.Access)).ToList(), s.Rev)).ToList();
+    }
+
+    public async Task<SectionItem> GetSectionAsync(Guid id, CancellationToken ct)
+    {
+        var section = await db.Sections.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id && !s.Deleted, ct) ?? throw ApiException.NotFound("Section");
+        return await SectionItemAsync(section, ct);
+    }
+
     private async Task<SectionItem> SectionItemAsync(SectionEntity s, CancellationToken ct)
     {
         var access = await db.SectionGroups.AsNoTracking().Where(g => g.SectionId == s.Id)

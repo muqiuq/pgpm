@@ -40,6 +40,11 @@ const rows = useLive(
     for (const c of props.conflicts) {
       const row = await db.synced(c.table).get(c.rowId)
       if (row) found.set(`${c.table}:${c.rowId}`, row)
+      // The map a group of conflicts belongs to, for its heading.
+      if (c.mapId && !found.has(`maps:${c.mapId}`)) {
+        const map = await db.synced('maps').get(c.mapId)
+        if (map) found.set(`maps:${c.mapId}`, map)
+      }
     }
     return found
   },
@@ -60,13 +65,27 @@ function rowOf(c: ConflictEntry) {
   return rows.value.value.get(`${c.table}:${c.rowId}`)
 }
 
+function mapName(mapId: string): string {
+  const name = rows.value.value.get(`maps:${mapId}`)?.name
+  return typeof name === 'string' && name ? `Map ${name}` : 'Map'
+}
+
 function describe(c: ConflictEntry) {
   const row = rowOf(c)
   if (c.table === 'items' && row) {
     const item = row as unknown as ItemRow
     return { icon: itemTypes[item.type]?.icon ?? 'pi pi-file', key: itemKey(item), type: item.type }
   }
-  const icons: Record<string, string> = { persons: 'pi pi-address-book', user_settings: 'pi pi-cog' }
+  const icons: Record<string, string> = {
+    persons: 'pi pi-address-book',
+    user_settings: 'pi pi-cog',
+    field_values: 'pi pi-list-check',
+    milestones: 'pi pi-flag',
+    dod_items: 'pi pi-check-square',
+    maps: 'pi pi-map',
+    map_elements: 'pi pi-clone',
+    map_layers: 'pi pi-clone',
+  }
   return { icon: icons[c.table] ?? 'pi pi-file', key: null, type: undefined }
 }
 
@@ -142,7 +161,7 @@ async function forAll(side: 'mine' | 'theirs') {
     <EmptyState v-if="!conflicts.length" icon="pi pi-check-circle" title="No conflicts." />
     <template v-else>
       <section v-for="group in groups" :key="group.mapId" class="group">
-        <h3 v-if="group.mapId" class="group-title">Map</h3>
+        <h3 v-if="group.mapId" class="group-title">{{ mapName(group.mapId) }}</h3>
         <article v-for="c in group.list" :key="c.id" class="conflict panel" :data-testid="`conflict-${c.rowId}`">
           <header class="conflict-header">
             <i :class="describe(c).icon" aria-hidden="true" />

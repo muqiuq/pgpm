@@ -102,6 +102,8 @@ public sealed class EndpointAuditTests
         ["POST /api/v1/config/statuses/{id:guid}/archive"] = "Configuration:Manage",
         ["POST /api/v1/config/statuses/{id:guid}/unarchive"] = "Configuration:Manage",
         ["PUT /api/v1/config/statuses/order"] = "Configuration:Manage",
+        ["GET /api/v1/config/sections"] = "Configuration:Manage",
+        ["GET /api/v1/config/sections/{id:guid}"] = "Configuration:Manage",
         ["POST /api/v1/config/sections"] = "Configuration:Manage",
         ["PUT /api/v1/config/sections/{id:guid}"] = "Configuration:Manage",
         ["POST /api/v1/config/sections/{id:guid}/archive"] = "Configuration:Manage",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, toRef, useSlots, watch } from 'vue'
 import { useNow } from '@/composables/useNow'
 import { jsonEqual } from '@/local/outbox'
 import { cssColor } from './cards'
@@ -122,6 +122,7 @@ const emit = defineEmits<{
   openItem: [itemId: string]
   error: [error: unknown]
 }>()
+const slots = useSlots()
 
 const now = useNow()
 const model = createMapModel(props.source, { now, virtual: toRef(props, 'virtual') })
@@ -826,7 +827,7 @@ function finishDraw() {
   } else if (t === 'text') {
     const id = editor.add({ kind: 'text', text: null, ...centred(SIZES.text) })
     placed(id)
-    if (id) void nextTick(() => startEdit(id))
+    if (id) void nextTick(() => editWhenThere(id))
   } else if (t === 'rect' || t === 'ellipse') {
     const box = bandBox(d.from, d.to)
     const frame = dragged ? rectOf(box) : centred(SIZES[t])
@@ -880,6 +881,27 @@ const editStyle = computed(() => {
     textAlign: s.align ?? (el?.kind === 'text' ? 'left' : 'center'),
   }
 })
+
+/**
+ * A text just placed is edited as soon as its row is in the model: the memory source has it at once, the device's
+ * source after its write (a live query's round).
+ */
+let editPending: string | null = null
+function editWhenThere(id: string) {
+  editPending = null
+  if (model.elementsById.value.has(id)) startEdit(id)
+  else editPending = id
+}
+watch(
+  () => model.elementsById.value,
+  (byId) => {
+    if (editPending && byId.has(editPending)) {
+      const id = editPending
+      editPending = null
+      void nextTick(() => startEdit(id))
+    }
+  },
+)
 
 function startEdit(id: string) {
   const el = model.elementsById.value.get(id)
@@ -1541,6 +1563,7 @@ defineExpose({
       :editor="editor"
       :quadrants="quadrantLabels"
       :now="now"
+      :milestone-editor="!!slots['milestone-panel']"
       @close="closePanel"
       @select="select"
       @open-item="(id) => emit('openItem', id)"

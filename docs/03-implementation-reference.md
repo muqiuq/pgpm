@@ -260,6 +260,7 @@ with `errors` by field.
 | `PUT /api/v1/config/statuses/order` | 〃 | `{itemType, ids: [all of the type]}` → `[StatusItem]` (sort orders 10, 20, …) |
 | `POST /api/v1/config/sections` · `PUT …/{id}` | 〃 | `{name, description?, appliesTo: [idea, project], defaultFor ⊆ appliesTo, collapsedByDefault?, access?: [{groupId, level: view\|edit}]}` (`access` null on PUT: unchanged) → `SectionItem {id, …, access: [{groupId, groupName, level}], rev}`; a change of who may *view* bumps the affected users' `access_epoch` (reset), the row is re-stamped for `canEdit`; 409 `section_in_template` when `project` is dropped while templates use it |
 | `POST /api/v1/config/sections/{id}/archive` · `/unarchive`, `PUT …/sections/order {ids}` | 〃 | → `SectionItem` / `[SectionItem]` |
+| `GET /api/v1/config/sections` · `GET …/{id}` | 〃 | → `[SectionItem]` (archived ones too, in order) / `SectionItem` with `access: [{groupId, groupName, level}]` – the groups aren't synced (`section_groups` is server-only), the section dialog reads them here (phases 4–5 integration); 404 for an unknown id |
 | `POST /api/v1/config/fields` · `PUT …/{id}` | 〃 | `{sectionId, key (create only, ^[a-z][a-z0-9_]{1,62}$, unique → 409 duplicate_key), label, helpText?, type (create only), config {…}, required?, defaultValue?}` → `FieldItem {id, sectionId, key, label, helpText, type, config, required, defaultValue, sortOrder, isArchived, rev}`; config checked by type, scores by `ScoreConfigValidator` (codes in `errors.config`: `cycle`, `input_max_required`, …), also every score that uses the field; another key/type on PUT → 400 |
 | `POST /api/v1/config/fields/{id}/archive` · `/unarchive` | 〃 | → `FieldItem`; 409 `used_by_score` |
 | `GET /api/v1/config/fields/{id}/usage` | 〃 | → `{id, key, values, items, scores: [keys], templates}` |
@@ -279,6 +280,17 @@ with `errors` by field.
 | `GET /api/v1/files/{id}/{name}` | read on the file's item/map | the bytes |
 
 The Trash lists maps too (`rootKind: "map"`, `rootType: canvas\|matrix`, `title` = the map's name).
+
+*Phases 4–5 integration (verified against the clients):* the package dry run's `entity` is the importer's singular
+(`group` … `matrix preset`); `invalid_package` (400) carries `problems: [""]` at the top level; `admin_required` is 403;
+the server stamps a milestone's `completedAt` / `decidedAt` / `decidedBy` and does not enforce the DoD for *done* (the
+client asks and the status patch is the History's record); `maps` takes a patch of `isTemplate` with *Configuration:
+Manage* only (else `missing_right`); `preview` is bytea, base64 on the wire, ≤ 256 KB (`validation_failed` above),
+**last writer wins** and is left out of the History (§15 #70); a `files` insert whose SHA-256 and size match an
+available file the user can read is available at once on any item or map (map image copies); `map_shares` inserts are
+accepted only in the batch that inserts their map (`missing_access` later); `PUT /api/v1/maps/{id}/shares` re-stamps the
+map and its rows and evicts users who lost access (`kind: "map"`). The contract tests cover a section/field/template
+round trip and a map's sharing round trip (`ConfigContractTests`, `MapsContractTests`).
 
 ### 3.4 Audit
 
@@ -1334,7 +1346,9 @@ data and user-resolved conflicts:
      current = `old` → apply; current = `new` → no-op; otherwise **conflict** – the
      key is **not applied** and reported with *theirs* and who/when (last
      `change_log` entry of that field). Non-conflicting keys are applied
-     (`partial`). Status changes: status must belong to the type (and template's
+     (`partial`). Keys a table names *last writer wins* (`SyncTable.LastWriterWins`:
+     `maps.preview`) skip the `old` check – the later patch wins, never a conflict
+     (§15 #70). Status changes: status must belong to the type (and template's
      allowed set); server sets `status_changed_at`.
    - **delete**: *manage* on items, *edit* for children and map rows. If the row
      changed since `baseRev` → `conflict/changed_since_delete` unless the
@@ -1759,6 +1773,7 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
 - `GateDecision.vue`: decision buttons, note, suggested status change (confirm).
 - Saved views: selector in `FilterBar`'s `#end` slot; `useLocalTable` takes a
   view `definition`.
+- As built in phase 4: §12.9.
 
 ### 12.8 Items, persons, statuses, search (phase 3 client, as built)
 
@@ -1832,7 +1847,7 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
   accepts `originItemId` with read access to the origin and sets the origin's `convertedToItemId` when the user may edit
   it – the client converts only with edit (the source's status changes too); until the server's row arrives the source
   counts as converted through the local project naming it (index `originItemId`). Phase 4 adds the template, sections
-  and field values.
+  and field values (§12.9).
 - **Persons, statuses, search** (`views/persons/`, `views/admin/StatusesView.vue`, `components/GlobalSearch.vue`,
   `local/search.ts`): the persons list (`list:person`) searches name, e-mail, job title, department and company, filters
   source, members/guests and department and shows active persons unless *With inactive*; *New person* (Persons: Edit)
@@ -1851,6 +1866,95 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
   `aria-labelledby` names its label (a `<label for>` doesn't reach its combobox): the status selects of the create,
   convert, bulk and status dialogs do so. The e2e specs wait for the service worker (`offlineReady`) before going
   offline – pages not opened yet load from the precache only then; `localRows(page, store)` reads the local database.
+
+### 12.9 Configuration and method features (phase 4 client, as built)
+
+- **Configuration on the device** (`local/catalogue.ts`): `useCatalogue()` (sections and field definitions the user
+  sees, archived ones too, by id/key/section, plus score.ts's `defsByKey`) and `useTemplates()` (templates with their
+  allowed statuses, sections, field defaults and milestones), both live; `loadCatalogue`/`loadTemplates` inside a
+  repository transaction. Row types for every configuration and milestone table in `local/rows.ts`; `milestones` and
+  `dod_items` have their server-owned members (`completedAt`, `decidedAt`/`decidedBy`, `stateChangedBy`/`At`) and
+  defaults in `local/tables.ts` (no Dexie version).
+- **Field widgets**: `domain/fields/fieldWidget.ts` (one switch: which widget, draft ⇄ stored value, `valueError` = the
+  server's `FieldValueRules` plus *required*) and `renderValue.ts` (texts, option parts with colour and points, unknown
+  ids as *(removed option)*, "4 / 5" / *n/a*, "58 / 65", sort and search values, `timeboxPassed`). Components in
+  `components/fields/`: `FieldEditor` (texts, numbers, dates, switches through `InlineField`; select and multiselect as
+  PrimeVue Select/MultiSelect saved as picked, options with colour dot and muted points, archived options offered only
+  where chosen; persons by `PersonPicker`, single fields replaced; date-time with `datetime-local`; Markdown rendered with
+  *Edit* → `<type>-field-edit` `/<type>/:id/fields/:key/edit`, `FieldEditView` with `MarkdownEditor` mode `field`, draft
+  key `items:<id>:field.<key>`, saved as a `value` patch with `old` = the text when editing began), `RatingInput` (one
+  button per value + *n/a*, a click on the chosen one clears, labels as tooltips), `ScoreBadge` (*incomplete* while an
+  input is missing, optional thresholds), `FieldValue` (read-only, list cells).
+- **Sections on ideas and projects** (`local/fields.ts`, `ItemSections` + `SectionPanel` in the Overview's `#sections`
+  slot): `item_sections` order (integers, new ones last + 10), open/collapsed from `collapsedByDefault` until toggled on
+  the page, scores also in the section header, sub-headings from `config.subheading`, archived fields hidden, a lock where
+  `canEdit = false` (inputs read-only; the server refuses such values anyway), a conflict marker per field value (opens
+  the conflict dialog). *Add section* (applying to the type, not archived; fills the fields' default values) and
+  *Remove section* (tombstones the row, values stay). One value row per field: `setFieldValue` inserts once, then
+  patches `value` (null clears; a younger duplicate row of two offline devices loses to the older one locally, as the
+  server merges it). Scores recomputed live from `useItemFields` (never stored).
+- **Creating items** (`local/templates.ts`, `ItemCreateDialog`, `TemplatePicker`): ideas get the sections *default for
+  ideas*, blank projects those *default for projects*, a project from a template – picked in the dialog, *Blank project*
+  first – its sections, the template's field defaults (else the field's own `defaultValue`; values of sections the user
+  may not edit are left out), its milestones and gates with their DoD (`due = start + offsetDays`, the start date asked in
+  the dialog, default today; gate status suggestions copied), all in the item's batch, offline. The status picker shows
+  the template's allowed statuses with its default preselected; *Share with* is preselected with the template's
+  `defaultShares` (else the creator's groups). A project's status select on its page is restricted the same way.
+- **Conversion** asks for a template too (and its start date when it has milestones); the project gets, besides phase
+  3's, the source's sections that apply to projects and the values of every field whose section applies to projects
+  (shown or hidden; same field = same value, overriding template defaults), except in sections the user may not edit.
+- **Lists**: a `field:<key>` column for every field of the sections that apply to the type (scores too; `FieldValue`
+  cells, a timebox date passed marked), sorted by `sortValueOf` (select: option order, rating *n/a* below 0, incomplete
+  scores last); field values are searched (texts, option labels, person names); `fields` filters applied (`eq`, `in`,
+  `contains`, `range`, `set`, `unset`; a field the user doesn't see matches only `unset`), edited in the *Filters* panel
+  (`FieldFilters`); `overdue` and the status cell include passed timebox dates (not in a closed status) – the seeded
+  *Running experiments* view works with status, `days_in_status` and `field:timebox_end`. `registerColumns()` is the hook
+  for phase 5's *quadrant* column. The projects list links *Gate decisions*.
+- **Milestones tab** (`views/items/milestones/`, `local/milestones.ts`, `domain/milestones.ts`): list in fractional
+  order (up/down) and an SVG mini timeline (gates as diamonds, milestones as dots, done filled, overdue red, today dashed,
+  undated ones counted); create dialog (kind, title, due date); per card inline title, status, due date + overdue,
+  colour, responsible persons (milestone assignments, `itemId` null, once per milestone, default role *Review board* for
+  gates), description (*Edit* → `/projects/:id/milestones/:mid/edit`, mode `field`, draft `milestones:<id>:description`),
+  DoD checklist (open/done/n·a; n/a without a note opens an inline note first; the note is kept on state changes;
+  progress = done ÷ (all − n/a) shown "3 / 5"; none or only n/a counts as complete). *Done* is free with a complete DoD;
+  otherwise – and for a gate without decision – a confirm lists what is missing and says the change is in the History
+  (the status patch is the record; the card then shows *Done without a complete DoD / a decision*). `GateDecision`: pick
+  pending/go/no-go/iterate/pivot/park, note, *Record decision* (one patch); after go / no-go it offers *Move project to
+  …* when the template allows that status, it isn't archived and the project isn't in it – the project moves only on
+  confirmation.
+- **Gate decisions** (`/gates`, `views/gates/`): every gate of the readable projects on the device; columns of
+  `COLUMNS.gate` (`status` is the gate's own), filters `decisions`, `templateIds`, `groupIds`, `assignedToMe`, `overdue`,
+  search over gate title and project key/title, default sort `-decided_at` (a decision not synced yet by its `updatedAt`),
+  `list:gate` state, saved views of `itemType: 'gate'` (`savedViews.ts` `ViewType`), URL `?decision&me&overdue&view`;
+  a row opens the project's Milestones tab.
+- **Admin pages** (*Configuration: Manage*, online only, each change followed by `engine.syncNow()`; reads from the
+  synced rows): *Sections & Fields* (`views/admin/sections/`: sections in order with up/down – every id sent –, archive,
+  section dialog with applies to / default for / collapsed / access per group; fields per section with up/down, archive,
+  delete after `…/usage` – blocked while a score uses it –, field dialog: key suggested from the label and locked after
+  create, type locked, sub-heading, required, per-type settings, options editor (ids from labels, locked once saved;
+  saved options can only be archived; colours, points), score editor (inputs from the numeric fields with their maxima,
+  op, n/a mode, max, caps, scale, normalise, decimals; `validateScoreConfig` before sending, the server's
+  `errors.config` codes as sentences, "shown as … / max"), default value); *Project Templates* (list with order and
+  archive; `/admin/templates/new`, `/admin/templates/:id` – a page sending the whole `TemplateInput`; existing milestones
+  keep their ids; removing a section drops its defaults; gate suggestions among the allowed statuses); *Assignment
+  roles* (`/admin/roles`, a tab next to *Statuses*, so the menu is unchanged); *Configuration packages* (built-in list
+  with import state, upload a JSON, dry run → diff grouped by entity, conflicts first, unchanged hidden by default,
+  *Overwrite* per conflict or all → dry run again → *Apply* (disabled while `needsAdmin && !isAdmin`), result toast;
+  export downloads `<name>.pgpm.json`).
+- **Section groups**: the section dialog reads them through `GET /api/v1/config/sections/{id}` (§3.3, added in the
+  phases 4–5 integration; `section_groups` isn't synced). When that fails (offline in between, an error) the dialog says
+  it can't read them and offers *Leave the groups as they are* (sends `access: null`) or *Replace them*.
+- **Integrated with the server (phases 4–5 integration)**: every configuration call goes through the generated client
+  (`api/config.ts`, statuses included). A conflict is named by what it belongs to (`apply.ts` `describeRow`): a field
+  value as "<item> · <field>", a DoD item by its text, other rows of an item or milestone by its title; the conflict
+  dialog heads a map's group with the map's name. A **bulk status change** skips projects whose template doesn't allow
+  the status (the server would refuse them; the toast says why). `GateDecision` keeps the decision being chosen when the
+  milestone row arrives again unchanged (any sync of the project used to reset it). Creating an idea right after the
+  first sign-in waits for the statuses (the dialog's *Create* does nothing without one – the e2e funnel waits for the
+  form to be complete). e2e `funnel.spec.ts` against the stack with `core` + `innovation-ai` seeded: an idea assessed
+  to 58 / 65, *Ready for review*, the *Review board decision* read-only for the innovation team (and refused by the
+  server from her device) and decided by a board member, live at hers, converted with *AI use case* (assessment carried,
+  gates G0–G3), gate decisions moving the project; the built-in packages' dry runs then report no change.
 
 ## 13. Maps [PNMTD canvas pieces + NEW editing]
 
@@ -1959,7 +2063,7 @@ a real editor and offline-first:
   persons, field definitions/values, access, the personal view settings), a file
   URL resolver, `newId`, and `create/patch/remove/batch` with the outbox's
   `{key: {old, new}}` changes on the three map tables. `createMemorySource` holds
-  it in memory (tests, `/dev/map`); phase 5 implements it over the repo. Placing
+  it in memory (tests, `/dev/map`); `createLocalSource` implements it over the repo (§13.7). Placing
   tools ask the host through events (`requestItem` → *Create new* / *Add
   existing*, `requestMilestone`, `requestProject`, `requestImage`) whose payload
   has `place(id)`.
@@ -2030,6 +2134,99 @@ a real editor and offline-first:
   with new ids (fractional keys kept), `template_source_id` set; works offline.
 - Seeded by the `innovation-ai` package: *Impact field canvas*, *Crazy 8s*,
   *Customer journey*, *Use-case funnel*.
+
+### 13.7 Phase 5 client (as built)
+
+- **Local data source** (`maps/localSource.ts`, `createLocalSource(mapId, {db, repo, files, objectUrls})`): the
+  `MapDataSource` over the repository. The device stores rows camelCase (as synced), the map UI reads snake_case:
+  `maps/mapRows.ts` renames a row's own members only (jsonb content stays), a patch key's first segment
+  (`default_view.types` → `defaultView.types`). Live queries: the map, its layers, its elements, all statuses, all
+  field definitions, `user_settings` `map:<id>`, and one *related* query keyed by what the elements refer to (item,
+  project and milestone ids) plus a matrix' filter – re-subscribed only when that key changes. It reads the referenced
+  items and placed milestones' projects, on a matrix map the filter's candidates (types via the `type` index,
+  statuses, templates, `groupIds` through `item_shares`), the projects' milestones, their DoD items, links with both
+  ends among the items, assignments of items and milestones, their persons, the items' field values.
+  **Reconciliation** (`Reconciler`): a row keeps its object while `seq`, `rev` and `deleted` are the same and nothing
+  is pending (a re-stamp – computed `access` – changes `seq`); a pending local change (same `seq`/`rev`) is compared by
+  content; an answer that changed nothing returns the previous array. **Writes**: refused with read access
+  (`MapWriteError`); `create` refuses an existing id and maps, `remove` an unknown row and maps (as the memory source);
+  a patch's `{old, new}` go to the repository as given (`old` decides the server's conflict check; keys whose old and
+  new are equal are left out). **`batch(fn)`** calls `fn` at once and queues every write made until it ends (its
+  promise settles) into **one** repository transaction, in order; a write that fails there (a row gone) fails alone,
+  the others are stored; `fn` must not await its own writes (they settle with the batch); a batch inside a batch joins
+  it. **View settings** are published at once and written in order (one row, patched afterwards). **Files**:
+  `fileUrl` answers `blob:` URLs the source creates – the row's thumbnail when asked, else the local bytes, else a
+  download through the file pipeline (`fileBlob`) – and otherwise waits (a live query on the row and `blobs`) until
+  they arrive; `dispose()` ends the queries and revokes its URLs (also when the creating scope ends). `writes` counts
+  write operations (a batch once), `loaded` says the map, layers and elements were read once. Tests: the memory
+  source's behaviour tests are shared (`maps/dataSourceBehaviour.ts`, run by both), plus reads, matrix candidates,
+  reconciliation, batches, view settings, files, and two devices against the fake server (live move, offline
+  conflict per map, unsharing evicts) in `localSource.sync.test.ts`.
+- **Map operations** (`local/maps.ts`, inside repository transactions, offline): `createMap` (a canvas with layer
+  *Base* and `{grid: true, snap: false, gridSize: 20}`, a matrix with its own `matrix`, or from a template/preset via
+  `instantiateTemplate` + `mapFromTemplate`) with its `map_shares` in the same batch; `duplicateMap` (settings,
+  layers, every element with new ids and connections – cards, milestones, timelines only of items on the device, the
+  server would refuse others; lines to dropped ones become free ends); `addCardToMap` (*Add to map…*: the middle of
+  the map's elements, the topmost visible unlocked layer, on top); `placementsOf`. **Copying a map image**: a map image
+  belongs to its map (the server checks `fileId` is a `map_image` of the same map), so a copy (template, duplicate)
+  inserts a new `files` row with the same SHA-256 and size (the server takes known bytes at once, docs/03 §10.3) and
+  copies the local bytes, if any (`uploaded` when the original was available); an image whose file isn't on the device
+  is left out. Rows go in reference order (files and connected elements before what refers to them). Helpers keep
+  the Dexie zone (`inTransaction`; `mapContent` awaits Dexie promises only).
+- **Maps list** (`views/maps/MapsView.vue`, `/maps`, tabs *Maps* · *Templates* via `?tab=templates`): preview, name
+  and description, kind, *Read only*, owner, modified; *New map* (Maps: Create) → *Canvas map*, *Matrix map* (from a
+  preset – the *Prioritization matrix* first – or *Own axes*: two number/rating/score fields with their ranges, split in
+  the middle, default quadrant labels, ideas and projects), *From template…*; per map *Open*, *New map from this
+  template*, *Rename…* (edit), *Duplicate…* (Maps: Create; *Share with* preselected with the original's sharing),
+  *Share…* (`ShareDialog` with `mapId`: `PUT /api/v1/maps/{id}/shares`, `POST …/owner`), *Mark/Unmark as template*
+  (Configuration: Manage and edit; a marked matrix map becomes a preset), *Delete…* (manage, to the Trash). New maps
+  preselect *Share with* as items do (the creator's groups at *edit*).
+- **Preview** (`maps/preview.ts`): not an SVG snapshot (`<foreignObject>` cards and CSS variables don't survive a
+  canvas, Safari taints it) but a schematic drawn on a 320 × 200 canvas from the rows – cards in their colours
+  (palette names resolved to their light-mode hex), shapes with fill and stroke, lines, text as bars, images and
+  milestones as boxes, a matrix map's quadrants and computed cards – as WebP (PNG where the browser can't encode WebP;
+  the list sniffs the type), base64 in `maps.preview`. Written when leaving a map (route change, unmount) if the user
+  can edit, is online, and changed something during the visit (or the map has none). Two devices writing a preview
+  at once are no conflict: the server lets the later patch win (`LastWriterWins`, §15 #70; the fake server too), so the
+  client's former auto-settling (`previewConflicts.ts`) is gone.
+- **Map page** (`views/maps/MapView.vue`, `/maps/:id`, `props: true`): holds the rail, makes the source (with the
+  app's file pipeline), keys `MapCanvas`/`MatrixMap` by kind and id, and recreates the source when the id changes.
+  Header: back, kind icon, name, *Template*, *Read only*, the map's conflicts (opens the sync dialog), *Library*
+  (canvas), *Matrix settings* (matrix, manage), *Share · …*. Requests (`mapRequests.ts`, `PlaceDialog.vue`): an item
+  tool → *Create new* (title, status – the type's default –, *Share with* preselected; item and shares one batch, then
+  `place`) and *Add existing* (local search; items on the map marked *on the map · n×*); the milestone tool → a
+  project, then its milestones and gates; the timeline tool → a project; the image tool → the pasted file or a file
+  chooser (hidden input; *cancel* cancels), stored with `attachFile({mapId}, file, 'map_image')`, placed at its size
+  (at most 480 × 360). Slots: `#item-panel` → `ItemQuickEdit` (title, status, colour, image – `CoverImage` –,
+  persons – `AssignmentsPanel` –, and *Values*: the card badges and a matrix' axes and size, a score with its inputs,
+  ratings as 0…max + n/a buttons, numbers, selects; scores read-only; the item's own access and the section's
+  `canEdit` decide; values set through phase 4's `setFieldValue` – one row per field, null clears –, a project's status
+  among its template's; `#sections` → `MapItemSections`, phase 4's `ItemSections` as on the Overview);
+  `#milestone-panel` → `MapMilestonePanel` (status with the DoD override confirmation, `DodChecklist`, a gate's
+  `GateDecision` with the suggested status, *Open the project's milestones*; the project's access decides – the
+  summary below then leaves its read-only DoD out); `#map-sharing` → the groups and *Share…*. **Library** (`LibraryPanel.vue`): every
+  item on the device, search, type and status filters, the count on the map; rows drag as
+  `application/x-pgpm-item`, the stage's drop calls `addItemCard(id, toWorld(x, y))`, *+* adds in the middle of the
+  view. **Matrix settings** (`MatrixConfigDialog.vue`): axes (field, label, min, max, split), bubble size, the four
+  labels, filter types, statuses, templates, groups – one patch of `matrix`. `?focus=item:<id>` goes to the canvas.
+- **Item page *Maps* tab** (`views/maps/ItemMapsTab.vue`): canvas maps with the item's card count, matrix maps whose
+  filter takes it with its quadrant or *Not yet assessed*, each linking `?focus=item:<id>`; *Add to map…* lists the
+  canvas maps the user may edit (not templates) and calls `addCardToMap`.
+- **Quadrant column and filter** (`views/maps/quadrants.ts`, `QuadrantFilter.vue`): phase 4's hook wasn't there, so
+  the item lists got a minimal one: `columnsFor`/`visibleColumns` take extra columns, `ListContext.columnValue` and
+  `quadrantOf`, `ItemFilters.quadrant = {mapId, quadrants}` (kept in views and `list:<type>`); one column
+  `quadrant:<map id>` (*Quadrant · name*) per matrix map whose filter takes the type, showing and sorting by the
+  label; the filter in the *Filters* popover.
+- **Server assumptions**: all verified against the server in the phases 4–5 integration (§3.3); `preview` became last
+  writer wins there. Not built: bulk *Add to map* on the item lists, a template filter control on the canvas' filter
+  bar.
+- **Integrated with the server (phases 4–5 integration)**: a text placed with the text tool is edited once its row is in
+  the model – the device's source answers a write after a live-query round, so `MapCanvas` waits for the row instead of
+  the next tick (with the memory source it was there at once); *Escape* in the inline editor drops the text, *Ctrl+Enter*
+  or a click elsewhere keeps it. e2e (`maps.spec.ts`) against the real server: two users co-edit live (measured: a drawn
+  rectangle ≈ 0.3 s, a move ≈ 0.2 s from pointerup to the other browser's DOM), offline editing with the conflict grouped
+  under the map's name, the seeded *Prioritization matrix* with assessed ideas in their quadrants and a card moving when
+  its ratings change, unsharing evicting the map live.
 
 ## 14. Configuration keys
 
@@ -2140,6 +2337,7 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | 67 | Conversion copies the cover and the attachments as new `files` rows of the project that share the stored bytes; images embedded in the description keep pointing at the source's files (docs/01 §8 names attachments, not embedded images) | a row belongs to one item, nothing is uploaded twice; copying embedded images would mean rewriting the description |
 | 68 | The commit's answer also carries `fileName` (an image's name gets its type's extension) | the client lays the answer over its row: the name must not lag behind the bytes |
 | 69 | Playwright runs `identity.spec.ts` as a project of its own (`first-admin`) that every other spec depends on (phase 2: first by file name) | it needs the fresh stack's initial password; later specs' names must not change the order |
+| 70 | `maps.preview` is last writer wins (no `old` check, never a conflict) and not recorded in the History (`SyncTable.LastWriterWins`, `NotInHistory`; §11.5) | a derived picture nobody decides between; 256 KB per visit would swamp the History |
 
 ## 16. Score evaluation [NEW]
 
