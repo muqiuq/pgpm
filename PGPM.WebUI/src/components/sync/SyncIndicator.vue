@@ -33,7 +33,7 @@ const tooltip = computed(() => {
 const ariaLabel = computed(() => {
   const parts = [label.value]
   if (sync.pendingCount) parts.push(`${sync.pendingCount} pending`)
-  if (sync.conflictCount) parts.push(`${sync.conflictCount} conflicts`)
+  if (sync.conflictCount) parts.push(`${sync.conflictCount} conflict${sync.conflictCount === 1 ? '' : 's'}`)
   return `Sync: ${parts.join(', ')}`
 })
 </script>

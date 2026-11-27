@@ -44,6 +44,17 @@ public static class OpenApiSetup
                 }
                 return Task.CompletedTask;
             });
+            // A JSON object of any members (a synced row, a patch's {old, new}): without additionalProperties the UI's types
+            // would allow no member at all.
+            o.AddSchemaTransformer((schema, context, _) =>
+            {
+                if (context.JsonTypeInfo.Type == typeof(System.Text.Json.Nodes.JsonObject))
+                {
+                    schema.AdditionalPropertiesAllowed = true;
+                    schema.AdditionalProperties = new OpenApiSchema();
+                }
+                return Task.CompletedTask;
+            });
             // A file upload is multipart/form-data, which the document does not infer without the Consumes constraint that
             // ApiSetup turns off.
             o.AddOperationTransformer((operation, context, _) =>

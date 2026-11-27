@@ -10,7 +10,7 @@ export type Row = Record<string, unknown>
 export type OutboxOp = 'insert' | 'patch' | 'delete'
 
 /** One changed key of a patch: the value the user saw, and the one they set. */
-export interface FieldChange {
+export type FieldChange = {
   old: unknown
   new: unknown
 }

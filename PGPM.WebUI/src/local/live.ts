@@ -2,7 +2,8 @@ import type { Eviction } from '@/api/sync'
 import type { Row } from './outbox'
 
 /**
- * The live channel (docs/03 §11.4, §12.5): the browser's own WebSocket on `/api/v1/sync/live`, no library. It carries
+ * The live channel (docs/03 §11.4, §12.5): the browser's own WebSocket on `/api/v1/sync/live`, no library, and its
+ * messages – typed here by hand, as OpenAPI doesn't describe a WebSocket. It carries
  * no state-changing client messages – only `hello`, `ack`, `ping`/`pong` – so it adds no CSRF surface; writes stay on
  * HTTP. Incoming `changes` are applied one batch after the other and acknowledged with their cursor (the server sends
  * the next batch only after the ack). Heartbeat: a `ping` every 25 s; nothing heard for two of them → closed.
@@ -26,7 +27,8 @@ export type SocketFactory = (url: string) => SocketLike
 export const closeCodes = {
   /** The session is invalid: sign in again. */
   signedOut: 4401,
-  /** The Origin header didn't match the host. */
+  /** The Origin header didn't match the host. PGPM's server refuses that with HTTP 403 before the upgrade (the browser
+   * sees 1006), so this code arrives only from another server. */
   origin: 4403,
   /** Reset required: run an HTTP sync with reset. */
   reset: 4409,
@@ -44,11 +46,14 @@ export interface ChangesMessage {
   more: boolean
 }
 
+/** *… is editing* (docs/03 §18.6): never about the user's own editors; `since` only with `editing`. */
 export interface EditingMessage {
   type: 'editing' | 'editing_end'
   itemId: string
   target: string
-  user: unknown
+  userId: string
+  /** The display name. */
+  user: string
   since?: string
 }
 

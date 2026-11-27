@@ -97,23 +97,30 @@ export async function applyEviction(db: PgpmDb, eviction: Eviction): Promise<Evi
   return root ? { kind: eviction.kind, id: eviction.id, title: titleOf(root) } : null
 }
 
-/** A page of rows and evictions, rows before evictions (an eviction wins over a row of the same page). */
+/**
+ * A page of evictions and rows (docs/03 §11.4): evictions first, then the rows – the server pulls only what the user may
+ * see now, so a row in the same page as its root's eviction means the access came back (a share added again).
+ */
 export async function applyChanges(
   db: PgpmDb,
   changes: Record<string, Row[]> | null | undefined,
   evictions: readonly Eviction[] | null | undefined,
 ): Promise<{ rows: number; evicted: EvictedRoot[] }> {
-  let rows = 0
-  for (const [table, list] of Object.entries(changes ?? {})) {
-    if (!tableDef(table)) continue
-    for (const row of list) if (await applyServerRow(db, table, row)) rows++
-  }
   const evicted: EvictedRoot[] = []
   for (const eviction of evictions ?? []) {
     const root = await applyEviction(db, eviction)
     if (root) evicted.push(root)
   }
-  return { rows, evicted }
+  let rows = 0
+  for (const [table, list] of Object.entries(changes ?? {})) {
+    if (!tableDef(table)) continue
+    for (const row of list) if (await applyServerRow(db, table, row)) rows++
+  }
+  // A root that came back in the same page was not lost after all.
+  const back = await Promise.all(
+    evicted.map(async (root) => !!(await db.synced(rootTable(root.kind)!.name).get(root.id))),
+  )
+  return { rows, evicted: evicted.filter((_, i) => !back[i]) }
 }
 
 /** The reset (docs/03 §11.7): every synced store emptied; the outbox, conflicts, drafts and files stay. */
@@ -301,11 +308,15 @@ export async function applyResults(
       continue
     }
 
-    // Field conflicts: the other keys were applied, the colliding ones keep the server's value.
+    // Field conflicts (`partial`, or `conflict` with kind `field`): the other keys were applied, the colliding ones keep
+    // the server's value. A `conflict` brings the server's row (`current`): nothing of the patch was applied.
     const reported = conflicts.filter((c) => c.mutationId === entry.mutationId)
     const keys = result.conflictFields ?? reported.map((c) => c.field)
     if (!stored) continue
-    let server: Row = applyPatch(base ?? withoutLocal(stored), minusKeys(entry.changes, keys))
+    let server: Row =
+      current && current.deleted !== true
+        ? { ...current }
+        : applyPatch(base ?? withoutLocal(stored), minusKeys(entry.changes, keys))
     const fields: Record<string, ConflictField> = {}
     let theirRev = rev
     for (const key of keys) {

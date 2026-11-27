@@ -103,9 +103,9 @@ public enum SyncStatus
 /// </summary>
 public sealed record SyncMutationResult
 {
-    public Guid MutationId { get; init; }
+    public required Guid MutationId { get; init; }
 
-    public SyncStatus Status { get; init; }
+    public required SyncStatus Status { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Guid? Id { get; init; }

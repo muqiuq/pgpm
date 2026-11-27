@@ -990,7 +990,8 @@ messages (only `hello`, `ack`, `pong`), so it adds no CSRF surface.
 - **Tables** are named by their snake_case table name: `groups`, `persons`, `items`, `item_shares`, `user_settings`
   (phase 3+ add more; `changes` lists them in registry order, parents first). **Rows** are the data-model columns as
   **camelCase** properties (`owner_user_id` → `ownerUserId`): uuids lower-case strings, timestamps ISO-8601 UTC
-  (`2026-11-27T09:12:00.123456Z`, microseconds), `date` as `yyyy-MM-dd`, `numeric` as a JSON number (`1234.50`),
+  (`2026-11-27T09:12:00.123400Z`, always six fractional digits – what PostgreSQL keeps, sortable as text; read in any
+  ISO form, with an offset converted to UTC, without one taken as UTC), `date` as `yyyy-MM-dd`, `numeric` as a JSON number (`1234.50`),
   enums lower case (`note`, `manual`, `read`), `text[]` as an array, jsonb as JSON, bytea as base64. Every row has
   `seq`, `rev`, `deleted`, `deleteBatchId`, `createdAt`, `createdBy`, `updatedAt`, `updatedBy`; `items` also the computed
   `access` (`read` | `edit` | `manage`). Never delivered: `groups.normalizedName`, `groups.entraAppRole`. A deleted row is
@@ -1014,7 +1015,8 @@ messages (only `hello`, `ack`, `pong`), so it adds no CSRF surface.
   exist) is `missing_access` without `current`. Every conflicting field is also in `conflicts[]` (`theirs`, `by` = the
   display name of the last change-log entry of that field, `at`, `rev`).
 - **Resolutions**: send `resolved: [{table, id, field, resolution}]` (`mine` | `theirs` | `edited`) for every decided
-  field; *Keep mine* / *Edit* additionally push a normal patch (`old` = theirs).
+  field – `field: null` for the delete kinds (the whole row); each becomes a `conflict_resolved` History entry of a row
+  the user may see, anything else is ignored; *Keep mine* / *Edit* additionally push a normal patch (`old` = theirs).
 - **Duplicate pairs** (phase 2): `item_shares (itemId, groupId)` → `mergedInto`; `user_settings (userId, key)` → the
   insert becomes a patch of `value` with `old` = the existing value (the later device wins, never a conflict).
 - **Phase 2 writes**: `items` inserts of `type: note` only (others `not_supported`, needs `Notes:Create`), patches with
@@ -1031,12 +1033,14 @@ messages (only `hello`, `ack`, `pong`), so it adds no CSRF surface.
   `revoked` (deactivated, signed out everywhere – then close 4401), `expired` (the 30-day sign-in – 4401),
   `rights_changed` (refetch `/auth/me`). `reset` is followed by close 4409. A wrong or missing `Origin` is refused with
   HTTP 403 before the upgrade (a browser sees 1006; `4403` is not sent). `app {version}` and close 1001 at a deploy.
-  The server's `ping` every 25 s is answered with `pong`; the client's `ping` gets a `pong`.
+  The server's `ping` every 25 s is answered with `pong`; the client's `ping` gets a `pong`. A browser refused with 403
+  (a wrong `PublicUrl`) sees close 1006 and keeps reconnecting with backoff while it polls over HTTP.
 - **REST** (online): `PUT /api/v1/items/{id}/shares` `[{groupId, access}]` → the new list `[{id, groupId, groupName,
   access}]`; `POST /api/v1/items/{id}/owner {userId}` → 204; `GET /api/v1/trash?page&pageSize` → `{items: [{batchId,
   rootKind: "item", rootId, rootType: "note", title, deletedAt, deletedBy, deletedByName}], page, pageSize,
   totalCount}`; `POST /api/v1/trash/{batchId}/restore` → `{batchId, restored, skipped}`; `DELETE /api/v1/trash/{batchId}`
-  (admin) → 204; `GET /api/v1/history?itemId&page&pageSize` → `{items: [{id, at, userId, userName, source, entity,
+  (admin) → 204 (the list also takes `search` – in the title – and `sort` = `-deletedAt` (default), `deletedAt`,
+  `title`, `-title`); `GET /api/v1/history?itemId&page&pageSize` → `{items: [{id, at, userId, userName, source, entity,
   entityId, action, changes, clientChangedAt}], …}`; `POST` / `DELETE /api/v1/editing {itemId, target}` (edit access; the
   `DELETE` carries the body too) → 204. Errors are ProblemDetails with `code` (`missing_access` + `level`, `item_deleted`).
 
@@ -1261,22 +1265,30 @@ Decisions taken while building it:
   then empties the synced stores (outbox, conflicts, drafts and blobs stay – whatever is still in the
   outbox goes out afterwards and is rebased on the re-pulled rows), adopts the response's
   `accessEpoch` and pulls from 0, then reopens the live channel.
-- **Results**: `partial` and `conflict` without `kind` are both field conflicts (`conflictFields` /
+- **Results**: `partial` and `conflict` of kind `field` are both field conflicts (`conflictFields` /
   `conflicts[]`); one conflict entry per row and kind, fields merged. `deleted_by_other` restores from
-  `current.deleteBatchId` – the trash list is searched for the root when the server leaves it out.
+  `current.deleteBatchId` – the trash list is searched for the root when the server leaves it out. A `conflict` of kind `field` carries the server's row (`current`), which becomes
+  the local row as it is (nothing of the patch was applied); a `partial` is rebased from the base. A page applies its
+  evictions first, then its rows: the server only delivers rows the user may see now, so a root evicted and delivered
+  again in one page (unshared and shared again) stays.
 - **Session**: a sign-out wipes (`session.logout()`); a 401 or close 4401 only stops the engine and
   keeps the data, so the same user's pending changes go out after the next sign-in; a sign-in of
   another user wipes first (`meta.userId`).
 - **Tabs**: BroadcastChannel `pgpm-sync` – the leader broadcasts its status (followers ask on start);
   followers forward `changed` and `sync-now`; `editing` notices are relayed. Without Web Locks every
   tab leads.
-- **Close codes**: 4401 → session refresh, no reconnect; 4403 → polling only (`liveRefused`);
+- **Close codes**: 4401 → session refresh, no reconnect; 4403 → polling only (`liveRefused`; PGPM's server answers a
+  wrong origin with HTTP 403 instead, see §11.4);
   4409 → HTTP sync with reset; 4429 → reconnect after the longest backoff. A socket silent for two
   heartbeats is closed (4000) and treated like a dropped one (catch-up over HTTP, reconnect).
+- **Integration (phase 2)**: a `reset` message and the close 4409 after it are one reset (one pull from 0); after a
+  reset the session reloads `/auth/me` (the groups changed, and no `rights_changed` comes). The browser's `offline`
+  event closes the live socket and shows *Offline* (DevTools' and Playwright's offline mode leave open WebSockets
+  alone, a sleeping laptop's socket may linger); `online` catches up over HTTP and reopens it.
 - Toasts: once per run "n sync conflicts", one per refused change ("Change undone: reason"), one per
   eviction ("Access to … was removed"). Background Sync is requested when a sync fails offline with
   pending entries.
-- Tests: `src/test/fakeSyncServer.ts` implements this contract in memory (push rules, visibility,
+- Tests: `src/test/fakeSyncServer.ts` mirrors PGPM's server in memory (push rules and their codes, visibility,
   re-stamp, evictions, epochs, trash, live channel with ack flow control) for `sync.test.ts`.
 
 ### 11.8 Conflict resolution (client) [NEW]
@@ -1302,7 +1314,8 @@ Decision 2026-11-26 #10: no silent last-writer-wins.
   `deleted_by_other` is the restore, of a `changed_since_delete` the forced delete; "for all" goes on
   after a failure (a restore offline) and names what failed. *Edit* of a Markdown field opens
   `/notes/:id/edit?conflict=<id>` with the editor's conflict view; saving there resolves as *edited*,
-  *Take theirs* as *theirs*.
+  *Take theirs* as *theirs*. *Restore with my changes* is disabled offline and without *manage* access (the
+  Trash's rule; the tombstone keeps the `access` the device knew).
 
 ### 11.9 What is dropped from PLM (E2EE)
 
@@ -1369,8 +1382,19 @@ dialogs (inline edits commit immediately):
 - **Convergence property test**: three simulated clients with random offline
   mutation sequences; after resolving all conflicts with *theirs*, every local
   store equals the server state.
-- **Playwright**: two browser contexts, change visible on the other < 1 s;
-  offline edit → reconnect → conflict dialog → resolve.
+- **Playwright** (`PGPM.WebUI/e2e/sync.spec.ts`): two browser contexts, change visible on the other < 1 s;
+  offline edit → reconnect → conflict dialog → resolve. As built: each test creates a team of its own through the admin
+  API (a group with Notes: Create, users whose temporary passwords are changed); scenarios (a) live < 1 s, measured
+  from the click on one page to the text on the other by the browser's clock, (b) field conflict → *Keep mine* /
+  *Keep theirs*, (c) delete vs edit both ways, (d) unsharing evicts live, (e) a membership change resets (live and with
+  pending changes), (f) Trash restore, (g) sign-out wipe and another user on the same browser, (h) two tabs, one
+  socket, (i) *… is editing*, (j) offline after the first sync, (k) the indicator's states. tools/e2e.sh raises
+  `Auth:LoginRateLimit:PermitLimit` for its stack (the tests sign in dozens of users from one address).
+- **Contract** (`PGPM.Contract.Tests/SyncContractTests.cs`, against the image): the first admin's password change
+  (`FirstAdmin`, once per run), a group and two users, a note with its share in one batch, the wire format (names,
+  microsecond timestamps, `access`), the live channel (403 for another origin, `hello`/`welcome`, `ping`/`pong`,
+  `changes` + `ack`), a `conflict` of kind `field` with `current` and `conflicts[]`, `resolved[]`, `missing_access`
+  without `current`, an eviction live.
 
 ## 12. Frontend UI [PNMTD]
 
@@ -1468,8 +1492,10 @@ Online-only views show an "Available online only" empty state when offline.
 Phase 2: `useLive(query, initial, key?)` (`local/useLive.ts`) answers `{value, loaded, error, refresh}`;
 `useLocalTable` (`composables/useLocalTable.ts`) returns the shape of `useServerTable` (typed as
 `TableSource<T>` in `composables/tableSource.ts`, which `ListTable.vue` takes). The phase 2 endpoints
-not yet in `openapi.json` (sync, sharing, trash, history, editing) are typed by hand in
-`api/sync.ts` on `api/raw.ts` (same CSRF header, `ApiError`, error listeners).
+(sync, sharing, trash, history, editing) are in `openapi.json`; `api/sync.ts` calls them through the openapi-fetch
+client on the generated types (`JsonObject` rows as `{[key]: unknown}`), typing strictly only what the client sends
+(the generated request types have every member optional) – the hand-written `api/raw.ts` is gone. The live channel's
+messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
 
 ### 12.6 Sync indicator, sharing, trash [NEW]
 
@@ -1757,6 +1783,8 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | 35 | A wrong live `Origin` is HTTP 403 before the upgrade (close code `4403` is not used) | nothing of the session reaches a cross-site page |
 | 36 | `user_settings` duplicates (two devices, same key) are merged as a patch with `old` = the existing value: the later wins | personal UI state needs no conflict dialog |
 | 37 | Trigram index on `items.title` deferred to phase 3 (global search) | needs `pg_trgm`; nothing searches server-side yet |
+| 38 | The client closes the live socket on the browser's `offline` event (docs/03 §11.7 "Integration") | an offline browser's socket (DevTools' and Playwright's offline mode, a closed lid) may stay open and keep the indicator *Live*; `online` catches up over HTTP |
+| 39 | Wire timestamps always with six fractional digits (`UtcMicrosecondsJsonConverter`), not System.Text.Json's trimmed ones | the client sorts and compares them as text |
 
 ## 16. Score evaluation [NEW]
 

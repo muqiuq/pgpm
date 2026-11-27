@@ -1,5 +1,7 @@
 using System.Net;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using PGPM.Lib.Helper;
 using static PGPM.Tests.Sync.SyncKit;
@@ -108,11 +110,19 @@ public sealed class SyncPushPullTests
         Assert.AreEqual("accepted", noOp.Arr("results")[0].Str("status"));
         Assert.AreEqual(3, noOp.Arr("results")[0].Int("rev"));
 
-        // The decision is recorded.
-        await clientA.SyncAllAsync(resolved: [new JsonObject { ["table"] = "items", ["id"] = id.ToString(), ["field"] = "title", ["resolution"] = "theirs" }]);
+        // The decisions are recorded: a field's, and a delete conflict's (field null: the whole row).
+        await clientA.SyncAllAsync(resolved: [
+            new JsonObject { ["table"] = "items", ["id"] = id.ToString(), ["field"] = "title", ["resolution"] = "theirs" },
+            new JsonObject { ["table"] = "items", ["id"] = id.ToString(), ["field"] = null, ["resolution"] = "mine" },
+        ]);
         await using var db = app.NewDb();
-        var actions = await db.ChangeLog.Where(c => c.ItemId == id).OrderBy(c => c.Id).Select(c => c.Action).ToListAsync();
-        CollectionAssert.AreEqual(new[] { "create", "share", "update", "update", "conflict", "conflict", "conflict_resolved" }, actions);
+        var log = await db.ChangeLog.Where(c => c.ItemId == id).OrderBy(c => c.Id).Select(c => new { c.Action, c.Changes }).ToListAsync();
+        CollectionAssert.AreEqual(new[] { "create", "share", "update", "update", "conflict", "conflict", "conflict_resolved", "conflict_resolved" },
+            log.Select(l => l.Action).ToList());
+        Assert.AreEqual(JsonValueKind.Null, JsonDocument.Parse(log[^1].Changes).RootElement.GetProperty("field").ValueKind);
+
+        // Timestamps on the wire: UTC with microseconds, always six digits (docs/03 §11.4).
+        StringAssert.Matches(clientA.Row("items", id).Str("updatedAt"), new Regex(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$"));
     }
 
     [TestMethod]

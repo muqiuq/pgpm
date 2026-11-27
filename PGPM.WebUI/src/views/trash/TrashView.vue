@@ -45,7 +45,7 @@ const icons: Record<string, string> = {
   project: 'pi pi-briefcase',
   map: 'pi pi-map',
 }
-const iconOf = (entry: TrashEntry) => icons[entry.type ?? entry.rootKind] ?? 'pi pi-file'
+const iconOf = (entry: TrashEntry) => icons[entry.rootType] ?? icons[entry.rootKind] ?? 'pi pi-file'
 
 async function restore(entry: TrashEntry) {
   const ok = await done(() => trashApi.restore(entry.batchId), {

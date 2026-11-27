@@ -70,6 +70,14 @@ function describe(c: ConflictEntry) {
   return { icon: icons[c.table] ?? 'pi pi-file', key: null, type: undefined }
 }
 
+/** Why *Restore with my changes* can't be done now: offline, or without *manage* (the Trash's rule). */
+function restoreHint(c: ConflictEntry): string | undefined {
+  if (!online.value) return 'Restoring needs a connection'
+  const row = rowOf(c) as { access?: unknown } | undefined
+  if (c.table === 'items' && row?.access && row.access !== 'manage') return 'Restoring needs manage access'
+  return undefined
+}
+
 function show(value: unknown): string {
   if (value === null || value === undefined || value === '') return '(empty)'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
@@ -226,10 +234,10 @@ async function forAll(side: 'mine' | 'theirs') {
                 @click="done(() => actions.discard(c), 'Your changes are discarded')"
               />
               <Button
-                v-tooltip.top="online ? undefined : 'Restoring needs a connection'"
+                v-tooltip.top="restoreHint(c)"
                 label="Restore with my changes"
                 size="small"
-                :disabled="busy || !online"
+                :disabled="busy || !!restoreHint(c)"
                 @click="done(() => actions.restoreWithMine(c), 'Restored with your changes')"
               />
             </template>

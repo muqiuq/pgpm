@@ -20,20 +20,10 @@ export interface EditingNotice {
 const notices = shallowRef<EditingNotice[]>([])
 const lapse = 120_000
 
-function who(user: unknown): { id: string | null; name: string } {
-  if (typeof user === 'string') return { id: null, name: user }
-  if (typeof user === 'object' && user !== null) {
-    const u = user as Record<string, unknown>
-    const name = [u.displayName, u.name, u.userName, u.username].find((v) => typeof v === 'string') as
-      string | undefined
-    return { id: typeof u.id === 'string' ? u.id : null, name: name ?? 'Someone' }
-  }
-  return { id: null, name: 'Someone' }
-}
-
-/** A message of the live channel (sync.ts hands them over, in every tab). */
+/** A message of the live channel (sync.ts hands them over, in every tab): `userId` and `user`, the display name. */
 export function receiveEditing(message: EditingMessage, now = Date.now()) {
-  const { id, name } = who(message.user)
+  const id = typeof message.userId === 'string' && message.userId ? message.userId : null
+  const name = typeof message.user === 'string' && message.user ? message.user : 'Someone'
   const same = (n: EditingNotice) =>
     n.itemId === message.itemId && n.target === message.target && (id ? n.userId === id : n.userName === name)
   const others = notices.value.filter((n) => !same(n) && now - n.heardAt < lapse)

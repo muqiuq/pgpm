@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -17,7 +18,7 @@ public static class WireJson
 {
     public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
-        Converters = { new LowerCaseEnumJsonConverterFactory() },
+        Converters = { new LowerCaseEnumJsonConverterFactory(), new UtcMicrosecondsJsonConverter() },
         NumberHandling = JsonNumberHandling.Strict,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
@@ -118,6 +119,31 @@ public sealed record WireColumn(string Key, string PropertyName, string ColumnNa
         .Select(p => new WireColumn(WireJson.KeyOf(p.Name), p.Name, p.GetColumnName(), p.ClrType, p.GetColumnType() == "jsonb", p.IsNullable,
             p.PropertyInfo!))
         .ToList();
+}
+
+/// <summary>
+/// Timestamps as the wire has them (docs/03 §11.4): UTC with always six fractional digits, <c>2026-11-27T09:12:00.123400Z</c>
+/// – what PostgreSQL keeps, and sortable as text. Read: any ISO-8601 form; with an offset converted to UTC, without one
+/// taken as UTC.
+/// </summary>
+public sealed class UtcMicrosecondsJsonConverter : JsonConverter<DateTime>
+{
+    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var value = reader.GetDateTime();
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+        };
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+    {
+        var utc = value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : value;
+        writer.WriteStringValue(utc.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", CultureInfo.InvariantCulture));
+    }
 }
 
 /// <summary>Enums as lower-case strings, read ignoring case; numbers and undefined names are refused.</summary>

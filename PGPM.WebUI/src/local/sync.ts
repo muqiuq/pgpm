@@ -118,6 +118,8 @@ export interface EngineOptions {
   notify?: (notice: Notice) => void
   onSignedOut?: () => void
   onSession?: (state: string) => void
+  /** A reset re-pulled everything (access changed): what the session knows (groups, rights) may be stale too. */
+  onReset?: () => void
   onAppVersion?: (version: string) => void
   onEditing?: (message: EditingMessage) => void
   /** Listen to window/document events (online, visibilitychange, the worker's pgpm-sync). Default true. */
@@ -180,6 +182,8 @@ export class SyncEngine {
   private reconnectAttempt = 0
   private errorAttempt = 0
   private reopenLive = false
+  /** The live channel said `reset`: its close 4409 that follows needs no second reset. */
+  private resetAnnounced = false
   private running = false
   private abort: AbortController | null = null
   private detach: (() => void)[] = []
@@ -281,7 +285,10 @@ export class SyncEngine {
           }),
           welcome: () => this.onWelcome(),
           changes: (message) => this.onChanges(message),
-          reset: () => void this.sync({ pull: true, reset: true }),
+          reset: () => {
+            this.resetAnnounced = true
+            void this.sync({ pull: true, reset: true })
+          },
           session: (state) => this.options.onSession?.(state),
           app: (version) => this.options.onAppVersion?.(version),
           editing: (message) => {
@@ -322,7 +329,11 @@ export class SyncEngine {
     }
     on(window, 'online', () => this.wake())
     on(window, 'offline', () => {
-      if (this.status.leader && !this.isLive) this.setConnection('offline')
+      if (!this.status.leader) return
+      // The browser says it has no network: a socket it still holds (a closed lid, flight mode – DevTools' offline mode
+      // even leaves it working) goes, changes queue, the indicator says Offline; `online` catches up and reopens it.
+      this.live?.close()
+      this.setConnection('offline')
     })
     on(window, 'pgpm:sync', () => this.wake())
     if (typeof document !== 'undefined') {
@@ -532,6 +543,7 @@ export class SyncEngine {
         this.status.lastSyncAt = at
       }
       this.status.error = null
+      if (result.reset) this.options.onReset?.()
       if (result.conflicts > 0) {
         this.notify({
           severity: 'warn',
@@ -649,6 +661,7 @@ export class SyncEngine {
   private openLive() {
     if (!this.live || !this.running || this.status.liveRefused) return
     if (!this.isOnline) return
+    this.resetAnnounced = false
     this.live.open()
   }
 
@@ -695,7 +708,8 @@ export class SyncEngine {
       return
     }
     if (code === closeCodes.reset) {
-      void this.sync({ pull: true, reset: true })
+      if (!this.resetAnnounced) void this.sync({ pull: true, reset: true })
+      this.resetAnnounced = false
       return
     }
     const steps = this.timing.reconnect

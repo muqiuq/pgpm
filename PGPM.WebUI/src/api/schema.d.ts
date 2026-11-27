@@ -1815,7 +1815,9 @@ export interface components {
             access?: null | components["schemas"]["ItemAccess"];
         };
         JsonNode: unknown;
-        JsonObject: Record<string, never>;
+        JsonObject: {
+            [key: string]: unknown;
+        };
         /** @enum {unknown} */
         Level: "None" | "Create" | "Edit" | "Use" | "View" | "Manage";
         LoginRequest: {
@@ -1951,8 +1953,8 @@ export interface components {
         };
         SyncMutationResult: {
             /** Format: uuid */
-            mutationId?: string;
-            status?: components["schemas"]["SyncStatus"];
+            mutationId: string;
+            status: components["schemas"]["SyncStatus"];
             /** Format: uuid */
             id?: null | string;
             /** Format: int32 */

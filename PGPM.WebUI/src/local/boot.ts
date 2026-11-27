@@ -38,6 +38,7 @@ export const engine = new SyncEngine({
   onEditing: receiveEditing,
   onSignedOut: () => void useSession().refresh(),
   onSession: (state) => void (state === 'rights_changed' ? useSession().load(true) : useSession().refresh()),
+  onReset: () => void useSession().load(true),
   onAppVersion: (version) => {
     if (version !== appVersion) {
       void navigator.serviceWorker

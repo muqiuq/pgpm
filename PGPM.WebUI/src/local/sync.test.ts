@@ -282,8 +282,88 @@ describe('the sync engine against the contract (docs/03 §11.4–§11.8)', () =>
     await until(async () => !(await ben.db.synced('items').get('stale')), 'reset after 4409')
     await live(ben)
     await ben.db.synced('items').put({ id: 'stale2', type: 'note', title: 'Stale', rev: 1 })
+    const before = server.requests.length
     server.setGroups(BEN, [G1])
     await until(async () => !(await ben.db.synced('items').get('stale2')), 'reset after the message')
+    await live(ben)
+    // The message and its close 4409 are one reset: one pull from 0.
+    expect(server.requests.slice(before).filter((r) => r.since === 0)).toHaveLength(1)
+  })
+
+  it('a patch whose every key conflicts is a conflict of kind field: nothing applied, the server’s row kept', async () => {
+    const ana = client(ANA, { live: false })
+    const ben = client(BEN, { live: false })
+    const note = await ana.repo.transaction(async (tx) => {
+      const n = await tx.create<ItemRow>('items', { type: 'note', title: 'Both' })
+      await tx.create('item_shares', { itemId: n.id, groupId: G1, access: 'edit' })
+      return n
+    })
+    await ana.engine.sync({ pull: true })
+    await ben.engine.sync({ pull: true })
+    await ben.repo.patch('items', note.id, { title: 'Ben’s' })
+    await ana.repo.patch('items', note.id, { title: 'Ana’s', pinned: true })
+    await ana.engine.sync({ pull: true })
+    const result = await ben.engine.sync({ pull: true })
+    expect(result).toMatchObject({ ok: true, conflicts: 1 })
+    const [conflict] = await ben.db.conflicts.toArray()
+    expect(conflict).toMatchObject({
+      kind: 'field',
+      fields: { title: { mine: 'Ben’s', theirs: 'Ana’s', by: 'Ana Muster' } },
+    })
+    expect(await ben.db.synced('items').get(note.id)).toMatchObject({ title: 'Ana’s', pinned: true })
+    expect(serverRow(note.id)).toMatchObject({ title: 'Ana’s', rev: 2 })
+  })
+
+  it('a change of a row the user can no longer see is dropped (missing_access without current)', async () => {
+    const ana = client(ANA, { live: false })
+    const ben = client(BEN, { live: false })
+    const note = await ana.repo.transaction(async (tx) => {
+      const n = await tx.create<ItemRow>('items', { type: 'note', title: 'Soon private' })
+      await tx.create('item_shares', { itemId: n.id, groupId: G1, access: 'edit' })
+      return n
+    })
+    await ana.engine.sync({ pull: true })
+    await ben.engine.sync({ pull: true })
+    await ben.repo.patch('items', note.id, { title: 'Too late' })
+    server.putShares(ANA, note.id, [])
+    expect(await ben.engine.sync({ pull: true })).toMatchObject({ ok: true, rejected: 1 })
+    expect(await ben.db.synced('items').get(note.id)).toBeUndefined()
+    expect(await ben.db.outbox.count()).toBe(0)
+    expect(serverRow(note.id).title).toBe('Soon private')
+  })
+
+  it('an eviction and the row again in one page: access came back, the row stays (evictions first)', async () => {
+    const ana = client(ANA, { live: false })
+    const ben = client(BEN, { live: false })
+    const note = await ana.repo.transaction(async (tx) => {
+      const n = await tx.create<ItemRow>('items', { type: 'note', title: 'Back again' })
+      await tx.create('item_shares', { itemId: n.id, groupId: G1, access: 'edit' })
+      return n
+    })
+    await ana.engine.sync({ pull: true })
+    await ben.engine.sync({ pull: true })
+    server.putShares(ANA, note.id, [])
+    server.putShares(ANA, note.id, [{ groupId: G1, access: 'read' }])
+    expect(await ben.engine.sync({ pull: true })).toMatchObject({ ok: true, evicted: 0 })
+    expect(await ben.db.synced('items').get(note.id)).toMatchObject({ title: 'Back again', access: 'read' })
+    expect(ben.notices.filter((n) => n.summary === 'Access removed')).toHaveLength(0)
+  })
+
+  it('the live channel answers the server’s ping, and relays editing notices of the others only', async () => {
+    const heard: { user: string; to: string }[] = []
+    const ana = client(ANA, { engine: { onEditing: (m) => heard.push({ user: m.user, to: 'ana' }) } })
+    const ben = client(BEN, { engine: { onEditing: (m) => heard.push({ user: m.user, to: 'ben' }) } })
+    ana.engine.start()
+    ben.engine.start()
+    await live(ana, ben)
+    const note = await sharedNote(ana, ben)
+    server.ping()
+    await until(() => [...server.connections].every((c) => c.pongs === 1), 'the pongs')
+    server.startEditing(ANA, note.id, 'description')
+    await until(() => heard.length === 1, 'the notice')
+    expect(heard).toEqual([{ user: 'Ana Muster', to: 'ben' }])
+    server.endEditing(ANA, note.id, 'description')
+    await until(() => heard.length === 2, 'the end')
   })
 
   it('close 4401 ends the session: no reconnect, the app is told', async () => {
@@ -348,8 +428,13 @@ describe('the sync engine against the contract (docs/03 §11.4–§11.8)', () =>
     const second = await phone.repo.create('user_settings', { key: 'list:note', value: { sort: '-title' } })
     await phone.engine.sync({ pull: true })
     expect(await phone.db.synced('user_settings').get(second.id)).toBeUndefined()
-    expect(await phone.db.synced('user_settings').get(first.id)).toMatchObject({ key: 'list:note' })
+    // The later device wins: its value overwrote the existing one (docs/03 §15 #36).
+    expect(await phone.db.synced('user_settings').get(first.id)).toMatchObject({
+      key: 'list:note',
+      value: { sort: '-title' },
+    })
     expect([...server.table('user_settings').values()]).toHaveLength(1)
+    expect(server.table('user_settings').get(first.id)).toMatchObject({ value: { sort: '-title' }, rev: 2 })
   })
 
   it('pulls page after page until the server has no more', async () => {

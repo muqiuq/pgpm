@@ -44,8 +44,9 @@ remove_stack() {
 remove_stack
 trap '[[ "$KEEP" == "1" ]] || remove_stack' EXIT
 
-# Settings of their own: start.sh adds the generated passwords.
-(umask 077 && printf '%s\n' '# tools/e2e.sh' >"$ENV_FILE")
+# Settings of their own: start.sh adds the generated passwords. The sync tests sign in dozens of users from one address,
+# more than the 10 a minute a client may try (Auth:LoginRateLimit:PermitLimit).
+(umask 077 && printf '%s\n' '# tools/e2e.sh' 'Auth__LoginRateLimit__PermitLimit=1000' >"$ENV_FILE")
 
 log="$(mktemp "$PWD/.tmpcheck/e2e.XXXXXX")"
 echo "Starting ${NAME} on port ${PORT}…"

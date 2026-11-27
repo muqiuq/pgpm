@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, request, type APIRequestContext, type Page } from '@playwright/test'
 
 /** The first admin of the e2e stack (tools/e2e.sh passes Auth__InitialAdmin__Password) … */
 export const initialAdminPassword = process.env.E2E_ADMIN_PASSWORD ?? ''
@@ -67,4 +67,108 @@ export async function signOut(page: Page) {
   await page.getByTestId('user-menu').click()
   await page.getByRole('menuitem', { name: 'Sign out' }).click()
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
+}
+
+/** Someone the sync tests sign in as: created by the admin through the API, the temporary password changed. */
+export interface TestUser {
+  id: string
+  username: string
+  password: string
+  name: string
+}
+
+/**
+ * The v1 API outside the browser (Playwright's request context): its own cookies, the CSRF header on unsafe calls
+ * (the XSRF-TOKEN cookie echoed, docs/03 §4.3).
+ */
+export class Api {
+  private constructor(readonly context: APIRequestContext) {}
+
+  static async create(baseURL: string | undefined): Promise<Api> {
+    return new Api(await request.newContext({ baseURL }))
+  }
+
+  /** The call's JSON (undefined for 204); an error with the status and body otherwise. */
+  async call<T = unknown>(method: string, path: string, data?: unknown): Promise<T> {
+    const headers: Record<string, string> = {}
+    if (method !== 'GET') {
+      const token = (await this.context.storageState()).cookies.find((c) => c.name === 'XSRF-TOKEN')?.value
+      if (token) headers['X-XSRF-TOKEN'] = token
+    }
+    const response = await this.context.fetch(path, { method, headers, data })
+    const text = await response.text()
+    if (!response.ok()) throw new Error(`${method} ${path}: ${response.status()} ${text}`)
+    return (text ? JSON.parse(text) : undefined) as T
+  }
+
+  signIn(username: string, password: string) {
+    return this.call<{ next: string; me: { flags: { mustChangePassword: boolean } } }>('POST', '/api/v1/auth/login', {
+      username,
+      password,
+    })
+  }
+
+  changePassword(current: string, next: string) {
+    return this.call('POST', '/api/v1/account/password', { currentPassword: current, newPassword: next })
+  }
+
+  dispose() {
+    return this.context.dispose()
+  }
+}
+
+/** The admin through the API: the initial password changed first if no test did that yet (a fresh stack). */
+export async function adminApi(baseURL: string | undefined): Promise<Api> {
+  const api = await Api.create(baseURL)
+  try {
+    await api.signIn('admin', adminPassword)
+    return api
+  } catch {
+    const login = await api.signIn('admin', initialAdminPassword)
+    if (login.me.flags.mustChangePassword) await api.changePassword(initialAdminPassword, adminPassword)
+    return api
+  }
+}
+
+/** A group of its own with Notes: Create, and users in it (Ana, Ben, …): what one sync test works with. */
+export interface Team {
+  admin: Api
+  group: { id: string; name: string }
+  users: TestUser[]
+}
+
+export async function createTeam(baseURL: string | undefined, names: string[] = ['Ana', 'Ben']): Promise<Team> {
+  const admin = await adminApi(baseURL)
+  const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
+  const group = await admin.call<{ id: string; name: string }>('POST', '/api/v1/groups', {
+    name: `Team ${stamp}`,
+    rights: { Notes: 'Create' },
+  })
+  const users: TestUser[] = []
+  for (const name of names) {
+    const username = `${name.toLowerCase()}-${stamp}`
+    const created = await admin.call<{ user: { id: string }; temporaryPassword: { password: string } }>(
+      'POST',
+      '/api/v1/users',
+      { username, displayName: `${name} ${stamp}`, groupIds: [group.id] },
+    )
+    const password = `e2e-${stamp}-${name.toLowerCase()}-pw`
+    const own = await Api.create(baseURL)
+    await own.signIn(username, created.temporaryPassword.password)
+    await own.changePassword(created.temporaryPassword.password, password)
+    await own.dispose()
+    users.push({ id: created.user.id, username, password, name: `${name} ${stamp}` })
+  }
+  return { admin, group, users }
+}
+
+/** The sign-in form for a user, the 2FA suggestion put off, signed in. */
+export async function signInAs(page: Page, user: TestUser, path = '/notes') {
+  await page.goto(`/sign-in?returnUrl=${encodeURIComponent(path)}`)
+  await signIn(page, user.username, user.password)
+  const suggestion = page.getByRole('heading', { name: 'Protect your account with two-factor authentication' })
+  const menu = page.getByTestId('user-menu')
+  await expect(suggestion.or(menu)).toBeVisible()
+  if (await suggestion.isVisible()) await page.getByRole('button', { name: 'Later' }).click()
+  await expect(menu).toBeVisible()
 }

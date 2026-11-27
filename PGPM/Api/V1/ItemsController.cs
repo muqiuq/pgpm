@@ -40,7 +40,7 @@ public sealed class ItemsController(SharingService sharing) : V1ControllerBase
 [Route("api/v1/trash")]
 public sealed class TrashController(TrashService trash) : V1ControllerBase
 {
-    /// <summary>Newest first.</summary>
+    /// <summary>Newest first (sort: <c>-deletedAt</c>, <c>deletedAt</c>, <c>title</c>, <c>-title</c>); search: in the title.</summary>
     [HttpGet]
     public async Task<Paged<TrashItem>> List([FromQuery] PageQuery query, CancellationToken ct) =>
         await trash.ListAsync(await Viewer.OfAsync(HttpContext, ct), query, ct);

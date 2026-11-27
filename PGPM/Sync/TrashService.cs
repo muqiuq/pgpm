@@ -21,19 +21,28 @@ public sealed class TrashService(PgpmDbContext db, SyncWriter writer, IHttpConte
         var me = viewer.UserId;
         var groups = viewer.GroupIds.ToList();
         var admin = viewer.IsAdmin;
-        var entries =
+        var (field, descending) = Paging.Sort(query.Sort, "-deletedAt", "deletedat", "title");
+        var pattern = SearchText.Pattern(query.Search);
+        var found =
             from b in db.DeleteBatches.AsNoTracking()
             where b.RootKind == DeleteRootKind.Item && b.RestoredAt == null && b.PurgedAt == null
             join i in db.Items.AsNoTracking() on b.RootId equals i.Id
             where i.Deleted && i.DeleteBatchId == b.Id
                 && (admin || i.OwnerUserId == me
                     || db.ItemShares.Any(s => s.ItemId == i.Id && !s.Deleted && s.Access == ItemAccess.Manage && groups.Contains(s.GroupId)))
-            orderby b.DeletedAt descending, b.Id descending
+                && (pattern == null || EF.Functions.ILike(i.Title, pattern, @"\"))
             select new
             {
                 b.Id, b.RootId, i.Type, i.Title, b.DeletedAt, b.DeletedBy,
                 Name = db.Users.Where(u => u.Id == b.DeletedBy).Select(u => u.DisplayName).FirstOrDefault(),
             };
+        var entries = (field, descending) switch
+        {
+            ("title", false) => found.OrderBy(t => t.Title).ThenByDescending(t => t.DeletedAt).ThenBy(t => t.Id),
+            ("title", true) => found.OrderByDescending(t => t.Title).ThenByDescending(t => t.DeletedAt).ThenBy(t => t.Id),
+            (_, false) => found.OrderBy(t => t.DeletedAt).ThenBy(t => t.Id),
+            _ => found.OrderByDescending(t => t.DeletedAt).ThenByDescending(t => t.Id),
+        };
         var page = await Paging.PageAsync(entries, query, ct);
         return new Paged<TrashItem>(page.Items.Select(t => new TrashItem(t.Id, "item", t.RootId, t.Type.ToString().ToLowerInvariant(), t.Title,
             t.DeletedAt, t.DeletedBy, t.Name)).ToList(), page.Page, page.PageSize, page.TotalCount);

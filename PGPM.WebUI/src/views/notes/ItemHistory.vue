@@ -54,8 +54,8 @@ function changes(entry: HistoryEntry): string[] {
   const list = Array.isArray(entry.changes) ? entry.changes : entry.changes ? [entry.changes] : []
   return list.map((c) => {
     const change = c as Record<string, unknown>
-    const field = typeof change.field === 'string' ? fieldLabel(entry.entity ?? 'items', change.field, props.type) : ''
-    if ('resolution' in change) return `${field}: kept ${String(change.resolution)}`
+    const field = typeof change.field === 'string' ? fieldLabel(entry.entity, change.field, props.type) : ''
+    if ('resolution' in change) return `${field ? `${field}: ` : ''}kept ${String(change.resolution)}`
     if ('theirs' in change) return `${field}: ${short(change.yours)} / theirs ${short(change.theirs)}`
     return field ? `${field}: ${short(change.old)} → ${short(change.new)}` : short(change)
   })

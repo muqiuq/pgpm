@@ -2,6 +2,7 @@ import { ApiError } from '@/api/client'
 import type {
   Eviction,
   FieldConflict,
+  ItemShare,
   MutationResult,
   ShareSpec,
   SyncRequest,
@@ -9,16 +10,20 @@ import type {
   TrashEntry,
   WireMutation,
 } from '@/api/sync'
-import type { SocketLike } from '@/local/live'
+import type { EditingMessage, SocketLike } from '@/local/live'
 import { applyPatch, getPath, jsonEqual, type Row } from '@/local/outbox'
 import { accessRank, type Access } from '@/local/rows'
 import { uuidv7 } from '@/local/uuid'
 
 /**
- * An in-memory server for the sync tests: the contract of docs/03 §11.4–§11.6 as the client relies on it – push with
- * per-field conflicts, delete conflicts and `force`, idempotent mutation ids, sharing visibility with computed `access`,
- * re-stamps and evictions, access epochs and resets, trash and restore, and the live channel with ack flow control.
- * Also a readable statement of what the client expects from PGPM's server.
+ * An in-memory server for the sync tests: the contract of docs/03 §11.4–§11.6 as PGPM's server (`PGPM/Sync`) answers
+ * it – push with per-field conflicts (`partial`, `conflict` of kind `field` with `current`), delete conflicts and
+ * `force`, idempotent mutation ids, `missing_access` without `current` for a row the user can't see, duplicate pairs
+ * (`mergedInto`; `user_settings` overwrite the value), sharing visibility with computed `access`, re-stamps and
+ * evictions, access epochs and resets (`cursor: 0`, no rows), trash and restore (an item's shares stay out of its
+ * batch), and the live channel: `reset` then close 4409, `session` then 4401, ack flow control (an ack below the sent
+ * cursor is ignored), the server's `ping`, *… is editing* notices never sent to the editor's own user. Timestamps with
+ * microseconds, as PostgreSQL keeps them. Checked against the real server by the e2e tests (e2e/sync.spec.ts).
  */
 
 type ServerRow = Row & { id: string; seq: number; rev: number; deleted: boolean; deleteBatchId: string | null }
@@ -33,7 +38,7 @@ interface User {
 
 /** The patchable whitelist per table (docs/03 §11.5); others: read-only or insert-only. */
 const patchable: Record<string, readonly string[]> = {
-  items: ['title', 'description', 'color', 'imageFileId', 'statusId', 'pinned'],
+  items: ['title', 'description', 'color', 'imageFileId', 'statusId', 'pinned', 'tags'],
   persons: ['notes', 'displayName', 'email', 'jobTitle', 'department', 'companyName', 'phone', 'mobilePhone'],
   user_settings: ['value'],
 }
@@ -57,6 +62,8 @@ export class FakeSyncServer {
   readonly resolved: { userId: string; table: string; id: string; field: string | null; resolution: string }[] = []
   private readonly mutations = new Map<string, Stored>()
   private readonly evictions: { userId: string; seq: number; kind: 'item' | 'map'; id: string }[] = []
+  /** Open *… is editing* notices (EditingRegistry). */
+  readonly editing: EditingMessage[] = []
   private readonly lastChange = new Map<string, { by: string; at: string }>()
   private readonly batches = new Map<
     string,
@@ -93,8 +100,9 @@ export class FakeSyncServer {
     return user
   }
 
+  /** The wire's timestamp (docs/03 §11.4): UTC, microseconds. */
   private now() {
-    return new Date().toISOString()
+    return new Date().toISOString().replace('Z', '000Z')
   }
 
   /** Inserts or overwrites a row with fresh seq/rev/updated_*. */
@@ -128,10 +136,9 @@ export class FakeSyncServer {
   itemAccess(user: User, item: ServerRow): Access | null {
     if (user.isAdmin || item.ownerUserId === user.id) return 'manage'
     let best: Access | null = null
+    // An item's shares are not deleted with it: they decide who sees the tombstone (docs/03 §15 #32).
     for (const share of this.table('item_shares').values()) {
-      if (share.itemId !== item.id || !user.groupIds.includes(share.groupId as string)) continue
-      const live = !share.deleted || (item.deleted && share.deleteBatchId === item.deleteBatchId)
-      if (!live) continue
+      if (share.itemId !== item.id || share.deleted || !user.groupIds.includes(share.groupId as string)) continue
       const level = share.access as Access
       if (!best || accessRank[level] > accessRank[best]) best = level
     }
@@ -160,6 +167,12 @@ export class FakeSyncServer {
     return out
   }
 
+  /** The `current` of a result: a tombstone also names its delete batch (for *Restore*). */
+  private currentRow(user: User, table: string, row: ServerRow): Row {
+    const out = this.wireRow(user, table, row)
+    return row.deleted ? { ...out, deleteBatchId: row.deleteBatchId } : out
+  }
+
   // --- pull -----------------------------------------------------------------------------------------------------
 
   pull(userId: string, since: number, limit: number) {
@@ -174,12 +187,12 @@ export class FakeSyncServer {
       if (page.length) changes[table] = page.map((r) => this.wireRow(user, table, r))
       if (candidates.length > limit) truncated.push(page[page.length - 1]!.seq)
     }
+    const mine = this.evictions.filter((e) => e.userId === userId && e.seq > since).sort((a, b) => a.seq - b.seq)
+    const evictions = mine.slice(0, limit)
+    if (mine.length >= limit) truncated.push(evictions[evictions.length - 1]!.seq)
     const more = truncated.length > 0
-    const cursor = more ? Math.min(...truncated) : this.seq
-    const evictions: Eviction[] = this.evictions
-      .filter((e) => e.userId === userId && e.seq > since && e.seq <= cursor)
-      .map((e) => ({ kind: e.kind, id: e.id }))
-    return { changes, evictions, cursor, more }
+    const cursor = more ? Math.max(since, Math.min(...truncated)) : this.seq
+    return { changes, evictions: evictions.map((e): Eviction => ({ kind: e.kind, id: e.id })), cursor, more }
   }
 
   // --- push -----------------------------------------------------------------------------------------------------
@@ -203,10 +216,12 @@ export class FakeSyncServer {
       conflicts.push(...stored.conflicts)
     }
     for (const r of body.resolved) this.resolved.push({ userId, ...r })
-    const reset = body.accessEpoch !== user.accessEpoch || body.since < this.horizon
+    // A device that has synced before resets on another epoch, or behind the tombstone horizon (or beyond the head).
+    const reset =
+      body.since > 0 && (body.accessEpoch !== user.accessEpoch || body.since < this.horizon || body.since > this.seq)
     const response: SyncResponse = {
       head: this.seq,
-      cursor: body.since,
+      cursor: reset ? 0 : body.since,
       more: false,
       reset,
       accessEpoch: user.accessEpoch,
@@ -223,9 +238,38 @@ export class FakeSyncServer {
     return clone(response)
   }
 
-  private rejected(mutation: WireMutation, code: string, current: Row | null = null): Stored {
+  /** Refused; without `current` the client drops its row (a row the user can't see, a refused insert). */
+  private rejected(
+    mutation: WireMutation,
+    code: string,
+    current: Row | null = null,
+    errors?: Record<string, string[]>,
+  ): Stored {
+    const result: MutationResult = { mutationId: mutation.mutationId, status: 'rejected', id: mutation.id, code }
+    result.message = code
+    if (errors) result.errors = errors
+    if (current) result.current = current
+    return { result, conflicts: [] }
+  }
+
+  private conflict(
+    mutation: WireMutation,
+    row: ServerRow,
+    kind: string,
+    current: Row,
+    extra: Partial<MutationResult> = {},
+  ): Stored {
     return {
-      result: { mutationId: mutation.mutationId, status: 'rejected', id: mutation.id, code, message: code, current },
+      result: {
+        mutationId: mutation.mutationId,
+        status: 'conflict',
+        id: row.id,
+        rev: row.rev,
+        seq: row.seq,
+        kind,
+        current,
+        ...extra,
+      },
       conflicts: [],
     }
   }
@@ -248,21 +292,25 @@ export class FakeSyncServer {
 
   private apply(user: User, m: WireMutation): Stored {
     const rows = this.rows.get(m.table)
-    if (!rows || m.table === 'groups') return this.rejected(m, 'read_only')
+    if (!rows) return this.rejected(m, 'not_supported')
+    if (m.table === 'groups') return this.rejected(m, m.op === 'patch' ? 'not_patchable' : 'not_supported')
     const existing = rows.get(m.id)
     if (m.op === 'insert') return this.insert(user, m, existing)
-    if (!existing) return this.rejected(m, 'not_found')
-    if (!this.visible(user, m.table, existing)) return this.rejected(m, 'missing_access')
+    // A row that doesn't exist and one the user may not see are the same answer: no current, the client drops it.
+    if (!existing || !this.visible(user, m.table, existing)) return this.rejected(m, 'missing_access')
     if (m.op === 'patch') return this.patch(user, m, existing)
     return this.remove(user, m, existing)
   }
 
   private insert(user: User, m: WireMutation, existing: ServerRow | undefined): Stored {
-    if (existing) return this.rejected(m, 'duplicate_id', this.wireRow(user, m.table, existing))
+    if (existing) return this.rejected(m, 'duplicate_id')
     const row: Row & { id: string } = { ...(m.row ?? {}), id: m.id }
     if (m.table === 'items') {
-      if (row.type !== 'note') return this.rejected(m, 'validation_failed')
-      if (typeof row.title !== 'string' || !row.title.trim()) return this.rejected(m, 'validation_failed')
+      // Computed per user: ignored as the server ignores unknown keys.
+      delete row.access
+      if (row.type !== 'note') return this.rejected(m, 'not_supported')
+      if (typeof row.title !== 'string' || !row.title.trim())
+        return this.rejected(m, 'validation_failed', null, { title: ['A title is needed.'] })
       const number = (this.numbers.get('note') ?? 0) + 1
       this.numbers.set('note', number)
       const stored = this.write('items', { ...row, ownerUserId: user.id, number }, user.id)
@@ -272,43 +320,41 @@ export class FakeSyncServer {
     }
     if (m.table === 'item_shares') {
       const item = this.table('items').get(row.itemId as string)
-      if (!item || item.ownerUserId !== user.id || !this.created.get(m.batch)?.has(item.id)) {
+      if (!item || item.deleted) return this.rejected(m, 'parent_missing')
+      if (item.ownerUserId !== user.id || !this.created.get(m.batch)?.has(item.id)) {
         return this.rejected(m, 'missing_access')
       }
       const duplicate = [...this.table('item_shares').values()].find(
         (s) => !s.deleted && s.itemId === row.itemId && s.groupId === row.groupId,
       )
-      if (duplicate) return this.accepted(m, duplicate, { mergedInto: duplicate.id })
+      // `id` stays the client's, `mergedInto` is the row it became.
+      if (duplicate) return this.accepted(m, duplicate, { id: m.id, mergedInto: duplicate.id })
       return this.accepted(m, this.write('item_shares', row, user.id))
     }
     if (m.table === 'user_settings') {
       const duplicate = [...this.table('user_settings').values()].find(
         (s) => !s.deleted && s.userId === user.id && s.key === row.key,
       )
-      if (duplicate) return this.accepted(m, duplicate, { mergedInto: duplicate.id })
+      // Two devices, one key: a patch of the value with old = the existing one – the later device wins.
+      if (duplicate) {
+        const merged = jsonEqual(duplicate.value, row.value)
+          ? duplicate
+          : this.write('user_settings', { ...duplicate, value: row.value }, user.id)
+        return this.accepted(m, merged, { id: m.id, mergedInto: duplicate.id })
+      }
       return this.accepted(m, this.write('user_settings', { ...row, userId: user.id }, user.id))
     }
     return this.accepted(m, this.write(m.table, { ...row, source: 'manual' }, user.id))
   }
 
   private patch(user: User, m: WireMutation, row: ServerRow): Stored {
-    if (!this.canWrite(user, m.table, row, 'edit'))
-      return this.rejected(m, 'missing_access', this.wireRow(user, m.table, row))
-    if (row.deleted) {
-      return {
-        result: {
-          mutationId: m.mutationId,
-          status: 'conflict',
-          kind: 'deleted_by_other',
-          id: row.id,
-          current: { id: row.id, seq: row.seq, rev: row.rev, deleted: true, deleteBatchId: row.deleteBatchId },
-        },
-        conflicts: [],
-      }
-    }
+    if (row.deleted) return this.conflict(m, row, 'deleted_by_other', this.currentRow(user, m.table, row))
     const allowed = patchable[m.table] ?? []
     const changes = m.changes ?? {}
-    if (Object.keys(changes).some((k) => !allowed.includes(k.split('.')[0]!))) return this.rejected(m, 'not_patchable')
+    if (Object.keys(changes).some((k) => !allowed.includes(k.split('.')[0]!)))
+      return this.rejected(m, 'not_patchable', this.currentRow(user, m.table, row))
+    if (!this.canWrite(user, m.table, row, 'edit'))
+      return this.rejected(m, 'missing_access', this.currentRow(user, m.table, row))
     const apply: Record<string, { old: unknown; new: unknown }> = {}
     const conflicts: FieldConflict[] = []
     for (const [key, change] of Object.entries(changes)) {
@@ -336,44 +382,39 @@ export class FakeSyncServer {
       }
     }
     if (!conflicts.length) return this.accepted(m, stored)
+    const conflictFields = conflicts.map((c) => c.field)
+    if (!Object.keys(apply).length) {
+      // Every key conflicted (or was a no-op): nothing applied, the row as it is.
+      return {
+        ...this.conflict(m, stored, 'field', this.currentRow(user, m.table, stored), { conflictFields }),
+        conflicts,
+      }
+    }
     return {
       result: {
         mutationId: m.mutationId,
-        status: Object.keys(apply).length ? 'partial' : 'conflict',
+        status: 'partial',
         id: row.id,
         rev: stored.rev,
         seq: stored.seq,
-        conflictFields: conflicts.map((c) => c.field),
+        conflictFields,
       },
       conflicts,
     }
   }
 
   private remove(user: User, m: WireMutation, row: ServerRow): Stored {
-    if (m.table === 'item_shares') return this.rejected(m, 'read_only')
-    if (!this.canWrite(user, m.table, row, 'manage'))
-      return this.rejected(m, 'missing_access', this.wireRow(user, m.table, row))
     if (row.deleted) return this.accepted(m, row)
+    if (m.table === 'item_shares' || m.table === 'user_settings') return this.rejected(m, 'not_supported')
+    if (!this.canWrite(user, m.table, row, 'manage'))
+      return this.rejected(m, 'missing_access', this.currentRow(user, m.table, row))
     if (!m.force && m.baseRev !== null && row.rev !== m.baseRev) {
-      return {
-        result: {
-          mutationId: m.mutationId,
-          status: 'conflict',
-          kind: 'changed_since_delete',
-          id: row.id,
-          current: this.wireRow(user, m.table, row),
-        },
-        conflicts: [],
-      }
+      return this.conflict(m, row, 'changed_since_delete', this.currentRow(user, m.table, row))
     }
     const batch = uuidv7()
+    // The item's shares stay out of its batch: they decide who sees the tombstone and may restore it.
     if (m.table === 'items') {
       this.batches.set(batch, { rootKind: 'item', rootId: row.id, at: this.now(), by: user.id, restored: false })
-      for (const share of this.table('item_shares').values()) {
-        if (share.itemId === row.id && !share.deleted) {
-          this.write('item_shares', { ...share, deleted: true, deleteBatchId: batch }, user.id)
-        }
-      }
     }
     return this.accepted(m, this.write(m.table, { ...row, deleted: true, deleteBatchId: batch }, user.id))
   }
@@ -390,8 +431,8 @@ export class FakeSyncServer {
     this.publish()
   }
 
-  /** `PUT /api/v1/items/{id}/shares`: diff, re-stamp the subtree, evictions for those who lost access. */
-  putShares(userId: string, itemId: string, shares: ShareSpec[]) {
+  /** `PUT /api/v1/items/{id}/shares`: diff, re-stamp the subtree, evictions for those who lost access; the new list. */
+  putShares(userId: string, itemId: string, shares: ShareSpec[]): ItemShare[] {
     const user = this.user(userId)
     const item = this.table('items').get(itemId)
     if (!item || this.itemAccess(user, item) !== 'manage') throw new ApiError(403, { code: 'missing_access' })
@@ -416,6 +457,14 @@ export class FakeSyncServer {
       }
     }
     this.publish()
+    return [...this.table('item_shares').values()]
+      .filter((s) => s.itemId === itemId && !s.deleted)
+      .map((s) => ({
+        id: s.id,
+        groupId: s.groupId as string,
+        groupName: String(this.table('groups').get(s.groupId as string)?.name ?? ''),
+        access: s.access as Access,
+      }))
   }
 
   /** `GET /api/v1/trash`: the batches of roots the user may manage. */
@@ -431,6 +480,7 @@ export class FakeSyncServer {
         batchId,
         rootKind: b.rootKind,
         rootId: b.rootId,
+        rootType: String(this.table('items').get(b.rootId)?.type ?? 'note'),
         title: String(this.table('items').get(b.rootId)?.title ?? ''),
         deletedAt: b.at,
         deletedBy: b.by,
@@ -438,25 +488,74 @@ export class FakeSyncServer {
       }))
   }
 
-  /** `POST /api/v1/trash/{batchId}/restore`. */
-  restore(userId: string, batchId: string) {
+  /** `POST /api/v1/trash/{batchId}/restore`: the batch's rows again, with new seqs. */
+  restore(userId: string, batchId: string): { batchId: string; restored: number; skipped: number } {
     const batch = this.batches.get(batchId)
     if (!batch || batch.restored) throw new ApiError(404, { code: 'not_found' })
+    let restored = 0
     for (const table of tableNames) {
       for (const row of this.table(table).values()) {
-        if (row.deleteBatchId === batchId) this.write(table, { ...row, deleted: false, deleteBatchId: null }, userId)
+        if (row.deleteBatchId === batchId) {
+          this.write(table, { ...row, deleted: false, deleteBatchId: null }, userId)
+          restored++
+        }
       }
     }
     batch.restored = true
     this.publish()
+    return { batchId, restored, skipped: 0 }
   }
 
-  /** Group membership changed (an admin): the user's access epoch goes up, live connections get `reset`. */
+  /** Group membership changed (an admin): the access epoch goes up; live connections get `reset`, then close 4409. */
   setGroups(userId: string, groupIds: string[]) {
     const user = this.user(userId)
     user.groupIds = groupIds
     user.accessEpoch++
-    for (const c of this.connections) if (c.userId === userId) c.send({ type: 'reset' })
+    for (const c of [...this.connections]) if (c.userId === userId) c.reset()
+  }
+
+  /** Signed out everywhere (`revoked`) or the 30 days over (`expired`): `session`, then close 4401. */
+  endSession(userId: string, state: 'revoked' | 'expired') {
+    for (const c of [...this.connections]) {
+      if (c.userId !== userId) continue
+      c.send({ type: 'session', state })
+      c.drop(4401)
+    }
+  }
+
+  /** The server's heartbeat (every 25 s): a `ping` to every connection. */
+  ping() {
+    for (const c of this.connections) c.send({ type: 'ping' })
+  }
+
+  /** `POST /api/v1/editing`: the others who may read the item hear it; never the editor's own user. */
+  startEditing(userId: string, itemId: string, target: string) {
+    const user = this.user(userId)
+    const message: EditingMessage = { type: 'editing', itemId, target, userId, user: user.name, since: this.now() }
+    this.endEditing(userId, itemId, target, false)
+    this.editing.push(message)
+    this.tellEditing(message)
+  }
+
+  /** `DELETE /api/v1/editing`. */
+  endEditing(userId: string, itemId: string, target: string, tell = true) {
+    const at = this.editing.findIndex((e) => e.userId === userId && e.itemId === itemId && e.target === target)
+    if (at < 0) return
+    const [open] = this.editing.splice(at, 1)
+    if (tell) this.tellEditing({ type: 'editing_end', itemId, target, userId, user: open!.user })
+  }
+
+  /** Whether the user may read the item now (the editing notices go to readers only). */
+  canRead(userId: string, itemId: string): boolean {
+    const user = this.users.get(userId)
+    const item = this.table('items').get(itemId)
+    return !!user && !!item && this.itemAccess(user, item) !== null
+  }
+
+  private tellEditing(message: EditingMessage) {
+    for (const c of this.connections) {
+      if (c.welcomed && c.userId !== message.userId && this.canRead(c.userId, message.itemId)) c.send({ ...message })
+    }
   }
 
   /** The network goes down: requests fail, sockets drop. */
@@ -491,6 +590,9 @@ export class ServerConnection {
   cursor = 0
   welcomed = false
   awaiting = false
+  /** The cursor of the batch waiting for its ack. */
+  sentCursor = 0
+  pongs = 0
   readonly sent: Record<string, unknown>[] = []
   readonly server: FakeSyncServer
   readonly userId: string
@@ -512,26 +614,48 @@ export class ServerConnection {
     this.socket.serverClosed(code)
   }
 
+  /** `reset`, then close 4409. */
+  reset() {
+    this.send({ type: 'reset' })
+    this.drop(4409)
+  }
+
   receive(message: Record<string, unknown>) {
     const user = this.server.users.get(this.userId)!
     switch (message.type) {
-      case 'hello':
-        if (message.accessEpoch !== user.accessEpoch || (message.since as number) < this.server.horizon) {
-          this.drop(4409)
+      case 'hello': {
+        if (this.welcomed) return
+        const since = message.since as number
+        if (
+          since < 0 ||
+          (since > 0 &&
+            (message.accessEpoch !== user.accessEpoch || since < this.server.horizon || since > this.server.seq))
+        ) {
+          this.reset()
           return
         }
-        this.cursor = message.since as number
+        this.cursor = since
         this.welcomed = true
         this.send({ type: 'welcome', head: this.server.seq })
+        for (const notice of this.server.editing) {
+          if (notice.userId !== this.userId && this.server.canRead(this.userId, notice.itemId)) this.send({ ...notice })
+        }
         this.pump()
         break
+      }
       case 'ack':
-        this.cursor = message.cursor as number
-        this.awaiting = false
-        this.pump()
+        // Applied up to at least what was sent: the next batch. Anything else is ignored.
+        if (this.awaiting && typeof message.cursor === 'number' && message.cursor >= this.sentCursor) {
+          this.cursor = Math.max(this.cursor, this.sentCursor)
+          this.awaiting = false
+          this.pump()
+        }
         break
       case 'ping':
         this.send({ type: 'pong' })
+        break
+      case 'pong':
+        this.pongs++
         break
       default:
         break
@@ -543,10 +667,11 @@ export class ServerConnection {
     if (!this.welcomed || this.awaiting || this.cursor >= this.server.seq) return
     const page = this.server.pull(this.userId, this.cursor, 500)
     if (!Object.keys(page.changes).length && !page.evictions.length) {
-      this.cursor = page.cursor
+      this.cursor = Math.max(this.cursor, page.cursor)
       return
     }
     this.awaiting = true
+    this.sentCursor = page.cursor
     this.send({ type: 'changes', ...page })
   }
 }

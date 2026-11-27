@@ -195,6 +195,15 @@ public sealed class SyncAccessTests
         Assert.AreEqual("item", entry.Str("rootKind"));
         Assert.AreEqual("note", entry.Str("rootType"));
         Assert.AreEqual(await DisplayNameAsync(app, owner), entry.Str("deletedByName"));
+        // Search in the title, sorted.
+        var found = await (await ownerClient.Http.GetAsync("/api/v1/trash?search=old%20id&sort=title")).JsonAsync();
+        Assert.AreEqual(id.ToString(), found.Arr("items").Single()!.Str("rootId"));
+        var none = await (await ownerClient.Http.GetAsync("/api/v1/trash?search=nothing%20like%20it")).JsonAsync();
+        Assert.AreEqual(0, none.Int("totalCount"));
+        using (var badSort = await ownerClient.Http.GetAsync("/api/v1/trash?sort=number"))
+        {
+            Assert.AreEqual(HttpStatusCode.BadRequest, badSort.StatusCode);
+        }
         var otherTrash = await (await otherClient.Http.GetAsync("/api/v1/trash?pageSize=500")).JsonAsync();
         Assert.IsFalse(otherTrash.Arr("items").Any(e => e.Str("rootId") == id.ToString()), "read access doesn't manage");
         var batchId = entry.Str("batchId");

@@ -60,7 +60,7 @@ describe('the sync indicator (docs/03 §12.6)', () => {
       createdAt: '2026-11-27T00:00:00Z',
     })
     await until(() => wrapper.find('[data-testid="sync-conflicts"]').exists(), 'the conflict count')
-    expect(button().attributes('aria-label')).toBe('Sync: Offline, 2 pending, 1 conflicts')
+    expect(button().attributes('aria-label')).toBe('Sync: Offline, 2 pending, 1 conflict')
 
     await button().trigger('click')
     const sync = useSyncStore(pinia)

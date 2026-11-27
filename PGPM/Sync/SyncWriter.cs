@@ -163,12 +163,14 @@ public sealed class SyncWrite : IAsyncDisposable
 
     /// <summary>
     /// A conflict the user decided (docs/03 §11.8, request <c>resolved[]</c>): a <c>conflict_resolved</c> entry, for a row
-    /// they may see. Anything else is ignored: it is a record, not a change.
+    /// they may see; <c>field: null</c> for the delete kinds (the whole row). Anything else is ignored: it is a record,
+    /// not a change.
     /// </summary>
     public async Task ResolveAsync(SyncResolution resolution, CancellationToken ct)
     {
+        var field = resolution.Field;
         if (SyncTables.Find(resolution.Table ?? "") is not { } table || resolution.Id is not { } id
-            || resolution.Field is not { Length: > 0 and <= 200 } field
+            || field is { Length: 0 or > 200 }
             || resolution.Resolution is not ("mine" or "theirs" or "edited")
             || await table.FindVisibleAsync(this, id, ct) is not { } row)
         {

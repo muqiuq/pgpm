@@ -2344,7 +2344,8 @@
       },
       "JsonNode": { },
       "JsonObject": {
-        "type": "object"
+        "type": "object",
+        "additionalProperties": { }
       },
       "Level": {
         "enum": [
@@ -2826,6 +2827,10 @@
         }
       },
       "SyncMutationResult": {
+        "required": [
+          "mutationId",
+          "status"
+        ],
         "type": "object",
         "properties": {
           "mutationId": {
