@@ -4,6 +4,7 @@ import { appApi, type AppInfo } from '@/api/app'
 import { authApi, type MeResponse, type RightsAreaItem } from '@/api/auth'
 import { ApiError } from '@/api/client'
 import { holds, meets, setCatalogue, type Area, type Level, type Right } from '@/api/rights'
+import { claimLocalData, wipeLocalData } from '@/local/db'
 import { requestPersistence } from '@/pwa/storage'
 
 /** Where the last `/auth/me` and the rights catalogue are kept for an offline start (docs/03 §4.5). */
@@ -38,8 +39,11 @@ function writeCache(value: Cached | null) {
  *
  * Offline-first: the last `/auth/me` (and the rights catalogue) is kept in localStorage, so the app opens signed in
  * without the network and checks the session in the background; without a copy the first navigation waits for
- * `/auth/me`. A 401 ends the session (sessionHandling.ts sends the user to the sign-in). Phase 2 moves the copy into
- * IndexedDB's `meta` and wipes the local data on logout and on a change of user.
+ * `/auth/me`. A 401 ends the session (sessionHandling.ts sends the user to the sign-in).
+ *
+ * The local data (docs/01 §14.5): a sign-out wipes it; a sign-in of another user than the one it belongs to wipes it
+ * before the new user sees anything (claimLocalData). A session that merely ended (401) keeps it, so that the same user
+ * signs in again and the pending changes go out.
  */
 export const useSession = defineStore('session', () => {
   const cached = readCache()
@@ -97,6 +101,7 @@ export const useSession = defineStore('session', () => {
 
   /** A complete sign-in: the session, the catalogue, and the browser asked to keep this origin's data. */
   async function signedIn(next: MeResponse) {
+    await claimLocalData(next.user.id)
     set(next)
     void requestPersistence()
     if (!gated(next)) await loadCatalogue()
@@ -109,6 +114,7 @@ export const useSession = defineStore('session', () => {
       offline.value = false
       // Back from a Microsoft sign-in (a full navigation): the first session of this page asks to keep the data too.
       if (!me.value) void requestPersistence()
+      if (next.user.id !== me.value?.user.id) await claimLocalData(next.user.id)
       set(next)
       if (!gated(next)) await loadCatalogue()
     } catch (e) {
@@ -146,13 +152,17 @@ export const useSession = defineStore('session', () => {
     }
   }
 
-  /** Ends this PGPM session only: a Microsoft session at Entra stays (no single sign-out, docs/03 §5.3). */
+  /**
+   * Ends this PGPM session only: a Microsoft session at Entra stays (no single sign-out, docs/03 §5.3). The local data
+   * goes with it (the caller warned about pending changes and conflicts).
+   */
   async function logout() {
     try {
       await authApi.logout()
     } catch {
       // Signed out on the server already, or unreachable: the session ends here either way.
     }
+    await wipeLocalData()
     set(null)
   }
 

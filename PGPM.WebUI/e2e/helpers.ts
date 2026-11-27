@@ -18,6 +18,8 @@ export function problems(page: Page): string[] {
     const text = message.text()
     if (message.type() === 'error' || /\[Vue warn\]|Content Security Policy/.test(text)) {
       if (/Failed to load resource: net::ERR_INTERNET_DISCONNECTED/.test(text)) return
+      // The live channel's reconnect attempts while offline (the sync falls back to polling).
+      if (/WebSocket connection to '.*\/api\/v1\/sync\/live' failed/.test(text)) return
       if (/Failed to load resource: the server responded with a status of (401|403)/.test(text)) return
       seen.push(`${message.type()}: ${text}`)
     }

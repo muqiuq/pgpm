@@ -88,6 +88,11 @@ export function onApiError(listener: Listener): () => void {
   return () => listeners.delete(listener)
 }
 
+/** Tells the listeners of a failed call made without openapi-fetch (api/raw.ts). */
+export function reportApiError(error: ApiError, path: string) {
+  listeners.forEach((l) => l(error, path))
+}
+
 /**
  * The data of an openapi-fetch call, or an {@link ApiError}. A call the server never answered
  * (offline, proxy down) is an ApiError with status 0 and code "network".

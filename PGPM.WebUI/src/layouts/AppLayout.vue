@@ -6,12 +6,14 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import GlobalSearch from '@/components/GlobalSearch.vue'
 import LogoMark from '@/components/LogoMark.vue'
-import SyncIndicator from '@/components/SyncIndicator.vue'
+import SyncIndicator from '@/components/sync/SyncIndicator.vue'
+import { useActions } from '@/composables/useActions'
 import { useMedia } from '@/composables/useMedia'
 import { useNotify } from '@/composables/useNotify'
 import { installStatus, manualInstallSteps, promptInstall } from '@/pwa/install'
 import { usePreferences } from '@/stores/preferences'
 import { useSession } from '@/stores/session'
+import { useSyncStore } from '@/stores/sync'
 import { type NavGroup, visibleNavigation } from './navigation'
 
 /**
@@ -77,7 +79,25 @@ async function install() {
   }
 }
 
+const sync = useSyncStore()
+const { ask } = useActions()
+
+/** Signing out wipes this device's data (docs/01 §14.5): with changes not sent or conflicts open, it asks first. */
 async function signOut() {
+  const open = [
+    sync.pendingCount ? `${sync.pendingCount} change${sync.pendingCount === 1 ? '' : 's'} not sent yet` : '',
+    sync.conflictCount ? `${sync.conflictCount} unresolved conflict${sync.conflictCount === 1 ? '' : 's'}` : '',
+  ].filter(Boolean)
+  if (
+    open.length &&
+    !(await ask(
+      'Sign out and lose them?',
+      `This device has ${open.join(' and ')}. Signing out removes all PGPM data from this device, these with it.`,
+      'Sign out',
+    ))
+  ) {
+    return
+  }
   await session.logout()
   await router.replace({ name: 'sign-in' })
 }

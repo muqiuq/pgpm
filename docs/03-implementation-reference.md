@@ -1116,6 +1116,50 @@ purges rows and files and raises the tombstone horizon.
 - **Target**: p95 < 1 s from a completed change on client A to its display on
   client B (both live, same region).
 
+**Client implementation (phase 2)** – `PGPM.WebUI/src/local/`:
+
+| Module | Role |
+|---|---|
+| `tables.ts` | registry of the synced tables: wire name, Dexie indexes, `parents` (eviction cascade), `writes` (`all` / `insert` / `none`), `root` (eviction kind), `serverOwned`, `defaults`, `since`; `dbVersion` |
+| `db.ts` | `PgpmDb` (Dexie, schema from the registry), `localDb()`, `wipeLocalData()` with before/after hooks, `claimLocalData(userId)`, `databaseBlocked` |
+| `repo.ts` | `repo.create / patch / remove / transaction` – row + coalesced outbox entry in one Dexie transaction |
+| `apply.ts` | fresh rows, evictions, results, reset (inside the caller's transaction) |
+| `sync.ts` / `live.ts` / `leader.ts` | `SyncEngine` (status, `start`, `stop`, `localChange`, `syncNow`, `sync`, `wake`), the WebSocket, the Web Lock |
+| `resolve.ts` | the conflict decisions; `boot.ts` wires engine, repo and conflicts to the session |
+
+Decisions taken while building it:
+
+- **Bookkeeping** lives in `_local = {serverRev, pending, base}` on the stored row and is stripped
+  (`withoutLocal`) before anything leaves. `base` is the server's row while entries are pending:
+  results and fresh rows are rebased from it (`local = rebase(base, pending)`), so a held-back key
+  falls back to the server's value without a refetch. A tombstone keeps the known members (title)
+  under `deleted: true` for the conflict dialog.
+- **Sent entries are never coalesced**: a push stamps `sentAt` on the entries it takes (≤ 200, in
+  `seq` order); later local changes become entries of their own, because the server may already have
+  stored a result under the sent `mutationId`. A lost answer is re-sent with the same ids.
+- **Cursor** = the maximum of what the HTTP pull and the live feed applied (both are idempotent);
+  only a reset sets it back to 0. A reset pushes what is left first (as long as the server answers),
+  then empties the synced stores (outbox, conflicts, drafts and blobs stay – whatever is still in the
+  outbox goes out afterwards and is rebased on the re-pulled rows), adopts the response's
+  `accessEpoch` and pulls from 0, then reopens the live channel.
+- **Results**: `partial` and `conflict` without `kind` are both field conflicts (`conflictFields` /
+  `conflicts[]`); one conflict entry per row and kind, fields merged. `deleted_by_other` restores from
+  `current.deleteBatchId` – the trash list is searched for the root when the server leaves it out.
+- **Session**: a sign-out wipes (`session.logout()`); a 401 or close 4401 only stops the engine and
+  keeps the data, so the same user's pending changes go out after the next sign-in; a sign-in of
+  another user wipes first (`meta.userId`).
+- **Tabs**: BroadcastChannel `pgpm-sync` – the leader broadcasts its status (followers ask on start);
+  followers forward `changed` and `sync-now`; `editing` notices are relayed. Without Web Locks every
+  tab leads.
+- **Close codes**: 4401 → session refresh, no reconnect; 4403 → polling only (`liveRefused`);
+  4409 → HTTP sync with reset; 4429 → reconnect after the longest backoff. A socket silent for two
+  heartbeats is closed (4000) and treated like a dropped one (catch-up over HTTP, reconnect).
+- Toasts: once per run "n sync conflicts", one per refused change ("Change undone: reason"), one per
+  eviction ("Access to … was removed"). Background Sync is requested when a sync fails offline with
+  pending entries.
+- Tests: `src/test/fakeSyncServer.ts` implements this contract in memory (push rules, visibility,
+  re-stamp, evictions, epochs, trash, live channel with ack flow control) for `sync.test.ts`.
+
 ### 11.8 Conflict resolution (client) [NEW]
 
 Decision 2026-11-26 #10: no silent last-writer-wins.
@@ -1133,6 +1177,13 @@ Decision 2026-11-26 #10: no silent last-writer-wins.
   then re-push) or *Discard*. `changed_since_delete` → *Delete anyway* (re-push
   with `force: true`) or *Keep it*.
 - Logout with unresolved conflicts warns like pending changes.
+- Implementation (`components/sync/ConflictResolver.vue`, `local/resolve.ts`): every decision runs in
+  one repository transaction with the removal of the entry and its `resolved[]` record (meta
+  `resolved`, sent with the next request; `field: null` for the delete kinds). *Keep mine* of a
+  `deleted_by_other` is the restore, of a `changed_since_delete` the forced delete; "for all" goes on
+  after a failure (a restore offline) and names what failed. *Edit* of a Markdown field opens
+  `/notes/:id/edit?conflict=<id>` with the editor's conflict view; saving there resolves as *edited*,
+  *Take theirs* as *theirs*.
 
 ### 11.9 What is dropped from PLM (E2EE)
 
@@ -1295,6 +1346,12 @@ filter/sort – then `ListTable.vue`, `FilterBar.vue`, `useColumnWidths` +
 
 Online-only views show an "Available online only" empty state when offline.
 
+Phase 2: `useLive(query, initial, key?)` (`local/useLive.ts`) answers `{value, loaded, error, refresh}`;
+`useLocalTable` (`composables/useLocalTable.ts`) returns the shape of `useServerTable` (typed as
+`TableSource<T>` in `composables/tableSource.ts`, which `ListTable.vue` takes). The phase 2 endpoints
+not yet in `openapi.json` (sync, sharing, trash, history, editing) are typed by hand in
+`api/sync.ts` on `api/raw.ts` (same CSRF header, `ApiError`, error listeners).
+
 ### 12.6 Sync indicator, sharing, trash [NEW]
 
 - `components/sync/SyncIndicator.vue` in the app bar: *live* (green dot),
@@ -1305,6 +1362,12 @@ Online-only views show an "Available online only" empty state when offline.
   dialog: local insert; later: `PUT …/shares`, online only), owner transfer.
 - `views/trash/TrashView.vue`: `useServerTable` over `GET /api/v1/trash`, restore,
   purge (admin).
+- Phase 2 as built: the indicator shows *Live*, *Syncing*, *Online* (HTTP only), *Offline*,
+  *Connecting*, *Signed out*, with the pending count and an orange conflict count; a click opens the
+  dialog on the conflicts when there are any. The Share dialog shows the sharing read-only below
+  *manage* and disables it offline; the owner is picked from the persons that are users. The create
+  dialog's *Share with* is preselected with the creator's groups at *edit* (docs/01 §18.2 default);
+  the item and its shares are one batch. Sign-out with pending changes or conflicts asks first.
 
 ### 12.7 Fields, ratings, scores, statuses, gates [NEW]
 

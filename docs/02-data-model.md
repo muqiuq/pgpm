@@ -851,7 +851,7 @@ Database `pgpm`, additive versioned migrations.
 | `conflicts` | `id` | `table+id`, `map_id` | held-back changes awaiting a decision (§14.2) |
 | `blobs` | file `id` | `cached_at` | file bytes (cover/map images eager, attachments on demand; 200 MB budget) |
 | `drafts` | key | | unsaved description/create-dialog state |
-| `meta` | key | | `cursor`, `access_epoch`, `client_id`, `last_sync_at`, `app_version`, cached `/auth/me` |
+| `meta` | key | | `cursor`, `accessEpoch`, `clientId`, `lastSyncAt`, `userId` (whose data it is), `resolved` (decisions not reported yet); the cached `/auth/me` stays in localStorage (read synchronously at start) |
 
 ### 14.1 Outbox entry
 
@@ -871,6 +871,10 @@ Database `pgpm`, additive versioned migrations.
   "clientChangedAt": "2026-11-26T09:12:00Z"
 }
 ```
+
+Locally the entry also carries `seq` (the store key) and `sentAt` (set when a push takes it; a sent
+entry is never coalesced again); neither is pushed. A stored row keeps its bookkeeping in
+`_local: {serverRev, pending, base}` (docs/03 §11.7).
 
 Consecutive patches of the same row are coalesced (first `old`, last `new`);
 insert + delete of a never-synced row cancel out. In detail
