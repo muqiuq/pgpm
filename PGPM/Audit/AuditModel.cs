@@ -26,14 +26,21 @@ public sealed record AuditWho(AuditActor Actor, Guid? UserId, string Username, s
     public static AuditWho Entra(Guid? userId, string username, string? ipAddress) =>
         new(AuditActor.Entra, userId, username, "entra", ipAddress, null);
 
-    /// <summary>The signed-in user of a request, or nobody (an anonymous step of the sign-in).</summary>
+    /// <summary>
+    /// The signed-in user of a request, or nobody (an anonymous step of the sign-in). An MCP token's request is the actor
+    /// <c>mcp</c> in its user's name, with the token as <c>token:{id}:rw|ro</c> (docs/03 §7.2).
+    /// </summary>
     public static AuditWho From(HttpContext http)
     {
         var agent = http.Request.Headers.UserAgent.ToString();
         var signedIn = http.User.Identity?.IsAuthenticated == true;
-        return new AuditWho(AuditActor.User, signedIn ? http.User.UserId() : null, signedIn ? http.User.Identity!.Name ?? "" : "", null,
-            IpOf(http), agent.Length > 256 ? agent[..256] : agent);
+        var mcp = Mcp.McpPrincipal.Reference(http.User);
+        return new AuditWho(mcp is null ? AuditActor.User : AuditActor.Mcp, signedIn ? http.User.UserId() : null,
+            signedIn ? http.User.Identity!.Name ?? "" : "", mcp, IpOf(http), agent.Length > 256 ? agent[..256] : agent);
     }
+
+    /// <summary>The directory job (docs/03 §8): PGPM itself.</summary>
+    public static readonly AuditWho DirectoryJob = new(AuditActor.System, null, "system", "directory", null, null);
 
     /// <summary>The request's user, or the CLI when there is no request.</summary>
     public static AuditWho From(IHttpContextAccessor accessor) => accessor.HttpContext is { } http ? From(http) : Cli;

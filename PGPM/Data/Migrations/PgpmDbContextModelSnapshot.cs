@@ -2716,6 +2716,302 @@ namespace PGPM.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("PGPM.Mcp.McpLogEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Arguments")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("arguments");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<string>("Client")
+                        .HasColumnType("text")
+                        .HasColumnName("client");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("integer")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text")
+                        .HasColumnName("error");
+
+                    b.Property<string>("ErrorCode")
+                        .HasColumnType("text")
+                        .HasColumnName("error_code");
+
+                    b.Property<string>("Ip")
+                        .HasColumnType("text")
+                        .HasColumnName("ip");
+
+                    b.Property<string>("Kind")
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("method");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("outcome");
+
+                    b.Property<byte[]>("Result")
+                        .HasColumnType("bytea")
+                        .HasColumnName("result");
+
+                    b.Property<bool>("Strike")
+                        .HasColumnType("boolean")
+                        .HasColumnName("strike");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("summary");
+
+                    b.Property<string>("Targets")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("targets");
+
+                    b.Property<Guid?>("TokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("token_id");
+
+                    b.Property<string>("Tool")
+                        .HasColumnType("text")
+                        .HasColumnName("tool");
+
+                    b.Property<string>("ToolKind")
+                        .HasColumnType("text")
+                        .HasColumnName("tool_kind");
+
+                    b.Property<bool>("Truncated")
+                        .HasColumnType("boolean")
+                        .HasColumnName("truncated");
+
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("text")
+                        .HasColumnName("user_agent");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("username");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mcp_log");
+
+                    b.HasIndex("At")
+                        .HasDatabaseName("ix_mcp_log_at");
+
+                    b.HasIndex("TokenId", "Id")
+                        .HasDatabaseName("ix_mcp_log_token_id_id");
+
+                    b.HasIndex("UserId", "Id")
+                        .HasDatabaseName("ix_mcp_log_user_id_id");
+
+                    b.ToTable("mcp_log", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_mcp_log_kind", "kind IS NULL OR kind IN ('read', 'write')");
+
+                            t.HasCheckConstraint("ck_mcp_log_outcome", "outcome IN ('ok', 'error', 'denied', 'rate_limited', 'unauthenticated')");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Mcp.McpTokenEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("BlockedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("blocked_at");
+
+                    b.Property<int>("DeleteCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("delete_count");
+
+                    b.Property<DateTime?>("DeleteUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("delete_until");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
+                    b.Property<string>("EndedNote")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("ended_note");
+
+                    b.Property<string>("EndedWhy")
+                        .HasColumnType("text")
+                        .HasColumnName("ended_why");
+
+                    b.Property<string>("Hash")
+                        .HasColumnType("text")
+                        .HasColumnName("hash");
+
+                    b.Property<string>("Hint")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("hint");
+
+                    b.Property<DateTime?>("IssuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("issued_at");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("LastClient")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("last_client");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("LastUsedFrom")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("last_used_from");
+
+                    b.Property<DateTime?>("OnSince")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("on_since");
+
+                    b.Property<string>("OnStamp")
+                        .HasColumnType("text")
+                        .HasColumnName("on_stamp");
+
+                    b.Property<DateTime?>("OnUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("on_until");
+
+                    b.PrimitiveCollection<List<DateTime>>("Strikes")
+                        .IsRequired()
+                        .HasColumnType("timestamp with time zone[]")
+                        .HasColumnName("strikes");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mcp_tokens");
+
+                    b.HasIndex("Hash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_mcp_tokens_hash")
+                        .HasFilter("hash IS NOT NULL");
+
+                    b.HasIndex("UserId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("ix_mcp_tokens_user_id_kind");
+
+                    b.ToTable("mcp_tokens", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_mcp_tokens_ended_why", "ended_why IS NULL OR ended_why IN ('off', 'expired', 'regenerated', 'stamp', 'strikes', 'admin', 'user_inactive', 'totp_off')");
+
+                            t.HasCheckConstraint("ck_mcp_tokens_kind", "kind IN ('read', 'write')");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Persons.DirectorySync.DirectorySyncStateEntity", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<int>("CreatedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("created_count");
+
+                    b.Property<int>("DeactivatedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("deactivated_count");
+
+                    b.Property<string>("DeltaLink")
+                        .HasColumnType("text")
+                        .HasColumnName("delta_link");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTime?>("LastFinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_finished_at");
+
+                    b.Property<DateTime?>("LastFullAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_full_at");
+
+                    b.Property<string>("LastMode")
+                        .HasColumnType("text")
+                        .HasColumnName("last_mode");
+
+                    b.Property<DateTime?>("LastStartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_started_at");
+
+                    b.Property<string>("LastStatus")
+                        .HasColumnType("text")
+                        .HasColumnName("last_status");
+
+                    b.Property<DateTime?>("LastSucceededAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_succeeded_at");
+
+                    b.Property<int>("LinkedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("linked_count");
+
+                    b.Property<int>("SeenCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("seen_count");
+
+                    b.Property<int>("UpdatedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("updated_count");
+
+                    b.HasKey("TenantId")
+                        .HasName("pk_directory_sync_state");
+
+                    b.ToTable("directory_sync_state", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_directory_sync_state_last_mode", "last_mode IS NULL OR last_mode IN ('full', 'delta')");
+
+                            t.HasCheckConstraint("ck_directory_sync_state_last_status", "last_status IS NULL OR last_status IN ('running', 'ok', 'failed')");
+                        });
+                });
+
             modelBuilder.Entity("PGPM.Persons.PersonEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3581,6 +3877,16 @@ namespace PGPM.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_map_shares_maps_map_id");
+                });
+
+            modelBuilder.Entity("PGPM.Mcp.McpTokenEntity", b =>
+                {
+                    b.HasOne("PGPM.Auth.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_mcp_tokens_users_user_id");
                 });
 
             modelBuilder.Entity("PGPM.Persons.PersonEntity", b =>

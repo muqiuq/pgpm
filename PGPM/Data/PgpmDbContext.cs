@@ -7,7 +7,9 @@ using PGPM.Audit;
 using PGPM.Auth;
 using PGPM.Auth.Rights;
 using PGPM.Items;
+using PGPM.Mcp;
 using PGPM.Persons;
+using PGPM.Persons.DirectorySync;
 using PGPM.Lib.Helper;
 using PGPM.Settings;
 using PGPM.Sync;
@@ -64,6 +66,13 @@ public partial class PgpmDbContext(DbContextOptions<PgpmDbContext> options) : Db
     public DbSet<SyncEvictionEntity> SyncEvictions => Set<SyncEvictionEntity>();
 
     public DbSet<ChangeLogEntity> ChangeLog => Set<ChangeLogEntity>();
+
+    // Directory sync and MCP (docs/02 §3, §5; phase 6).
+    public DbSet<DirectorySyncStateEntity> DirectorySyncState => Set<DirectorySyncStateEntity>();
+
+    public DbSet<McpTokenEntity> McpTokens => Set<McpTokenEntity>();
+
+    public DbSet<McpLogEntity> McpLog => Set<McpLogEntity>();
 
     /// <summary>The context's part in the sync counter (its lock, the head to publish after the commit).</summary>
     internal SyncSession SyncSession { get; } = new();
@@ -151,6 +160,51 @@ public partial class PgpmDbContext(DbContextOptions<PgpmDbContext> options) : Db
             e.HasIndex(p => p.UserId).IsUnique().HasFilter("user_id IS NOT NULL");
             e.HasOne<UserEntity>().WithMany().HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.SetNull);
             Synced(e);
+        });
+
+        // The directory sync's state per tenant (docs/02 §5).
+        modelBuilder.Entity<DirectorySyncStateEntity>(e =>
+        {
+            e.ToTable("directory_sync_state", t =>
+            {
+                t.HasCheckConstraint("ck_directory_sync_state_last_status",
+                    $"last_status IS NULL OR last_status IN ({string.Join(", ", DirectoryRunStatus.All.Select(v => $"'{v}'"))})");
+                t.HasCheckConstraint("ck_directory_sync_state_last_mode", "last_mode IS NULL OR last_mode IN ('full', 'delta')");
+            });
+            e.HasKey(s => s.TenantId);
+            e.Property(s => s.TenantId).ValueGeneratedNever();
+        });
+
+        // MCP (docs/02 §3): two tokens per user, the log of every request. No foreign key from the log: it outlives its user.
+        modelBuilder.Entity<McpTokenEntity>(e =>
+        {
+            e.ToTable("mcp_tokens", t =>
+            {
+                EnumCheck<McpTokenKind>(t, "mcp_tokens", "kind");
+                t.HasCheckConstraint("ck_mcp_tokens_ended_why",
+                    $"ended_why IS NULL OR ended_why IN ({string.Join(", ", McpTokenEnds.All.Select(v => $"'{v}'"))})");
+            });
+            e.HasOne<UserEntity>().WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(t => new { t.UserId, t.Kind }).IsUnique();
+            e.HasIndex(t => t.Hash).IsUnique().HasFilter("hash IS NOT NULL");
+            e.Property(t => t.Hint).HasMaxLength(8);
+            e.Property(t => t.LastUsedFrom).HasMaxLength(64);
+            e.Property(t => t.LastClient).HasMaxLength(200);
+            e.Property(t => t.EndedNote).HasMaxLength(300);
+        });
+        modelBuilder.Entity<McpLogEntity>(e =>
+        {
+            e.ToTable("mcp_log", t =>
+            {
+                t.HasCheckConstraint("ck_mcp_log_outcome", $"outcome IN ({string.Join(", ", McpOutcomes.All.Select(v => $"'{v}'"))})");
+                t.HasCheckConstraint("ck_mcp_log_kind", "kind IS NULL OR kind IN ('read', 'write')");
+            });
+            e.Property(l => l.Id).UseIdentityAlwaysColumn();
+            e.Property(l => l.Arguments).HasColumnType("jsonb");
+            e.Property(l => l.Targets).HasColumnType("jsonb");
+            e.HasIndex(l => l.At);
+            e.HasIndex(l => new { l.TokenId, l.Id });
+            e.HasIndex(l => new { l.UserId, l.Id });
         });
 
         // Items and sharing (docs/02 §4, §6). No foreign keys to users: an item outlives its owner's account.

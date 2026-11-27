@@ -126,6 +126,21 @@ public sealed class EndpointAuditTests
         ["POST /api/v1/config/packages/dry-run"] = "Configuration:Manage",
         ["POST /api/v1/config/packages/apply"] = "Configuration:Manage",
         ["GET /api/v1/config/packages/export"] = "Configuration:Manage",
+        // MCP (docs/03 §7.1): one's own tokens (switching off needs no right), the catalog for everybody, the rest View/Manage.
+        ["GET /api/v1/account/mcp"] = "signed-in",
+        ["POST /api/v1/account/mcp/{kind}/on"] = "Mcp:Use",
+        ["POST /api/v1/account/mcp/{kind}/off"] = "signed-in",
+        ["POST /api/v1/account/mcp/{kind}/regenerate"] = "Mcp:Use",
+        ["GET /api/v1/mcp/catalog"] = "signed-in",
+        ["GET /api/v1/mcp/status"] = "Mcp:View",
+        ["GET /api/v1/mcp/log"] = "Mcp:View",
+        ["GET /api/v1/mcp/log/{id:long}"] = "signed-in",
+        ["GET /api/v1/mcp/tokens"] = "Mcp:View",
+        ["POST /api/v1/mcp/tokens/{id:guid}/off"] = "Mcp:Manage",
+        ["POST /api/v1/mcp/tokens/revoke-all"] = "Mcp:Manage",
+        // The directory sync (docs/03 §8).
+        ["GET /api/v1/directory/status"] = "Directory:Manage",
+        ["POST /api/v1/directory/sync"] = "Directory:Manage",
     };
 
     /// <summary>Writes that need no right because the object's access decides (docs/03 §6.3): manage for sharing, edit for presence.</summary>

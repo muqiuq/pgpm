@@ -1627,6 +1627,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/directory/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DirectoryStatusItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/directory/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: {
+                    full?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/{id}/chunks/{n}": {
         parameters: {
             query?: never;
@@ -2358,6 +2430,425 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/account/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpAccountItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/mcp/{kind}/on": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kind: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpTokenIssued"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/mcp/{kind}/off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kind: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpTokenItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/mcp/{kind}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kind: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpTokenIssued"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpCatalog"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpStatus"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    userId?: string;
+                    tokenId?: string;
+                    kind?: components["schemas"]["McpTokenKind"];
+                    tool?: string;
+                    outcome?: string;
+                    from?: string;
+                    to?: string;
+                    page?: number;
+                    pageSize?: number;
+                    sort?: string;
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedOfMcpLogItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp/log/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpLogDetail"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpAdminTokenItem"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp/tokens/{id}/off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["McpTurnOffRequest"];
+                    "text/json": components["schemas"]["McpTurnOffRequest"];
+                    "application/*+json": components["schemas"]["McpTurnOffRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpAdminTokenItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp/tokens/revoke-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["McpRevokeAllRequest"];
+                    "text/json": components["schemas"]["McpRevokeAllRequest"];
+                    "application/*+json": components["schemas"]["McpRevokeAllRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["McpRevokeAllResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/config/packages": {
         parameters: {
             query?: never;
@@ -3051,6 +3542,63 @@ export interface components {
             hasPassword: boolean;
             hasMicrosoftAccount: boolean;
         };
+        DirectoryCountsItem: {
+            /** Format: int32 */
+            microsoft: number;
+            /** Format: int32 */
+            active: number;
+            /** Format: int32 */
+            inactive: number;
+            /** Format: int32 */
+            guests: number;
+            /** Format: int32 */
+            linked: number;
+            /** Format: int32 */
+            manual: number;
+        };
+        DirectoryRunItem: {
+            /** Format: date-time */
+            startedAt: null | string;
+            /** Format: date-time */
+            finishedAt: null | string;
+            status: null | string;
+            mode: null | string;
+            error: null | string;
+            /** Format: int32 */
+            created: number;
+            /** Format: int32 */
+            updated: number;
+            /** Format: int32 */
+            deactivated: number;
+            /** Format: int32 */
+            seen: number;
+            /** Format: int32 */
+            linked: number;
+            /** Format: date-time */
+            lastFullAt: null | string;
+            /** Format: date-time */
+            lastSucceededAt: null | string;
+        };
+        DirectorySettingsItem: {
+            enabled: boolean;
+            configured: boolean;
+            /** Format: int32 */
+            intervalHours: number;
+            /** Format: int32 */
+            fullSyncDays: number;
+            running: boolean;
+            pending: boolean;
+            /** Format: date-time */
+            nextRunAt: null | string;
+            /** Format: date-time */
+            nextFullRunAt: null | string;
+        };
+        DirectoryStatusItem: {
+            sso: components["schemas"]["SsoSettingsItem"];
+            directory: components["schemas"]["DirectorySettingsItem"];
+            lastRun: null | components["schemas"]["DirectoryRunItem"];
+            persons: components["schemas"]["DirectoryCountsItem"];
+        };
         EditingRequest: {
             /** Format: uuid */
             itemId?: null | string;
@@ -3223,6 +3771,181 @@ export interface components {
             next: string;
             me: null | components["schemas"]["MeResponse"];
         };
+        McpAccountItem: {
+            enabled: boolean;
+            url: string;
+            /** Format: int32 */
+            writeHours: number;
+            /** Format: int32 */
+            readDaysAfterOnline: number;
+            writeRequiresTotp: boolean;
+            hasSecondFactor: boolean;
+            canUse: boolean;
+            read: components["schemas"]["McpTokenItem"];
+            write: components["schemas"]["McpTokenItem"];
+        };
+        McpAdminTokenItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            username: string;
+            displayName: string;
+            token: components["schemas"]["McpTokenItem"];
+        };
+        McpCatalog: {
+            enabled: boolean;
+            url: string;
+            instructions: string;
+            /** Format: int32 */
+            writeHours: number;
+            /** Format: int32 */
+            readDaysAfterOnline: number;
+            writeRequiresTotp: boolean;
+            /** Format: int32 */
+            callsPerMinute: number;
+            /** Format: int32 */
+            writesPerMinute: number;
+            /** Format: int32 */
+            maxResultChars: number;
+            /** Format: int32 */
+            strikesToBlock: number;
+            /** Format: int32 */
+            logEntries: number;
+            ceiling: components["schemas"]["McpCeilingRow"][];
+            tools: components["schemas"]["McpToolDoc"][];
+        };
+        McpCeilingRow: {
+            area: components["schemas"]["Area"];
+            label: string;
+            write: null | components["schemas"]["Level"];
+            read: null | components["schemas"]["Level"];
+        };
+        McpCount: {
+            name: string;
+            /** Format: int32 */
+            count: number;
+        };
+        McpDay: {
+            /** Format: date */
+            date: string;
+            /** Format: int32 */
+            calls: number;
+            /** Format: int32 */
+            failed: number;
+        };
+        McpLogDetail: {
+            item: components["schemas"]["McpLogItem"];
+            correlationId: string;
+            userAgent: null | string;
+            arguments: null | string;
+            result: null | string;
+            truncated: boolean;
+            error: null | string;
+            targets: null | string;
+            audit: components["schemas"]["AuditEntryItem"][];
+            history: components["schemas"]["HistoryEntryItem"][];
+        };
+        McpLogItem: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            at: string;
+            /** Format: uuid */
+            tokenId: null | string;
+            kind: null | components["schemas"]["McpTokenKind"];
+            /** Format: uuid */
+            userId: null | string;
+            username: string;
+            ip: null | string;
+            client: null | string;
+            method: string;
+            tool: null | string;
+            toolKind: null | string;
+            outcome: string;
+            errorCode: null | string;
+            summary: string;
+            strike: boolean;
+            /** Format: int32 */
+            durationMs: number;
+        };
+        McpRevokeAllRequest: {
+            reason: null | string;
+        };
+        McpRevokeAllResult: {
+            /** Format: int32 */
+            revoked: number;
+        };
+        McpStatus: {
+            enabled: boolean;
+            /** Format: int32 */
+            readOn: number;
+            /** Format: int32 */
+            writeOn: number;
+            /** Format: int32 */
+            blocked: number;
+            /** Format: int32 */
+            withValue: number;
+            /** Format: int32 */
+            calls24h: number;
+            /** Format: int32 */
+            calls7d: number;
+            /** Format: int32 */
+            strikes24h: number;
+            /** Format: date-time */
+            lastCallAt: null | string;
+            outcomes24h: components["schemas"]["McpCount"][];
+            tools7d: components["schemas"]["McpCount"][];
+            users7d: components["schemas"]["McpCount"][];
+            days: components["schemas"]["McpDay"][];
+        };
+        McpTokenIssued: {
+            token: components["schemas"]["McpTokenItem"];
+            value: null | string;
+        };
+        McpTokenItem: {
+            kind: components["schemas"]["McpTokenKind"];
+            on: boolean;
+            state: string;
+            /** Format: date-time */
+            until: null | string;
+            hasValue: boolean;
+            hint: null | string;
+            /** Format: date-time */
+            issuedAt: null | string;
+            /** Format: date-time */
+            lastUsedAt: null | string;
+            lastUsedFrom: null | string;
+            lastClient: null | string;
+            /** Format: date-time */
+            endedAt: null | string;
+            endedWhy: null | string;
+            endedNote: null | string;
+            /** Format: date-time */
+            blockedAt: null | string;
+            /** Format: int32 */
+            strikes: number;
+            rights: {
+                [key: string]: components["schemas"]["Level"];
+            };
+            access: components["schemas"]["ItemAccess"];
+        };
+        /** @enum {unknown} */
+        McpTokenKind: "Read" | "Write";
+        McpToolDoc: {
+            name: string;
+            title: string;
+            description: string;
+            kind: components["schemas"]["ToolKind"];
+            right: string;
+            readToken: boolean;
+            destructive: boolean;
+            parameters: components["schemas"]["JsonObject"];
+            available: boolean;
+        };
+        McpTurnOffRequest: {
+            reason: null | string;
+        };
         MeResponse: {
             user: components["schemas"]["CurrentUser"];
             flags: components["schemas"]["SessionFlags"];
@@ -3319,6 +4042,15 @@ export interface components {
         };
         PagedOfHistoryEntryItem: {
             items: components["schemas"]["HistoryEntryItem"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalCount: number;
+        };
+        PagedOfMcpLogItem: {
+            items: components["schemas"]["McpLogItem"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -3425,6 +4157,16 @@ export interface components {
         SignInOptions: {
             microsoft: boolean;
             local: boolean;
+        };
+        SsoSettingsItem: {
+            enabled: boolean;
+            tenantId: null | string;
+            clientId: null | string;
+            clientSecretSet: boolean;
+            redirectUri: null | string;
+            autoProvision: boolean;
+            defaultGroup: null | components["schemas"]["Ref"];
+            appRoles: string[];
         };
         /** @enum {unknown} */
         StatusCategory: "open" | "active" | "closed";
@@ -3646,6 +4388,8 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
+        /** @enum {unknown} */
+        ToolKind: "Read" | "Write" | "Action" | "Delete" | "Ask";
         TotpCodeRequest: {
             code?: null | string;
         };

@@ -32,13 +32,13 @@ public static class SyncSetup
         return services;
     }
 
-    /// <summary>After authentication: a signed-in request's changes of synced rows are the user's, from the UI.</summary>
+    /// <summary>After authentication: a signed-in request's changes of synced rows are the user's, from the UI (or MCP).</summary>
     public static IApplicationBuilder UseChangeContext(this IApplicationBuilder app) =>
         app.Use(async (context, next) =>
         {
             if (context.User.UserId() is not null)
             {
-                using var _ = ChangeContext.Use(ChangeContext.Of(context));
+                using var _ = ChangeContext.Use(ChangeContext.Of(context, Mcp.McpPrincipal.IsMcp(context.User) ? ChangeSource.Mcp : ChangeSource.Ui));
                 await next(context);
                 return;
             }

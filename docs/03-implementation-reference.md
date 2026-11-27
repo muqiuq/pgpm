@@ -740,6 +740,61 @@ app.MapMcp("/mcp").RequireAuthorization("mcp");   // only when Mcp:Enabled
 
   Delete, sharing and owner tools are not offered in v1.
 
+### 7.4 Implementation (phase 6, pulled forward)
+
+**Server** (`PGPM/Mcp/`): `McpEntities` (`mcp_tokens`, `mcp_log`; `ended_why` and `outcome` are text with a CHECK –
+`user_inactive`, `rate_limited`), `McpOptions`, `McpTokenValues`, `McpTokenService` (+ `McpTokenState`, `McpTokenUser`,
+`McpCaller`), `McpRights` (write ceiling `Notes/Ideas/Leads/Projects/Maps: Create`, read cap empty – reading needs no right –,
+`AccessCap`: read → *read*, write → *edit*), `McpPrincipal`, `McpTokenHandler`, `McpCalls` (`CatalogTool`, `ListFilter`,
+`CallFilter`, `InvokeAsync`), `McpLimits` + `McpStrikes`, `McpLog`, `McpTokenExpiryTask`, `McpSetup` (`AddPgpmMcp`,
+`UseMcpOriginCheck`, `MapPgpmMcp`, `McpInstructions`). Tools in `PGPM/Mcp/Tools/` (namespace `PGPM.Mcp.Tools`): `ToolSpec`,
+`ToolArgs`, `ToolContext` (+ `ToolPaging`), `ToolResults`, `ToolCatalog`, `ItemKinds`, `ItemTools`, `LookupTools`.
+Endpoints: `AccountMcpController` (`/api/v1/account/mcp`: `GET`; `POST {read|write}/on|off|regenerate` – *on* and
+*regenerate* need `Mcp:Use`, *off* never; the value only in that response, `no-store`), `McpAdminController` (`/api/v1/mcp`:
+`catalog` for everyone, `status`, `log`, `tokens` with `Mcp:View`, `log/{id}` with `Mcp:View` or one's own, `tokens/{id}/off`
+with a reason and `tokens/revoke-all` with `Mcp:Manage`).
+
+- **Capped access**: `Viewer.MaxAccess` – `AccessService.ItemAccessAsync` never answers more than it –, set by `Viewer.OfAsync`
+  for an MCP principal, whose `IsAdmin` is the user's flag (an admin's token sees everything, capped) while its rights never
+  carry `pgpm:admin`. So every service and table hook (`ItemsTable.AuthorizePatch` needs *edit*, deletes and sharing need
+  *manage*) is capped without knowing MCP.
+- **Writes**: `ToolContext.WriteAsync` opens one `SyncWriter` unit with the source `mcp`; tools apply ordinary
+  `SyncMutationIn`s (`ToolContext.ApplyAsync`: `rejected` → the tool's error with the table's code, `conflict` →
+  `changed_meanwhile`). `create_*` inserts the item and its `share_with` shares in one batch (the shares' same-batch rule);
+  `update_item` re-reads the row inside the unit (the counter's lock), refuses a stale `expectedRev` with `changed_meanwhile` and
+  `current`, and patches with `old` = the values it read. Each write tool also writes an audit entry (`mcp.item_created`,
+  `mcp.item_updated`, actor `mcp`, `actor_ref token:{id}:rw`) through an `AuditScope`; the change log has the fields with source
+  `mcp`; the MCP log entry, the audit entry and the change-log rows share the request's correlation id (shown together in
+  *Administration → MCP → Log*).
+- **Isolation**: cookie authentication is not run for `/mcp`; the `mcp` policy names only the `McpToken` scheme; `/mcp` gets the
+  API's CSP and `no-store`. Tested both ways (a token on `/api/v1` → 401, a session cookie or the tests' sign-in on `/mcp` → 401).
+- **Token states**: `on`, `off`, `no_value`, `expired`, `blocked`, `stamp`, `inactive`, `totp` (write token without TOTP and
+  without a Microsoft link), `no_right` (the user lost `Mcp:Use`: refused, but it stays on and works again with the right),
+  `mcp_off`.
+
+**Adding a tool in a later phase** – the catalog is generic, a tool is a spec:
+
+1. Write a `ToolSpec` (name in snake case, title, description, `ToolArgs.Schema(...)`, the right it needs as `Area`/`Level`
+   (null for access-only tools) plus `Requires` for a second right, `ToolKind`, `AuditEvents` for writes) and its
+   `Run(args, ctx, db, ct)`. Read through `ctx.Access(db)` (sharing, capped); write through `ctx.WriteAsync(db, write =>
+   ToolContext.ApplyAsync(write, mutation, ct))` – never directly. Set `ctx.Summary` / `ctx.Target(...)` and, for writes,
+   `AuditLog.Target/Summary`.
+2. Add a new `mcp.*` audit event to `AuditEvents` and `AuditCatalog` if none fits.
+3. Add the list to `ToolCatalog.All` (one `…Tools.All` per area: `PersonTools` with `assign_person`/`unassign_person`,
+   `LinkTools`, `MilestoneTools`, `MapTools` with `list_maps`/`get_map`/`add_item_to_map`, `convert_to_project` as `Action`
+   with `Requires = [(Projects, Create)]`).
+4. New item types need no new tools: add an `ItemKind` (fields as `ItemField`s with their wire key, `HasStatus`) to
+   `ItemKinds.All`; `create_idea` / `create_lead` / `create_project` appear once `ItemsTable.Creatable` contains the type, and
+   `search_items`' type and status filters, `update_item`'s fields and `list_config`'s item types follow. More detail for
+   `get_item` (persons, links, attachments, fields with scores, milestones) is an `ItemDetailPart` in `ItemDetails.Parts`;
+   more configuration for `list_config` (statuses, sections, fields, templates) a `ConfigPart` in `ConfigParts.All`.
+5. `McpServerTests.TheCatalogKeepsItsOwnRules` checks names, schemas and audit events; add a test of the tool over the SDK
+   client (`McpKit.ClientAsync`).
+
+**Web**: Account → Security → `McpCard.vue` (per token: switch, state, value once with copy, regenerate, last use, expiry, how to
+connect a client to `/mcp`), *Administration → MCP* (`views/admin/mcp/`: Status, Tokens with *Switch off…* and *Revoke all…*,
+Log with filters and the entry's audit and History, Tools from the catalog).
+
 ## 8. Persons directory sync via Microsoft Graph [NEW]
 
 No source project has this. GGITSV only reads `/me` at sign-in with a delegated
@@ -805,6 +860,41 @@ protected override async Task ExecuteAsync(CancellationToken stop)
 
 `BackgroundTasks:Enabled=false` disables it in tests (PNMTD).
 
+### 8.3 Implementation (phase 6, pulled forward)
+
+`PGPM/Persons/DirectorySync/` (namespace `PGPM.Persons.DirectorySync`, never `PGPM.Directory`, §15 #23):
+`GraphTokenCache` (client credentials, cached per tenant and client until 5 min before expiry, forgotten on a 401),
+`GraphDirectoryClient` (HTTP client `microsoft-directory`, absolute addresses; pages handed on one by one; 429/503 waited out per
+`Retry-After` – seconds or date, 10 s when missing, at most 5 min, 8 times per page – and the same page asked again; 410 →
+`DeltaExpiredException`), `DirectorySyncService` (the run), `DirectorySyncTask` (the loop and the signal),
+`DirectorySyncStateEntity`, `DirectorySyncSetup`. `DirectoryController`: `GET /api/v1/directory/status` and
+`POST /api/v1/directory/sync[?full=true]` (202, the task wakes; 409 `directory_off`), both `Directory:Manage`.
+
+- **Configuration**: `Directory:Enabled` plus `Entra:TenantId`, `ClientId`, `ClientSecret`; `Entra:Enabled` (the SSO) is not
+  needed – a directory without SSO works.
+- **One write unit per page** (`SyncWriter.BeginAsync` with source `directory`, `ChangeContext` without a user, so `created_by`/
+  `updated_by` stay empty): the counter's lock is never held across a Graph call. The job sets the persons' properties
+  directly inside the unit – a client's patch of a Microsoft person's directory fields is refused by `PersonsTable` –, so the
+  stamp, the change log (source `directory`) and the live feed are the sync's own. EF only marks a person modified when a value
+  differs, and `directory_synced_at` is set only then: an unchanged person keeps its seq.
+- **Fields**: a property missing from a page is unchanged (delta pages may carry only what changed), a null clears it; mail
+  lower-cased; display name → UPN → e-mail; the first business phone; `userType` `Member`/`Guest` (others null);
+  `accountEnabled` decides `is_active`; `@removed` → inactive, never deleted.
+- **Modes**: full when there is no delta link, `Directory:FullSyncDays` after the last full run, after a 410, or asked for
+  (`?full=true`); a full run reads from scratch and makes every active Microsoft person of the tenant it didn't see inactive.
+  The delta link is stored only after a complete run; a failed run leaves it, and the next run starts from it again.
+- **Linking**: a person whose (tenant, object id) is a user's Microsoft identity gets `user_id`; a user's manual person is
+  converted into the directory person when the directory brings it first (keeps its assignments, as at a sign-in), otherwise
+  the manual person lets go (`user_id = null`) – every user keeps exactly one person. Audit `person.linked` (actor_ref
+  `directory`).
+- **Result**: `directory_sync_state` (with the mode, the seen and linked counts, the last full run and the last success),
+  `key_values` `task.directory_sync`, audit `directory.sync_failed` for a failure (the error as Microsoft said it, never the
+  secret), *Run now* is `directory.sync_requested`.
+- **Tests**: `PGPM.Tests/Support/FakeGraph.cs` (login + `/users/delta` with tenants per test, paging, delta tokens, removals,
+  410, throttling, refused tokens) and `DirectorySync/DirectorySyncTests.cs`.
+- **Web**: *Administration → Microsoft integration* (`views/admin/MicrosoftView.vue`): the SSO settings (read-only), the sync's
+  settings, next runs, the last run with its counts and error, the persons by kind, *Run now* and *Full run*.
+
 ---
 
 ## 9. Background tasks
@@ -823,6 +913,10 @@ protected override async Task ExecuteAsync(CancellationToken stop)
 
 All: `BackgroundService` + `PeriodicTimer` or signal, own DI scope per run,
 catch-and-log, task health timestamp in `key_values`.
+
+Health keys (phase 2 and 6): `task.tombstone_pruner`, `task.log_pruner`, `task.mcp_token_expiry`, `task.directory_sync` (value:
+the last run's summary). `McpTokenExpiryTask` and `DirectorySyncTask` are singletons registered always and hosted with the
+background tasks, so the tests run them by hand (`RunAsync`, `StartAsync`). The MCP log is also trimmed every 25 writes.
 
 ## 10. Files and attachments [PNMTD storage + PLM transfer]
 
@@ -1826,7 +1920,7 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | `Entra:Enabled` / `TenantId` / `ClientId` / `ClientSecret` | off | GGITSV |
 | `Entra:AutoProvision` | true | GGITSV |
 | `Entra:DefaultGroupId` | – | NEW |
-| `Directory:Enabled` | false | NEW |
+| `Directory:Enabled` | false (also needs `Entra:TenantId/ClientId/ClientSecret`, not `Entra:Enabled`) | NEW |
 | `Directory:IntervalHours` / `FullSyncDays` | 6 / 7 | NEW |
 | `Files:Path` | `/var/lib/pgpm/files` | PNMTD |
 | `Files:MaxAttachmentBytes` / `MaxImageBytes` | 25 MB / 2 MB | PNMTD |
@@ -1839,6 +1933,9 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | `Sync:Live:RevalidateSeconds` / `HelloTimeoutSeconds` | 60 / 15 | NEW (phase 2) |
 | `Packages:SeedOnFirstStart` | `core,innovation-ai` | NEW |
 | `Mcp:Enabled` / `WriteHours` / `ReadDaysAfterOnline` | true / 12 / 7 | PNMTD |
+| `Mcp:WriteRequiresTotp` / `StrikesToBlock` | true / 3 | PNMTD (phase 6) |
+| `Mcp:CallsPerMinute` / `WritesPerMinute` | 120 / 20 | PNMTD (phase 6) |
+| `Mcp:LogEntries` / `MaxResultChars` | 10000 / 40000 | PNMTD (phase 6) |
 | `BackgroundTasks:Enabled` | true | PNMTD |
 
 ## 15. Deliberate deviations from the sources
@@ -1896,6 +1993,20 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | 49 | Configuration tables have no History (`change_log`); their changes are in the audit log (`config.*` events) | History is per item |
 | 50 | `milestones.completed_at`, `decided_at`, `decided_by` and `dod_items.state_changed_*` are set by the server | "set automatically" (docs/01 §11) |
 | 51 | Foreign keys from children to their parents (cascade) and to configuration (restrict); none to users, nor for references a row may outlive (status, template, cover image, connector ends) | integrity where a purge removes both anyway |
+| 52 | `mcp_log` keeps PNMTD's further columns (kind, username, ip, user agent, client, method, tool kind, error code and text, summary, truncated, strike, targets); outcome `unauthenticated` for a refused token; `ended_why` and `outcome` as text with a CHECK (doc 02: enum-like values) | the admin log's filters and detail; the lower-case enum converter can't write `user_inactive` |
+| 53 | MCP read token: no area levels at all (PNMTD: reading levels) | reading needs no right in PGPM; sharing decides (§6.2) |
+| 54 | Object access capped by `Viewer.MaxAccess` (read/edit), the MCP viewer's visibility from the user's admin flag | every table hook and service is capped without knowing MCP |
+| 55 | `Mcp:Use` needed to switch a token on or regenerate it, and checked per request (state `no_right`, the token stays on); switching off needs no right | the catalogue's "Use: own tokens" (§6.2) |
+| 56 | A blocked token is reported by an audit entry `mcp.token_blocked` (PNMTD: Pushover and e-mail to every admin) | PGPM has no notifications in v1 |
+| 57 | No delete window endpoints (`write/delete-window`); the columns stay reserved | no delete tools in v1 |
+| 58 | MCP writes are audited (`mcp.item_created`, `mcp.item_updated`, actor `mcp`) besides the change log (the UI's sync pushes are not) | what an assistant did is in the audit log, joined to its MCP log entry by the correlation id |
+| 59 | Refused MCP sign-ins are summed up per address **and token** per minute (PNMTD: per address) | a known token's refusals stay visible in its own log |
+| 60 | `get_item` / `update_item` take an item's key (`N-12`) as well as its id; `share_with` gives `read` or `edit` only | assistants quote keys; the write token's access is capped at edit |
+| 61 | `/mcp` gets the API's CSP and `no-store` | it is an API, not a page |
+| 62 | Task health keys `task.directory_sync`, `task.mcp_token_expiry` (doc: `LAST_DIRECTORY_SYNC`) | phase 2's keys are `task.*` |
+| 63 | `directory_sync_state` adds `last_mode`, `seen_count`, `linked_count`, `last_full_at`, `last_succeeded_at` | the weekly full run's due date and the admin page |
+| 64 | The directory job writes one `SyncWriter` unit per Graph page and sets the persons' properties inside it (not as client mutations); no user in `created_by`/`updated_by` | the counter's lock is not held across Graph calls; the persons table refuses client patches of directory fields |
+| 65 | *Run now* answers 202 and wakes the background task (no run inside the request); 409 `directory_off` while `Directory:Enabled` is off or the registration incomplete | a full run of a large tenant takes minutes |
 
 ## 16. Score evaluation [NEW]
 

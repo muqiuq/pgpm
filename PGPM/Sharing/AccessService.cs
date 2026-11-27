@@ -14,11 +14,17 @@ namespace PGPM.Sharing;
 
 /// <summary>
 /// Who reads and writes: the user, the admin flag and the rights of the session, and the user's groups (from
-/// <see cref="SessionCache"/>, so a membership change applies at the next request).
+/// <see cref="SessionCache"/>, so a membership change applies at the next request). <see cref="MaxAccess"/> caps the
+/// access to every item: an MCP token's (docs/03 §7.3) – read for the read token, edit for the write token.
 /// </summary>
 public sealed record Viewer(Guid UserId, bool IsAdmin, IReadOnlyList<Guid> GroupIds, UserRights Rights)
 {
-    /// <summary>The request's user; 401 when signed out.</summary>
+    public ItemAccess MaxAccess { get; init; } = ItemAccess.Manage;
+
+    /// <summary>
+    /// The request's user; 401 when signed out. An MCP token's principal never carries the admin flag (its rights are
+    /// capped), but sees what its user sees – an admin's everything –, capped at its kind's access.
+    /// </summary>
     public static async Task<Viewer> OfAsync(HttpContext http, CancellationToken ct)
     {
         var id = http.User.UserId() ?? throw ApiException.Unauthorized();
@@ -26,6 +32,10 @@ public sealed record Viewer(Guid UserId, bool IsAdmin, IReadOnlyList<Guid> Group
         var entry = await services.GetRequiredService<SessionCache>().GetAsync(id,
             () => SessionCache.LoadAsync(services.GetRequiredService<PgpmDbContext>(), id, ct));
         var rights = http.User.Rights();
+        if (Mcp.McpPrincipal.KindOf(http.User) is { } kind)
+        {
+            return new Viewer(id, entry?.Rights.IsAdmin == true, entry?.GroupIds ?? [], rights) { MaxAccess = Mcp.McpRights.AccessCap(kind) };
+        }
         return new Viewer(id, rights.IsAdmin, entry?.GroupIds ?? [], rights);
     }
 }
@@ -73,8 +83,11 @@ public sealed class AccessService(PgpmDbContext db)
             : await db.ItemShares.AsNoTracking().Where(s => ids.Contains(s.ItemId) && !s.Deleted && groups.Contains(s.GroupId))
                 .Select(s => new { s.ItemId, s.Access }).ToListAsync(ct);
         var byItem = shares.ToLookup(s => s.ItemId, s => s.Access);
-        return owners.ToDictionary(o => o.Id, o => viewer.IsAdmin || o.OwnerUserId == viewer.UserId ? ItemAccess.Manage
-            : byItem[o.Id].DefaultIfEmpty(ItemAccess.None).Max());
+        return owners.ToDictionary(o => o.Id, o =>
+        {
+            var access = viewer.IsAdmin || o.OwnerUserId == viewer.UserId ? ItemAccess.Manage : byItem[o.Id].DefaultIfEmpty(ItemAccess.None).Max();
+            return access > viewer.MaxAccess ? viewer.MaxAccess : access;
+        });
     }
 
     /// <summary>403 <c>missing_access</c> below <paramref name="needed"/>; 404 for an item that doesn't exist.</summary>

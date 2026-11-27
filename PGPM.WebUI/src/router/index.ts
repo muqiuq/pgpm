@@ -29,6 +29,8 @@ const views: Record<string, () => Promise<RouteComponent>> = {
   users: () => import('@/views/admin/UsersView.vue'),
   groups: () => import('@/views/admin/GroupsView.vue'),
   'audit-log': () => import('@/views/admin/AuditLogView.vue'),
+  'admin-mcp': () => import('@/views/admin/mcp/McpView.vue'),
+  microsoft: () => import('@/views/admin/MicrosoftView.vue'),
   notes: () => import('@/views/notes/NotesView.vue'),
   trash: () => import('@/views/trash/TrashView.vue'),
 }
@@ -40,12 +42,10 @@ const pages: Record<string, { phase: number; summary: string }> = {
   leads: { phase: 3, summary: 'External opportunities from New to Won or Lost, converted into projects.' },
   ideas: { phase: 3, summary: 'Candidate use cases with assessments, scores and review-board decisions.' },
   persons: { phase: 3, summary: 'The people directory: Microsoft Entra users and manual externals.' },
-  'admin-mcp': { phase: 6, summary: 'MCP tokens of all users and the MCP log.' },
   statuses: { phase: 3, summary: 'Statuses per item type: open, active or closed, and how long an item may stay.' },
   sections: { phase: 4, summary: 'Sections and fields of ideas and projects: ratings, scores, selects and more.' },
   templates: { phase: 4, summary: 'Project templates: statuses, sections, defaults, milestones and gates.' },
   packages: { phase: 4, summary: 'Import and export configuration packages such as the innovation method.' },
-  microsoft: { phase: 6, summary: 'Microsoft SSO and the directory sync: settings, last result, Run now.' },
   system: { phase: 7, summary: 'Sync clients, live connections, storage and versions.' },
 }
 

@@ -25,6 +25,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <!-- File references in Markdown (FileCleanupTask, docs/03 §18.3). -->
     <PackageReference Include="Markdig" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="PGPM.Tests" />
