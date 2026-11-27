@@ -3,6 +3,7 @@
  * camelCase members, ISO-8601 UTC timestamps, lower-case uuid strings, jsonb as JSON. Type aliases (not interfaces), so
  * that every row is a `Row` of outbox.ts.
  */
+import type { FieldConfig, FieldType } from '@/domain/score'
 
 /** An item's or map's computed access for the receiving user (data model §1.2). */
 export type Access = 'read' | 'edit' | 'manage'
@@ -176,8 +177,10 @@ export type FileRow = SyncedColumns & {
 /** `saved_views` (data model §7.8): own views and the shared ones. */
 export type SavedViewRow = SyncedColumns & {
   ownerUserId: string
+  /** `gate`: the *Gate decisions* list. */
   itemType: ItemType | 'gate'
   name: string
+  description?: string | null
   definition: Record<string, unknown>
   isShared: boolean
   sortOrder: number
@@ -191,7 +194,7 @@ export type AssignmentRoleRow = SyncedColumns & {
   isArchived: boolean
 }
 
-/** `project_templates` (data model §7.7), as far as phase 3 reads them (the create dialog's picker slot). */
+/** `project_templates` (data model §7.7); `defaultShares` are preselected in the create dialog. */
 export type ProjectTemplateRow = SyncedColumns & {
   name: string
   description: string | null
@@ -201,6 +204,130 @@ export type ProjectTemplateRow = SyncedColumns & {
   defaultShares: { groupId: string; access: Access }[]
   sortOrder: number
   isArchived: boolean
+}
+
+/** The item types sections apply to (data model §7.2). */
+export type SectionItemType = 'idea' | 'project'
+
+/** `sections` (data model §7.2): read-only configuration; only the sections the user may view arrive. */
+export type SectionRow = SyncedColumns & {
+  name: string
+  description: string | null
+  appliesTo: SectionItemType[]
+  /** Added automatically to new items of the type (projects: only without template). */
+  defaultFor: SectionItemType[]
+  sortOrder: number
+  collapsedByDefault: boolean
+  isArchived: boolean
+  /** Computed for the receiving user (data model §1.2): the section's part of field access. */
+  canEdit: boolean
+}
+
+/** `field_definitions` (data model §7.4): read-only configuration; `config` by type (domain/score.ts `FieldConfig`). */
+export type FieldDefinitionRow = SyncedColumns & {
+  sectionId: string
+  /** Stable and immutable: `^[a-z][a-z0-9_]{1,62}$`. */
+  key: string
+  label: string
+  helpText: string | null
+  type: FieldType
+  config: FieldConfig | null
+  required: boolean
+  defaultValue: unknown
+  sortOrder: number
+  isArchived: boolean
+}
+
+/** `field_values` (data model §7.5): a field's value on an idea or project (never a score's). */
+export type FieldValueRow = SyncedColumns & {
+  itemId: string
+  fieldId: string
+  value: unknown
+}
+
+/** `item_sections` (data model §7.6): the sections an idea or project shows, in order. */
+export type ItemSectionRow = SyncedColumns & {
+  itemId: string
+  sectionId: string
+  sortOrder: number
+}
+
+/** `template_statuses` (data model §7.7): none for a template → every project status is allowed. */
+export type TemplateStatusRow = SyncedColumns & {
+  templateId: string
+  statusId: string
+}
+
+/** `template_sections` (data model §7.7): the template's sections, in order. */
+export type TemplateSectionRow = SyncedColumns & {
+  templateId: string
+  sectionId: string
+  sortOrder: number
+}
+
+/** `template_field_defaults` (data model §7.7). */
+export type TemplateFieldDefaultRow = SyncedColumns & {
+  templateId: string
+  fieldId: string
+  value: unknown
+}
+
+export type MilestoneKind = 'milestone' | 'gate'
+export type MilestoneStatus = 'planned' | 'in_progress' | 'done' | 'cancelled'
+export type GateDecisionValue = 'pending' | 'go' | 'no_go' | 'iterate' | 'pivot' | 'park'
+export type DodState = 'open' | 'done' | 'na'
+
+/** `template_milestones` (data model §7.7): due = project start + `offsetDays`; `dod` the criteria. */
+export type TemplateMilestoneRow = SyncedColumns & {
+  templateId: string
+  kind: MilestoneKind
+  title: string
+  description: string | null
+  offsetDays: number | null
+  dod: string[]
+  onGoStatusId: string | null
+  onNoGoStatusId: string | null
+  /** Fractional index (data model §10). */
+  sortOrder: string
+}
+
+/** `milestones` (data model §8): a project's milestones and gates. */
+export type MilestoneRow = SyncedColumns & {
+  itemId: string
+  kind: MilestoneKind
+  title: string
+  description: string | null
+  dueDate: string | null
+  status: MilestoneStatus
+  /** Set by the server when the status becomes `done`. */
+  completedAt: string | null
+  /** Gates only. */
+  decision: GateDecisionValue | null
+  decisionNote: string | null
+  /** Set by the server with a decision other than `pending`. */
+  decidedAt: string | null
+  decidedBy: string | null
+  /** Copied from the template: the project statuses suggested on *go* and *no-go*. */
+  onGoStatusId: string | null
+  onNoGoStatusId: string | null
+  /** Null: the project's colour. */
+  color: string | null
+  /** Fractional index (data model §10). */
+  sortOrder: string
+}
+
+/** `dod_items` (data model §8): a criterion of a milestone's Definition of Done. */
+export type DodItemRow = SyncedColumns & {
+  milestoneId: string
+  text: string
+  state: DodState
+  /** Evidence (a link or short text); required for `na`. */
+  note: string | null
+  /** Set by the server on every state change. */
+  stateChangedBy: string | null
+  stateChangedAt: string | null
+  /** Fractional index (data model §10). */
+  sortOrder: string
 }
 
 /** A row as stored locally: the row and its bookkeeping. */

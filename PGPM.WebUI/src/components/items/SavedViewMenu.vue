@@ -11,7 +11,7 @@ import type { ViewState } from '@/composables/useLocalTable'
 import { useNotify } from '@/composables/useNotify'
 import { localDb } from '@/local/db'
 import { repo } from '@/local/repo'
-import type { ItemType, SavedViewRow } from '@/local/rows'
+import type { SavedViewRow } from '@/local/rows'
 import {
   canChange,
   createView,
@@ -21,6 +21,7 @@ import {
   updateView,
   viewNameError,
   viewsFor,
+  type ViewType,
 } from '@/local/savedViews'
 import { useLive } from '@/local/useLive'
 import { useSession } from '@/stores/session'
@@ -31,7 +32,7 @@ import { useSession } from '@/stores/session'
  * *Configuration: Manage*), *Update*, *Rename…* and *Delete…* for the user's own views. A view whose state was changed
  * since shows as *modified*. v-model is the view's id.
  */
-const props = defineProps<{ type: ItemType; plural: string; state: ViewState }>()
+const props = defineProps<{ type: ViewType; plural: string; state: ViewState }>()
 const viewId = defineModel<string | null>({ default: null })
 const emit = defineEmits<{ apply: [state: ViewState | null] }>()
 

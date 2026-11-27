@@ -195,11 +195,19 @@ describe('item lists (docs/01 §4.3): filters, columns, sorting', () => {
 
   it('reads stored filters strictly and counts and cleans them', () => {
     expect(
-      readFilters({ statusIds: ['a', 3], overdue: 'yes', createdFrom: 'soon', unknown: 1, fields: [{ op: 'eq' }] }),
-    ).toEqual({ statusIds: ['a'], fields: [{ op: 'eq' }] })
+      readFilters({
+        statusIds: ['a', 3],
+        overdue: 'yes',
+        createdFrom: 'soon',
+        unknown: 1,
+        fields: [{ op: 'eq' }, { field: 'field:x', op: 'set', extra: 1 }, { field: 'x', op: 'set' }],
+      }),
+    ).toEqual({ statusIds: ['a'], fields: [{ field: 'field:x', op: 'set' }] })
     expect(cleanFilters({ statusIds: [], pinned: false, mine: true })).toEqual({ mine: true })
     expect(countFilters({ statusIds: ['a'], overdue: true, colors: [] }, ['statusIds'])).toBe(1)
-    expect(ids({ fields: [{ field: 'field:x', op: 'set' }] })).toHaveLength(all.length)
+    // A field the user doesn't see: nothing has a value of it.
+    expect(ids({ fields: [{ field: 'field:x', op: 'set' }] })).toHaveLength(0)
+    expect(ids({ fields: [{ field: 'field:x', op: 'unset' }] })).toHaveLength(all.length)
   })
 
   it('has the check-packages column ids per type; unknown ids (field:…) are ignored, key and title kept', () => {

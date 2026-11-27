@@ -9,6 +9,7 @@ import { useDatabase } from '@/local/db'
 import { setRepoContext } from '@/local/repo'
 import type { ItemRow } from '@/local/rows'
 import { useSession } from '@/stores/session'
+import { G_BOARD, G_TEAM, seedConfig, templateId } from '@/test/configFixture'
 import { memoryDb, until } from '@/test/memoryDb'
 import ItemCreateDialog from './ItemCreateDialog.vue'
 
@@ -126,11 +127,52 @@ describe('the create dialog (docs/01 §4.4)', () => {
     expect(push).toHaveBeenCalledWith({ name: 'idea', params: { id: item!.id } })
   })
 
+  it('creates a project from a template offline: its statuses, shares, sections and gates in one batch', async () => {
+    await seedConfig(db)
+    open('project')
+    await until(() => !!dialog() && dialog().textContent!.includes('Blank project'), 'the template picker')
+    // Blank: the project statuses, the creator's groups.
+    await until(() => dialog().textContent!.includes('Draft'), 'the default status')
+    const select = dialog().querySelector('#new-project-template')!.closest('[data-pc-name="select"]') as HTMLElement
+    select.click()
+    await until(() => !!document.body.querySelector('[role="option"][aria-label="AI use case"]'), 'the options')
+    // PrimeVue's Select picks on mousedown.
+    document.body
+      .querySelector('[role="option"][aria-label="AI use case"]')!
+      .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    await until(() => dialog().textContent!.includes('Preparing test'), 'the template’s default status')
+    await until(() => dialog().textContent!.includes('Review board'), 'the template’s shares')
+    const title = dialog().querySelector<HTMLInputElement>('#new-project-title')!
+    title.value = 'Invoice recognition'
+    title.dispatchEvent(new Event('input'))
+    const start = dialog().querySelector<HTMLInputElement>('#new-project-start')!
+    start.value = '2026-12-01'
+    start.dispatchEvent(new Event('input'))
+    button('Create project').click()
+    await until(() => push.mock.calls.length === 1, 'the navigation')
+    const project = ((await db.synced('items').toArray()) as unknown as ItemRow[]).find((i) => i.type === 'project')!
+    expect(project).toMatchObject({
+      title: 'Invoice recognition',
+      statusId: 's-project-preparing',
+      projectTemplateId: templateId,
+      projectStartDate: '2026-12-01',
+    })
+    const entries = await db.outbox.toArray()
+    expect(new Set(entries.map((e) => e.batch)).size).toBe(1)
+    expect(entries.filter((e) => e.table === 'item_shares').map((e) => e.row!.groupId)).toEqual([G_TEAM, G_BOARD])
+    expect(entries.filter((e) => e.table === 'item_sections')).toHaveLength(4)
+    expect(entries.filter((e) => e.table === 'milestones').map((e) => e.row!.dueDate)).toEqual([
+      '2026-12-01',
+      '2026-12-29',
+      '2027-01-26',
+    ])
+  })
+
   it('creates a note without a status; a project without statuses can’t be created yet', async () => {
     open('project')
     await until(() => !!dialog() && dialog().textContent!.includes('no project statuses'), 'the hint')
     expect(button('Create project').disabled).toBe(true)
-    expect(dialog().textContent).toContain('Templates come with phase 4')
+    expect(dialog().textContent).toContain('Blank project')
     mounted.splice(0).forEach((w) => w.unmount())
 
     open('note')

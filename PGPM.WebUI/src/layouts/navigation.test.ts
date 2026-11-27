@@ -69,6 +69,9 @@ describe('the menu (docs/01 §3)', () => {
       'trash',
       'persons',
       'statuses',
+      'sections',
+      'templates',
+      'packages',
       'admin-mcp',
       'microsoft',
     ]

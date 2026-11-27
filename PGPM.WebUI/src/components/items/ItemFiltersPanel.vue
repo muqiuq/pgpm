@@ -5,18 +5,21 @@ import MultiSelect from 'primevue/multiselect'
 import ToggleSwitch from 'primevue/toggleswitch'
 import { computed } from 'vue'
 import { itemTypes, presetColors } from '@/domain/itemTypes'
+import { useCatalogue } from '@/local/catalogue'
 import { relations } from '@/local/items'
 import { useGroups, usePersons, useUserPersons } from '@/local/lookups'
 import type { ItemType } from '@/local/rows'
-import type { ItemFilters } from '@/views/items/itemList'
+import type { FieldFilter, ItemFilters } from '@/views/items/itemList'
+import FieldFilters from './FieldFilters.vue'
 
 /**
  * The further filters of an item list (docs/01 §4.3), in the *Filters* panel: owner, assigned person, colour, created
- * and modified ranges, shared with a group, hide closed – and the link filter a saved view may bring (*Learnings*),
- * shown so that it can be removed. v-model is the list's filters; the quick ones (status, assigned to me, overdue) are
- * on the bar.
+ * and modified ranges, shared with a group, hide closed, the dynamic field filters (ideas, projects) – and the link
+ * filter a saved view may bring (*Learnings*), shown so that it can be removed. v-model is the list's filters; the quick
+ * ones (status, assigned to me, overdue) are on the bar.
  */
 const props = defineProps<{ type: ItemType }>()
+const { catalogue } = useCatalogue()
 const filters = defineModel<ItemFilters>({ required: true })
 const info = computed(() => itemTypes[props.type])
 const users = useUserPersons()
@@ -168,7 +171,13 @@ const date = (value: unknown) => (typeof value === 'string' && value ? value : u
         @click="set('hasLink', undefined)"
       />
     </div>
-    <p v-if="filters.fields?.length" class="muted small">Field filters of this view apply with phase 4.</p>
+    <FieldFilters
+      v-if="type === 'idea' || type === 'project'"
+      :model-value="filters.fields ?? []"
+      :type="type"
+      :catalogue="catalogue"
+      @update:model-value="(v: FieldFilter[]) => set('fields', v.length ? v : undefined)"
+    />
   </div>
 </template>
 

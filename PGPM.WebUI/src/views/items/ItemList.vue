@@ -6,6 +6,7 @@ import Popover from 'primevue/popover'
 import ToggleButton from 'primevue/togglebutton'
 import { computed, ref, watch, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import FieldValue from '@/components/fields/FieldValue.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import BulkActions from '@/components/items/BulkActions.vue'
 import ColumnChooser from '@/components/items/ColumnChooser.vue'
@@ -17,13 +18,18 @@ import PageHeader from '@/components/PageHeader.vue'
 import RelativeTime from '@/components/RelativeTime.vue'
 import { useLocalTable, type ViewState } from '@/composables/useLocalTable'
 import { useNow } from '@/composables/useNow'
+import { timeboxPassed } from '@/domain/fields/renderValue'
 import { itemRoute, itemTypes } from '@/domain/itemTypes'
+import { useCatalogue } from '@/local/catalogue'
 import { localDb } from '@/local/db'
+import { oneValuePerField } from '@/local/fields'
 import { selectableStatuses, today } from '@/local/items'
 import { usePersons, useStatuses, useUserPersons } from '@/local/lookups'
 import {
   itemKey,
   type AssignmentRow,
+  type FieldDefinitionRow,
+  type FieldValueRow,
   type ItemLinkRow,
   type ItemRow,
   type ItemShareRow,
@@ -44,6 +50,7 @@ import {
   formatDay,
   formatValue,
   groupBy,
+  itemFieldValue,
   itemText,
   linkSummary,
   matchItem,
@@ -96,6 +103,23 @@ const templates = useLive(
   async () => new Map((await all<ProjectTemplateRow>('project_templates')()).map((t) => [t.id, t.name])),
   new Map<string, string>(),
 )
+const { catalogue } = useCatalogue()
+const hasFields = props.type === 'idea' || props.type === 'project'
+const fieldValueRows = useLive(
+  async () => (hasFields ? oneValuePerField(await all<FieldValueRow>('field_values')()) : []),
+  [] as FieldValueRow[],
+)
+const fieldValues = computed(() => {
+  const byItem = new Map<string, Record<string, unknown>>()
+  for (const v of fieldValueRows.value.value) {
+    const field = catalogue.value.fieldById.get(v.fieldId)
+    if (!field) continue
+    let values = byItem.get(v.itemId)
+    if (!values) byItem.set(v.itemId, (values = {}))
+    values[field.key] = v.value
+  }
+  return byItem
+})
 
 const context = computed<ListContext>(() => ({
   statuses: statuses.byId.value,
@@ -112,7 +136,11 @@ const context = computed<ListContext>(() => ({
   templates: templates.value.value,
   me: { userId: session.user?.id ?? null, personId: session.personId },
   now: now.value,
+  catalogue: catalogue.value,
+  fieldValues: fieldValues.value,
+  scoreCache: new Map(),
 }))
+const renderContext = computed(() => ({ personName: (id: string) => persons.byId.value.get(id)?.displayName }))
 
 // --- filters, columns, view ---
 const query = route.query
@@ -143,7 +171,7 @@ const legacy: Record<string, string> = { updatedAt: 'updated_at', createdAt: 'cr
 
 const table = useLocalTable<Item>({
   rows: async () => (await localDb().synced('items').where('type').equals(props.type).toArray()) as unknown as Item[],
-  text: itemText,
+  text: (item) => itemText(item, context.value),
   filters: cleaned as unknown as Ref<Record<string, unknown>>,
   match: (item, f) => matchItem(item, f as ItemFilters, context.value),
   sortValue: (item, field) => sortValue(item, legacy[field] ?? field, context.value),
@@ -185,7 +213,8 @@ function applyView(state: ViewState | null) {
 }
 
 const currentState = computed(() => table.currentState())
-const shownColumns = computed(() => visibleColumns(props.type, columns.value))
+const shownColumns = computed(() => visibleColumns(props.type, columns.value, context.value))
+const allColumns = computed(() => columnsFor(props.type, context.value))
 const statusOptions = computed(() =>
   info.hasStatus ? selectableStatuses(statuses.all.value, props.type, null).filter((s) => !s.isArchived) : [],
 )
@@ -222,12 +251,28 @@ const dueOver = (item: Item) =>
   statusOf(item, context.value).status?.category !== 'closed'
 
 const open = (item: Item) => router.push(itemRoute(item))
+
+/** A timebox date column's *overdue* marker (docs/01 §6.1): passed while the item isn't closed. */
+function fieldOverdue(item: Item, field: FieldDefinitionRow): string | null {
+  if (field.config?.timebox !== true) return null
+  const closed = statusOf(item, context.value).status?.category === 'closed'
+  return timeboxPassed(field, itemFieldValue(item, field, context.value), today(now.value), closed) ? 'Passed' : null
+}
 </script>
 
 <template>
   <div class="page">
     <PageHeader :title="info.plural">
       <template #actions>
+        <Button
+          v-if="type === 'project'"
+          label="Gate decisions"
+          icon="pi pi-directions"
+          size="small"
+          severity="secondary"
+          outlined
+          @click="router.push({ name: 'gates' })"
+        />
         <Button v-if="canCreate" :label="`New ${info.label}`" icon="pi pi-plus" size="small" @click="creating = true" />
       </template>
     </PageHeader>
@@ -304,7 +349,7 @@ const open = (item: Item) => router.push(itemRoute(item))
       <Button v-if="activeCount" label="Clear" icon="pi pi-filter-slash" size="small" text @click="clearFilters" />
       <template #end>
         <SavedViewMenu v-model="viewId" :type="type" :plural="info.plural" :state="currentState" @apply="applyView" />
-        <ColumnChooser v-model="columns" :columns="columnsFor(type)" :defaults="defaultColumns(type)" />
+        <ColumnChooser v-model="columns" :columns="allColumns" :defaults="defaultColumns(type)" />
       </template>
     </FilterBar>
     <BulkActions v-if="selection.length" :type="type" :ids="selectedIds" @done="selection = []" />
@@ -385,6 +430,14 @@ const open = (item: Item) => router.push(itemRoute(item))
           <span v-else-if="['decision_date', 'start_date', 'end_date'].includes(col.id)">{{
             formatDay(sortValue(data, col.id, context) as string | null)
           }}</span>
+          <FieldValue
+            v-else-if="col.field"
+            :field="col.field"
+            :value="itemFieldValue(data, col.field, context)"
+            :context="renderContext"
+            :overdue="fieldOverdue(data, col.field)"
+            compact
+          />
           <span v-else class="ellipsis">{{ sortValue(data, col.id, context) ?? '' }}</span>
         </template>
       </Column>
