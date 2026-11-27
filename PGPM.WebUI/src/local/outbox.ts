@@ -1,10 +1,10 @@
 /**
  * The outbox (data model §14.1, docs/03 §11.5, §11.7): the mutations the device hasn't pushed yet, and the pure rules
  * the local repository and the sync engine apply to them – coalescing, applying a patch to a row, rebasing pending
- * patches on a fresh server row. No storage here (Dexie comes with the sync core).
+ * patches on a fresh server row. No storage here (db.ts, repo.ts).
  */
 
-/** A synced row as the client stores it: the server's columns (snake_case), jsonb members as nested objects. */
+/** A synced row as the client stores it: the server's columns (camelCase), jsonb members as nested objects. */
 export type Row = Record<string, unknown>
 
 export type OutboxOp = 'insert' | 'patch' | 'delete'
@@ -37,6 +37,11 @@ export interface OutboxEntry {
   clientChangedAt: string
   /** delete: the user chose *Delete anyway* (docs/03 §11.8). */
   force?: boolean
+  /**
+   * Local only, never pushed: when a push first took the entry. A sent entry is never coalesced with later ones – the
+   * server may have stored its result under its `mutationId` already.
+   */
+  sentAt?: string
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

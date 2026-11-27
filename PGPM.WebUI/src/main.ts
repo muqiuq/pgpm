@@ -15,6 +15,7 @@ import './design/base.css'
 import { PgpmPreset, darkClass } from './design/preset'
 import { queryClient } from './api/queries'
 import { installSessionHandling } from './composables/sessionHandling'
+import { installSync } from './local/boot'
 import { registerServiceWorker } from './pwa/register'
 import App from './App.vue'
 import { router } from './router'
@@ -31,6 +32,7 @@ app.use(ToastService)
 app.use(ConfirmationService)
 app.directive('tooltip', Tooltip)
 installSessionHandling(router)
+installSync()
 app.mount('#app')
 
 void registerServiceWorker()
