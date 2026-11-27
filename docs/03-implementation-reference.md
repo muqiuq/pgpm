@@ -1336,8 +1336,30 @@ PNMTD renders all maps as **plain Vue SVG** – no Cytoscape/vis-network/Konva
   notes: `<rect class="paper">` + `<foreignObject>` with rendered Markdown,
   `boards/boardMarkdown.ts`). Card badges: status (+ overdue), persons, milestone
   progress, configured scores (`maps.settings.cardBadges`).
-- **Level of detail**: below zoom 0.45 cards render as a colored rect + title only.
-- **Viewport culling** above ~300 elements.
+- **Level of detail** (`src/maps/culling.ts`): from zoom 0.45 everything is drawn;
+  below it cards render as a colored rect + title in plain SVG (no
+  `<foreignObject>`); below 0.3 (14 px text under 4.5 px) as the rect only, and
+  texts/labels under 24 px are left out. Less detail is applied at once while
+  zooming out, more detail only once the view has settled (180 ms without a
+  change), so a zoom gesture doesn't switch hundreds of cards back and forth.
+- **Viewport culling** from 300 elements: only elements touching a region – the
+  visible box grown by 50 % of its size on every side – are rendered (the
+  selection always). The region is renewed when the view leaves it, and after
+  the view settled when the zoom changed by more than 1.6×; panning inside it
+  re-renders nothing but the world group's transform. Frames, card models and
+  line geometries keep their object identity while unchanged, so a drag
+  re-renders only the moved elements and their lines.
+- **Spike S2** (2026-11-27; `/dev/map?map=stress&bench=1`: 1,000 elements –
+  about 600 cards, 300 shapes and texts, 100 connected lines – driven by
+  requestAnimationFrame; Vite dev build, headless Chromium 158 in a Linux
+  container on an Apple-silicon Mac, software raster, 1440 × 900). With LOD and
+  culling every pan and zoom phase holds the 60 fps cap (slowest frame
+  16.8 ms); uncapped a frame takes 1.8–3.1 ms (p50) panning and 2.9–6.7 ms
+  zooming, against 3.5–7.5 / 7.9–11 ms with both off. With 4× CPU throttling (a
+  slow laptop) pans stay at 56–60 fps and zooms at 43–54 fps (p95 33 ms), where
+  without them zooms drop to 22–24 fps (p50 50 ms) and the whole-map pan to
+  26 fps. What remains are one-off hitches when the region is renewed or the LOD
+  threshold is crossed (up to 150 ms throttled, under 20 ms unthrottled).
 - Images: `<image href="blob:…">` from IndexedDB, thumbnail first.
 - An item may have **several cards** on one map; all cards of an item re-render
   from the same item row. `?focus=item:<id>` selects all of them and fits the view.
@@ -1361,6 +1383,10 @@ PNMTD renders all maps as **plain Vue SVG** – no Cytoscape/vis-network/Konva
 - In PGPM these are `src/maps/panZoom.ts`, `moving.ts` (+ optional snap of the
   dragged selection), `geometry.ts` and `focus.ts` – pure functions with their
   vitests; `matrixLayout.ts` (§13.5) sits next to them.
+- Gestures (PGPM): with the Select tool a drag on the background pans and
+  Shift/Ctrl/⌘ + drag draws the rubber band; the Hand tool pans everywhere;
+  Space + drag and the middle button pan. A resize handle with Shift keeps the
+  aspect ratio; the grid snaps the moving edges.
 - Overlays: zoom +/−/Fit bottom-right, legend bottom-left (PNMTD); toolbar (left),
   layer panel, filter bar (top), minimap (PGPM).
 - The map view folds the app drawer to the rail (`preferences.holdRail()`) and uses
@@ -1382,6 +1408,11 @@ PNMTD renders all maps as **plain Vue SVG** – no Cytoscape/vis-network/Konva
   the content; `open = computed(() => selected !== null)`; a separate `shown` ref
   keeps the last selection visible while sliding out.
 - Width `min(30rem, 100vw)`, `100vw` below 600 px.
+- A background click closes it; *Map properties* (nothing selected) opens from
+  the toolbar's cog. The item quick edit is the host's `#item-panel` slot above
+  a read-only summary (status, persons, scores, description, milestones, links,
+  "appears n× on this map" with *Select all*); `#milestone-panel` and
+  `#map-sharing` likewise.
 - Layout from `views/network/DevicePanel.vue`: header (2.75rem color avatar with
   type icon, h2 title, status badge, close), actions row, scrolling body with
   stacked `<section>`s – no tabs. Immediately saved color picker as in PNMTD
@@ -1392,26 +1423,46 @@ PNMTD renders all maps as **plain Vue SVG** – no Cytoscape/vis-network/Konva
 PNMTD maps only move nodes and save positions explicitly via a save bar. PGPM is
 a real editor and offline-first:
 
+- **Data source** (`src/maps/dataSource.ts`): the canvas, the matrix map and the
+  side panel read and write through `MapDataSource` only – reactive rows (map,
+  layers, elements, items, statuses, milestones, DoD, links, assignments,
+  persons, field definitions/values, access, the personal view settings), a file
+  URL resolver, `newId`, and `create/patch/remove/batch` with the outbox's
+  `{key: {old, new}}` changes on the three map tables. `createMemorySource` holds
+  it in memory (tests, `/dev/map`); phase 5 implements it over the repo. Placing
+  tools ask the host through events (`requestItem` → *Create new* / *Add
+  existing*, `requestMilestone`, `requestProject`, `requestImage`) whose payload
+  has `place(id)`.
 - **No save bar**: every completed operation (drag end, resize end, style change,
   text edit) writes patches to the local repo immediately; during a drag only Vue
   state changes; one patch per element on `pointerup`; the live sync spreads it.
 - **Remote changes during interaction**: incoming changes to an element the user
   is dragging are applied after the drag ends (then the local patch's `old` no
   longer matches → conflict only if the same property changed).
-- **Undo/redo**: per-map command stack (session only); a command is a list of
-  `{table, id, before, after}`; undo writes the inverse patches.
+- **Undo/redo** (`src/maps/history.ts`): per-map command stack (session only, 200
+  steps); a command is a list of `{table, id, before, after}`; undo writes the
+  inverse patches. Undoing a
+  deletion creates the row again **under a new id** (the server never takes an id
+  twice) and remembers the alias, so later steps and references (a line's
+  `start_element_id`) follow it; a step's writes are one batch, rows created
+  before the patches that refer to them.
 - **z-order / layers**: fractional keys (`generateKeyBetween`).
 - **Connectors**: `line` elements with `start_element_id`/`end_element_id`;
   endpoints computed from the targets' borders; stored `points` are the fallback.
+  A connected line isn't dragged itself – it follows its elements; its ends are
+  dragged onto an element (connect) or anywhere (free). Deleting an element
+  turns the lines attached to it into free ends where they were drawn.
 - **Links overlay**: *Show links* draws `item_links` between cards of linked items
   (all card pairs, dashed, not stored; nearest pair only when an item has several
   cards).
 - **Timeline / milestones**: derived from the project's milestones; gates drawn
   as diamonds, colored by decision.
-- **Clipboard**: JSON (`{"pgpm":"elements", …}`) via `navigator.clipboard`; paste
-  creates new element ids; item cards reference the same items (another card).
-- **Keyboard**: Delete, Ctrl/⌘ Z / Shift Z, C / V / D, ] / [ (+Shift), arrows,
-  Space-pan, Esc, `F` fit.
+- **Clipboard**: JSON (`{"pgpm":"elements", …}`) via the copy/cut/paste events;
+  plain text pastes as a text element, a pasted image goes to `requestImage`;
+  paste creates new element ids; item cards reference the same items (another
+  card).
+- **Keyboard**: Delete, Ctrl/⌘ Z / Shift Z (and Y), C / X / V / D / A, ] / [
+  (+Shift), arrows, Space-pan, Esc, `F` fit, + / − zoom.
 - **Read-only maps**: tools hidden, `useMoving` disabled, side panel read-only.
 - **Export** (later): export-mode SVG (cards as plain SVG text, because
   `<foreignObject>` taints the canvas in Safari) → PNG.
@@ -1427,6 +1478,8 @@ a real editor and offline-first:
 - Axes, split lines and quadrant labels are rendered as a fixed background layer;
   free elements and layers work as on canvases.
 - Cards are not draggable; the side panel edits values and the card moves live.
+  They are drawn as a virtual layer below the free elements (ids
+  `matrix:<item id>`, no rows), moving with a 0.45 s transform transition.
 - Quadrant of an item for a given matrix map: `quadrantOf(x, y, matrix)` → `tl` |
   `tr` | `bl` | `br` with its label (the map's or the default) – used for card
   badges, list column/filter and MCP `search_items`. Right/top is an axis' high
