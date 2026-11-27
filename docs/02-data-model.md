@@ -201,7 +201,7 @@ One row per MCP call: `id`, `at`, `token_id`, `user_id`, `tool`, `arguments`
 kept. Phase 6 adds PNMTD's `kind`, `username`, `ip`, `user_agent`, `client`,
 `method` (`tools/call`, `tools/list`, `auth`), `tool_kind`, `error_code`, `error`,
 `summary`, `truncated`, `strike`, `targets` (jsonb), and the outcome
-`unauthenticated` for a refused token (doc 03 §15 #38). `mcp_tokens.hash` is
+`unauthenticated` for a refused token (doc 03 §15 #40). `mcp_tokens.hash` is
 null until a value is made (and after *Revoke all*); unique where set.
 
 ### `key_values` (PNMTD)
