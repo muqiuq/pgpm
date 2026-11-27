@@ -137,6 +137,13 @@ export const routes: RouteRecordRaw[] = [
           component: () => import('@/views/dev/MarkdownPlayground.vue'),
           meta: { title: 'Markdown playground', public: true },
         },
+        // The map canvas and matrix over the in-memory data source, with the frame-time benchmark (docs/03 §13).
+        {
+          path: '/dev/map',
+          name: 'dev-map',
+          component: () => import('@/maps/playground/MapPlayground.vue'),
+          meta: { title: 'Map playground', public: true },
+        },
       ]
     : []),
   {
