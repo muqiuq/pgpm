@@ -94,13 +94,14 @@ annotate() {
 in_node() { "$ENGINE" run --rm -v "$PWD":/w:ro -w /w "$NODE_IMAGE" "$@"; }
 
 # PGPM.WebUI copied into one container that lives for the run: npm ci once, then every check in the same node_modules,
-# without touching the working tree.
+# without touching the working tree. spec/ next to it, as in the repository: the test vectors the UI's tests share with
+# the C# tests (spec/score-vectors.json).
 web_holder() {
   "$ENGINE" container inspect "$WEB_HOLDER" >/dev/null 2>&1 && return 0
   "$ENGINE" run -d --rm --name "$WEB_HOLDER" -v "$PWD":/w:ro -v "${NPM_CACHE}":/root/.npm \
     -e NPM_CONFIG_UPDATE_NOTIFIER=false -e NPM_CONFIG_FUND=false -e NPM_CONFIG_AUDIT=false -e NO_COLOR=1 \
     "$NODE_IMAGE" sleep 3600 >/dev/null || return 1
-  "$ENGINE" exec "$WEB_HOLDER" sh -c 'mkdir -p /tmp/web && cd /w/PGPM.WebUI \
+  "$ENGINE" exec "$WEB_HOLDER" sh -c 'mkdir -p /tmp/web /tmp/spec && cp -R /w/spec/. /tmp/spec/ && cd /w/PGPM.WebUI \
     && tar --exclude=node_modules --exclude=dist --exclude=test-results -cf - . | tar -C /tmp/web -xf -'
 }
 in_web() { web_holder && "$ENGINE" exec -w /tmp/web "$WEB_HOLDER" "$@"; }
