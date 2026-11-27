@@ -40,11 +40,11 @@ const views: Record<string, () => Promise<RouteComponent>> = {
   trash: () => import('@/views/trash/TrashView.vue'),
   persons: () => import('@/views/persons/PersonsView.vue'),
   statuses: () => import('@/views/admin/StatusesView.vue'),
+  maps: () => import('@/views/maps/MapsView.vue'),
 }
 
 /** Each menu entry's placeholder until its phase replaces the component (docs/05 §3). */
 const pages: Record<string, { phase: number; summary: string }> = {
-  maps: { phase: 5, summary: 'Canvas and matrix maps of ideas, projects, milestones and shapes, with templates.' },
   sections: { phase: 4, summary: 'Sections and fields of ideas and projects: ratings, scores, selects and more.' },
   templates: { phase: 4, summary: 'Project templates: statuses, sections, defaults, milestones and gates.' },
   packages: { phase: 4, summary: 'Import and export configuration packages such as the innovation method.' },
@@ -92,6 +92,14 @@ export const routes: RouteRecordRaw[] = [
       },
     ]
   }),
+  // A map (docs/01 §12): the canvas or matrix host, `?focus=item:<id>` (docs/03 §13.1).
+  {
+    path: '/maps/:id',
+    name: 'map',
+    component: () => import('@/views/maps/MapView.vue'),
+    props: true,
+    meta: { title: 'Map', icon: 'pi pi-map', crumbs: [{ label: 'Maps', to: '/maps' }] },
+  },
   {
     path: '/persons/:id',
     name: 'person',

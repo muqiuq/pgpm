@@ -14,31 +14,43 @@ import { useLive } from '@/local/useLive'
 import ShareEditor from './ShareEditor.vue'
 
 /**
- * *Share* on an item (docs/01 §4.2, docs/03 §6.3, §12.6): the groups with *read* / *edit* / *manage*, and the owner.
+ * *Share* on an item – or, with `mapId`, a map (docs/01 §4.2, §12.1, docs/03 §6.3, §12.6): the groups with *read* /
+ * *edit* / *manage*, and the owner.
  * Changing them needs *manage* and a connection (`PUT …/shares`, `POST …/owner`); the server re-stamps the item, so
  * everyone's devices get the change (and lose the item, where access is gone). With less than *manage*, the sharing is
  * shown read-only.
  */
-const props = defineProps<{ itemId: string; title: string; ownerUserId: string; access: Access | null | undefined }>()
+const props = defineProps<{
+  itemId?: string
+  mapId?: string
+  title: string
+  ownerUserId: string
+  access: Access | null | undefined
+}>()
 const visible = defineModel<boolean>('visible', { default: false })
 
 const { done, notify } = useActions()
 const online = useOnline()
 const groups = useGroups()
 const users = useUserPersons()
+const target = computed(() =>
+  props.mapId
+    ? { table: 'map_shares', key: 'mapId', id: props.mapId }
+    : { table: 'item_shares', key: 'itemId', id: props.itemId ?? '' },
+)
 const current = useLive(
   async () =>
     (
       (await localDb()
-        .synced('item_shares')
-        .where('itemId')
-        .equals(props.itemId)
+        .synced(target.value.table)
+        .where(target.value.key)
+        .equals(target.value.id)
         .toArray()) as unknown as ItemShareRow[]
     )
       .filter((s) => !s.deleted)
       .map((s) => ({ groupId: s.groupId, access: s.access })),
   [] as ShareSpec[],
-  () => props.itemId,
+  () => target.value.id,
 )
 
 const manage = computed(() => props.access === 'manage')
@@ -73,18 +85,28 @@ async function save() {
   saving.value = true
   try {
     if (changed.value) {
-      const ok = await done(() => sharingApi.setShares(props.itemId, draft.value), {
-        success: 'Sharing saved',
-        failure: 'Sharing not saved',
-      })
+      const id = target.value.id
+      const shares = draft.value
+      const ok = await done(
+        () => (props.mapId ? sharingApi.setMapShares(id, shares) : sharingApi.setShares(id, shares)),
+        {
+          success: 'Sharing saved',
+          failure: 'Sharing not saved',
+        },
+      )
       if (!ok) return
     }
     if (ownerChanged.value) {
       const name = users.nameOf(owner.value, 'the new owner')
-      const ok = await done(() => sharingApi.transferOwner(props.itemId, owner.value!), {
-        success: `${name} is the owner now`,
-        failure: 'Owner not changed',
-      })
+      const id = target.value.id
+      const user = owner.value!
+      const ok = await done(
+        () => (props.mapId ? sharingApi.transferMapOwner(id, user) : sharingApi.transferOwner(id, user)),
+        {
+          success: `${name} is the owner now`,
+          failure: 'Owner not changed',
+        },
+      )
       if (!ok) return
     }
     // The re-stamped rows come over the live channel; without it, with this sync.

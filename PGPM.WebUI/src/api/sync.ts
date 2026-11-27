@@ -94,6 +94,11 @@ export const sharingApi = {
     call(client.PUT('/api/v1/items/{id}/shares', { params: { path: { id: itemId } }, body: shares })),
   transferOwner: (itemId: string, userId: string) =>
     call(client.POST('/api/v1/items/{id}/owner', { params: { path: { id: itemId } }, body: { userId } })),
+  /** A map's shares (docs/01 §12.1, same rules as an item's). */
+  setMapShares: (mapId: string, shares: ShareSpec[]) =>
+    call(client.PUT('/api/v1/maps/{id}/shares', { params: { path: { id: mapId } }, body: shares })),
+  transferMapOwner: (mapId: string, userId: string) =>
+    call(client.POST('/api/v1/maps/{id}/owner', { params: { path: { id: mapId } }, body: { userId } })),
 }
 
 // --- trash (docs/03 §11.6) -----------------------------------------------------------------------------------------

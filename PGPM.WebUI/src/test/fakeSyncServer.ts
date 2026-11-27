@@ -95,7 +95,7 @@ export const patchable: Record<string, readonly string[]> = {
     'sortOrder',
   ],
   dod_items: ['text', 'state', 'note', 'sortOrder'],
-  maps: ['name', 'description', 'settings', 'matrix', 'defaultView', 'preview'],
+  maps: ['name', 'description', 'settings', 'matrix', 'defaultView', 'isTemplate', 'preview'],
   map_layers: ['name', 'sortOrder', 'isVisible', 'isLocked'],
   map_elements: [
     'layerId',
@@ -769,6 +769,43 @@ export class FakeSyncServer {
       }))
   }
 
+  /** `PUT /api/v1/maps/{id}/shares` (phase 5): as an item's – re-stamp the map and its rows, evictions. */
+  putMapShares(userId: string, mapId: string, shares: ShareSpec[]): ItemShare[] {
+    const user = this.user(userId)
+    const map = this.table('maps').get(mapId)
+    if (!map || this.mapAccess(user, map) !== 'manage') throw new ApiError(403, { code: 'missing_access' })
+    const before = new Map([...this.users.values()].map((u) => [u.id, this.mapAccess(u, map)]))
+    const current = [...this.table('map_shares').values()].filter((s) => s.mapId === mapId && !s.deleted)
+    for (const share of current) {
+      const wanted = shares.find((s) => s.groupId === share.groupId)
+      if (!wanted) this.write('map_shares', { ...share, deleted: true, deleteBatchId: uuidv7() }, userId)
+      else if (wanted.access !== share.access) this.write('map_shares', { ...share, access: wanted.access }, userId)
+    }
+    for (const wanted of shares) {
+      if (!current.some((s) => s.groupId === wanted.groupId)) {
+        this.write('map_shares', { id: uuidv7(), mapId, groupId: wanted.groupId, access: wanted.access }, userId)
+      }
+    }
+    this.restamp('maps', mapId)
+    for (const child of mapChildren) {
+      for (const row of this.table(child).values()) if (row.mapId === mapId) this.restamp(child, row.id)
+    }
+    for (const other of this.users.values()) {
+      if (before.get(other.id) && !this.mapAccess(other, map)) {
+        this.evictions.push({ userId: other.id, seq: ++this.seq, kind: 'map', id: mapId })
+      }
+    }
+    this.publish()
+    return [...this.table('map_shares').values()]
+      .filter((s) => s.mapId === mapId && !s.deleted)
+      .map((s) => ({
+        id: s.id,
+        groupId: s.groupId as string,
+        groupName: String(this.table('groups').get(s.groupId as string)?.name ?? ''),
+        access: s.access as Access,
+      }))
+  }
+
   /** `GET /api/v1/trash`: the batches of roots the user may manage. */
   trash(userId: string): TrashEntry[] {
     const user = this.user(userId)
@@ -970,6 +1007,9 @@ export class FakeSyncServer {
             status: 200,
             headers: { 'Content-Type': file.type, ETag: `"${String(this.table('files').get(m[1]!)?.sha256)}"` },
           })
+        }
+        if ((m = /^\/api\/v1\/maps\/([^/]+)\/shares$/.exec(path)) && method === 'PUT') {
+          return json(200, this.putMapShares(userId, m[1]!, (await request.json()) as ShareSpec[]))
         }
         if (path === '/api/v1/config/statuses' && method === 'POST') {
           return json(201, this.createStatus(userId, (await request.json()) as Row))

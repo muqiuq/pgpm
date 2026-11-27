@@ -23,7 +23,7 @@ test('the first admin, a new group and user, and what that user sees', async ({ 
   await expect(page).toHaveURL(/\/change-password/)
   await changePassword(page, initialAdminPassword, adminPassword)
   await expect(page).toHaveURL(/\/maps$/)
-  await expect(page.getByText('Coming in phase 5')).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Maps' })).toBeVisible()
 
   // A group with a right …
   const group = `E2E team ${stamp}`

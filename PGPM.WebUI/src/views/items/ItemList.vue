@@ -35,6 +35,8 @@ import {
 import { useLive } from '@/local/useLive'
 import { useSession } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
+import QuadrantFilter from '@/views/maps/QuadrantFilter.vue'
+import { useItemQuadrants } from '@/views/maps/quadrants'
 import ItemCreateDialog from './ItemCreateDialog.vue'
 import {
   cleanFilters,
@@ -92,6 +94,8 @@ const types = useLive(async () => {
     })
   return map
 }, new Map<string, ItemType>())
+// Matrix maps that show the type: a quadrant column and filter each (phase 5).
+const quadrants = useItemQuadrants(props.type)
 const templates = useLive(
   async () => new Map((await all<ProjectTemplateRow>('project_templates')()).map((t) => [t.id, t.name])),
   new Map<string, string>(),
@@ -112,6 +116,8 @@ const context = computed<ListContext>(() => ({
   templates: templates.value.value,
   me: { userId: session.user?.id ?? null, personId: session.personId },
   now: now.value,
+  columnValue: quadrants.columnValue,
+  quadrantOf: quadrants.quadrantOf,
 }))
 
 // --- filters, columns, view ---
@@ -185,7 +191,7 @@ function applyView(state: ViewState | null) {
 }
 
 const currentState = computed(() => table.currentState())
-const shownColumns = computed(() => visibleColumns(props.type, columns.value))
+const shownColumns = computed(() => visibleColumns(props.type, columns.value, quadrants.columns.value))
 const statusOptions = computed(() =>
   info.hasStatus ? selectableStatuses(statuses.all.value, props.type, null).filter((s) => !s.isArchived) : [],
 )
@@ -300,11 +306,21 @@ const open = (item: Item) => router.push(itemRoute(item))
       />
       <Popover ref="filtersPanel">
         <ItemFiltersPanel v-model="filters" :type="type" />
+        <QuadrantFilter
+          v-if="quadrants.maps.value.length"
+          :model-value="filters.quadrant"
+          :maps="quadrants.maps.value"
+          @update:model-value="(v) => setFilter('quadrant', v)"
+        />
       </Popover>
       <Button v-if="activeCount" label="Clear" icon="pi pi-filter-slash" size="small" text @click="clearFilters" />
       <template #end>
         <SavedViewMenu v-model="viewId" :type="type" :plural="info.plural" :state="currentState" @apply="applyView" />
-        <ColumnChooser v-model="columns" :columns="columnsFor(type)" :defaults="defaultColumns(type)" />
+        <ColumnChooser
+          v-model="columns"
+          :columns="columnsFor(type, quadrants.columns.value)"
+          :defaults="defaultColumns(type)"
+        />
       </template>
     </FilterBar>
     <BulkActions v-if="selection.length" :type="type" :ids="selectedIds" @done="selection = []" />
