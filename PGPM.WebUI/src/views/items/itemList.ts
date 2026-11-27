@@ -1,6 +1,12 @@
+import { normalise } from '@/composables/useLocalTable'
+import { isEmptyValue } from '@/domain/fields/fieldWidget'
+import { searchText, sortValueOf, timeboxReason as timeboxOf } from '@/domain/fields/renderValue'
+import { evaluateScore } from '@/domain/score'
+import { emptyCatalogue, type Catalogue } from '@/local/catalogue'
 import { isOverdue, overdueReason, daysInStatus, relations, today } from '@/local/items'
 import {
   itemKey,
+  type FieldDefinitionRow,
   type AssignmentRow,
   type ItemLinkRow,
   type ItemRow,
@@ -14,10 +20,21 @@ import {
 
 /**
  * The item lists' rules (docs/01 §4.3), pure so that they are tested without a page: the filters – the saved views'
- * vocabulary of docs/03 §17 (`spec/config-package.schema.json` `viewFilters`, with ids instead of keys) plus the list's
- * own –, the columns per type (the ids of `COLUMNS` in tools/check-packages.py; `field:<key>` columns come with phase 4
- * and are ignored until then), and what each column sorts by.
+ * vocabulary of docs/03 §17 (`spec/config-package.schema.json` `viewFilters`, with ids instead of keys, field filters by
+ * `field:<key>`) plus the list's own –, the columns per type (the ids of `COLUMNS` in tools/check-packages.py and a
+ * `field:<key>` column for every field of the sections that apply to the type, scores included), and what each column
+ * sorts by. Further columns (phase 5's matrix *quadrant*) come in through {@link registerColumns}.
  */
+
+/** A dynamic field filter (`viewFilters.fields`): `field` is `field:<key>`. */
+export interface FieldFilter {
+  field: string
+  op: 'eq' | 'in' | 'contains' | 'range' | 'set' | 'unset'
+  value?: string | number | boolean
+  values?: string[]
+  min?: number | string
+  max?: number | string
+}
 
 export interface HasLinkFilter {
   relation: LinkRelation
@@ -35,11 +52,11 @@ export interface ItemFilters {
   /** Shared with any of these groups. */
   groupIds?: string[]
   assignedToMe?: boolean
-  /** Status aging (max days), a lead's next action due; phase 4 adds timebox fields and milestones. */
+  /** Status aging (max days), a lead's next action due, a passed timebox date field – never in a closed status. */
   overdue?: boolean
   hasLink?: HasLinkFilter
-  /** Dynamic field filters: kept, applied from phase 4 on. */
-  fields?: unknown[]
+  /** Dynamic field filters (ideas and projects): all must match. */
+  fields?: FieldFilter[]
   // --- the list's own ---
   /** Owners (user ids). */
   ownerIds?: string[]
@@ -79,6 +96,12 @@ export interface ListContext {
   templates: ReadonlyMap<string, string>
   me: { userId: string | null; personId: string | null }
   now: number
+  /** The sections and fields the user sees (dynamic columns, filters, scores). */
+  catalogue: Catalogue
+  /** The items' field values by key (`field_values`), by item id. */
+  fieldValues: ReadonlyMap<string, Readonly<Record<string, unknown>>>
+  /** Scores computed for this context, by item id then field key (filled as they are asked for). */
+  scoreCache: Map<string, Map<string, number | null>>
 }
 
 /** An empty context (tests, a list before its lookups arrive). */
@@ -95,7 +118,147 @@ export function emptyContext(partial: Partial<ListContext> = {}): ListContext {
     templates: new Map(),
     me: { userId: null, personId: null },
     now: Date.now(),
+    catalogue: emptyCatalogue,
+    fieldValues: new Map(),
+    scoreCache: new Map(),
     ...partial,
+  }
+}
+
+// --- dynamic fields ----------------------------------------------------------------------------------------------
+
+const FIELD = 'field:'
+
+/** The field a column id or filter names (`field:<key>`), if the user sees it. */
+export function fieldOfColumn(id: string, ctx: Pick<ListContext, 'catalogue'>): FieldDefinitionRow | undefined {
+  return id.startsWith(FIELD) ? ctx.catalogue.fieldByKey.get(id.slice(FIELD.length)) : undefined
+}
+
+/** A field's value on an item: the stored one, or a score's result (computed once per context). */
+export function itemFieldValue(item: Pick<ItemRow, 'id'>, field: FieldDefinitionRow, ctx: ListContext): unknown {
+  const values = ctx.fieldValues.get(item.id) ?? {}
+  if (field.type !== 'score') return values[field.key]
+  let cache = ctx.scoreCache.get(item.id)
+  if (!cache) ctx.scoreCache.set(item.id, (cache = new Map()))
+  if (!cache.has(field.key)) {
+    const def = ctx.catalogue.defsByKey[field.key] ?? field
+    cache.set(field.key, evaluateScore(def, ctx.catalogue.defsByKey, values))
+  }
+  return cache.get(field.key) ?? null
+}
+
+/** Why an item's timebox date fields make it overdue (docs/01 §6.1), or null; never in a closed status. */
+export function timeboxReason(item: ItemRow, ctx: ListContext): string | null {
+  if (item.type !== 'idea' && item.type !== 'project') return null
+  const status = item.statusId ? ctx.statuses.get(item.statusId) : undefined
+  if (status?.category === 'closed') return null
+  const values = ctx.fieldValues.get(item.id)
+  if (!values) return null
+  const fields = timeboxFields(ctx.catalogue.fields)
+  return fields.length ? timeboxOf(fields, values, today(ctx.now), false) : null
+}
+
+const timeboxCache = new WeakMap<readonly FieldDefinitionRow[], FieldDefinitionRow[]>()
+
+/** The fields with `config.timebox` (cached per catalogue). */
+function timeboxFields(fields: readonly FieldDefinitionRow[]): FieldDefinitionRow[] {
+  let list = timeboxCache.get(fields)
+  if (!list) timeboxCache.set(fields, (list = fields.filter((f) => f.config?.timebox === true)))
+  return list
+}
+
+function numeric(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value)
+  return null
+}
+
+/** Whether an item passes one field filter; a field the user doesn't see matches only `unset`. */
+export function matchField(item: ItemRow, filter: FieldFilter, ctx: ListContext): boolean {
+  const field = fieldOfColumn(filter.field, ctx)
+  if (!field) return filter.op === 'unset'
+  const value = itemFieldValue(item, field, ctx)
+  const empty = field.type === 'score' ? value === null || value === undefined : isEmptyValue(value)
+  switch (filter.op) {
+    case 'set':
+      return !empty
+    case 'unset':
+      return empty
+    case 'eq':
+      if (empty) return false
+      if (field.type === 'bool') return (value === true) === (filter.value === true || filter.value === 'true')
+      if (Array.isArray(value)) return value.includes(filter.value)
+      return value === filter.value || (numeric(value) !== null && numeric(value) === numeric(filter.value))
+    case 'in': {
+      const wanted = filter.values ?? []
+      if (empty || !wanted.length) return false
+      return Array.isArray(value) ? value.some((v) => wanted.includes(String(v))) : wanted.includes(String(value))
+    }
+    case 'contains': {
+      const needle = normalise(String(filter.value ?? '').trim())
+      if (!needle) return true
+      if (empty) return false
+      const ctxNames = { personName: (id: string) => ctx.persons.get(id)?.displayName }
+      return normalise(searchText(field, value, ctxNames) || String(value)).includes(needle)
+    }
+    case 'range': {
+      if (empty) return false
+      if (field.type === 'date' || field.type === 'datetime') {
+        const text = String(value)
+        return (
+          (filter.min === undefined || text >= String(filter.min)) &&
+          (filter.max === undefined || text <= String(filter.max))
+        )
+      }
+      const n = numeric(value)
+      if (n === null) return false
+      const min = numeric(filter.min)
+      const max = numeric(filter.max)
+      return (min === null || n >= min) && (max === null || n <= max)
+    }
+    default:
+      return true
+  }
+}
+
+/** A stored field filter list, checked: unknown members and ops dropped. */
+export function readFieldFilters(value: unknown): FieldFilter[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const ops = ['eq', 'in', 'contains', 'range', 'set', 'unset']
+  const out: FieldFilter[] = []
+  for (const raw of value) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const r = raw as Record<string, unknown>
+    if (typeof r.field !== 'string' || !r.field.startsWith(FIELD) || typeof r.op !== 'string' || !ops.includes(r.op))
+      continue
+    const f: FieldFilter = { field: r.field, op: r.op as FieldFilter['op'] }
+    if (['string', 'number', 'boolean'].includes(typeof r.value)) f.value = r.value as string | number | boolean
+    if (Array.isArray(r.values)) f.values = r.values.filter((v): v is string => typeof v === 'string')
+    if (typeof r.min === 'number' || typeof r.min === 'string') f.min = r.min
+    if (typeof r.max === 'number' || typeof r.max === 'string') f.max = r.max
+    out.push(f)
+  }
+  return out.length ? out : undefined
+}
+
+// --- further columns (a hook for phase 5's matrix quadrant) ---------------------------------------------------------
+
+/** Columns another part of the app adds to the item lists (phase 5: *quadrant* from the matrix maps). */
+export interface ColumnProvider {
+  /** The columns it adds for a type (ids must not collide with the built-in ones or `field:`). */
+  columns(type: ItemType, ctx: ListContext): ColumnDef[]
+  /** A column's value for an item (sorted by, shown as text); undefined: not its column. */
+  value(item: ItemRow, id: string, ctx: ListContext): unknown
+}
+
+const providers: ColumnProvider[] = []
+
+/** Adds columns to the item lists; answers a function that removes them again. */
+export function registerColumns(provider: ColumnProvider): () => void {
+  providers.push(provider)
+  return () => {
+    const at = providers.indexOf(provider)
+    if (at >= 0) providers.splice(at, 1)
   }
 }
 
@@ -132,8 +295,9 @@ export function matchItem(item: ItemRow, f: ItemFilters, ctx: ListContext): bool
   const assigned = ctx.assignments.get(item.id) ?? []
   if (f.assignedToMe && (!ctx.me.personId || !assigned.some((a) => a.personId === ctx.me.personId))) return false
   if (has(f.personIds) && !assigned.some((a) => f.personIds!.includes(a.personId))) return false
-  if (f.overdue && !isOverdue(item, status, ctx.now)) return false
+  if (f.overdue && !isOverdue(item, status, ctx.now) && !timeboxReason(item, ctx)) return false
   if (f.hasLink?.relation && !linkMatches(item, f.hasLink, ctx)) return false
+  if (has(f.fields) && !f.fields.every((filter) => matchField(item, filter, ctx))) return false
   if (has(f.ownerIds) && !f.ownerIds.includes(item.ownerUserId)) return false
   if (f.mine && item.ownerUserId !== ctx.me.userId) return false
   if (has(f.colors) && !f.colors.includes((item.color ?? '').toLowerCase())) return false
@@ -180,7 +344,7 @@ export function readFilters(value: Record<string, unknown> | null | undefined): 
             ...(strings(link.targetTypes)?.length ? { targetTypes: strings(link.targetTypes) as ItemType[] } : {}),
           }
         : undefined,
-    fields: Array.isArray(v.fields) ? v.fields : undefined,
+    fields: readFieldFilters(v.fields),
     ownerIds: strings(v.ownerIds),
     personIds: strings(v.personIds),
     colors: strings(v.colors),
@@ -199,11 +363,25 @@ export function countFilters(f: ItemFilters, without: readonly (keyof ItemFilter
   return Object.keys(cleanFilters(f)).filter((k) => !without.includes(k as keyof ItemFilters)).length
 }
 
-/** The text an item is found by: key, title, description and the lead's text fields. */
-export function itemText(item: ItemRow): string {
-  return [itemKey(item), item.title, item.description, item.leadOrganisation, item.leadNextAction, item.leadSource]
-    .filter(Boolean)
-    .join(' ')
+/** The text an item is found by: key, title, description, the lead's text fields and – with a context – field texts. */
+export function itemText(item: ItemRow, ctx?: ListContext): string {
+  const fixed = [
+    itemKey(item),
+    item.title,
+    item.description,
+    item.leadOrganisation,
+    item.leadNextAction,
+    item.leadSource,
+  ]
+  const values = ctx?.fieldValues.get(item.id)
+  if (values && ctx) {
+    const names = { personName: (id: string) => ctx.persons.get(id)?.displayName }
+    for (const [key, value] of Object.entries(values)) {
+      const field = ctx.catalogue.fieldByKey.get(key)
+      if (field) fixed.push(searchText(field, value, names))
+    }
+  }
+  return fixed.filter(Boolean).join(' ')
 }
 
 // --- columns -----------------------------------------------------------------------------------------------------
@@ -216,6 +394,8 @@ export interface ColumnDef {
   /** Can't be hidden. */
   required?: boolean
   align?: 'right'
+  /** A `field:<key>` column: its field. */
+  field?: FieldDefinitionRow
 }
 
 const column = (id: string, label: string, width?: string, extra: Partial<ColumnDef> = {}): ColumnDef => ({
@@ -302,9 +482,35 @@ const defaults: Record<ItemType, string[]> = {
   project: ['key', 'title', 'status', 'persons', 'start_date', 'end_date', 'owner'],
 }
 
-/** Every column a type's list can show, in the chooser's order. */
-export function columnsFor(type: ItemType): ColumnDef[] {
-  return byType[type]
+const fieldWidths: Partial<Record<FieldDefinitionRow['type'], string>> = {
+  bool: '6rem',
+  number: '8rem',
+  rating: '6.5rem',
+  score: '7.5rem',
+  date: '8rem',
+  datetime: '10rem',
+  select: '10rem',
+}
+
+/** The `field:<key>` columns of a type: every field (not archived) of the sections that apply to it, in order. */
+export function fieldColumns(type: ItemType, catalogue: Catalogue): ColumnDef[] {
+  if (type !== 'idea' && type !== 'project') return []
+  const sections = new Set(catalogue.sections.filter((s) => s.appliesTo.includes(type)).map((s) => s.id))
+  return catalogue.fields
+    .filter((f) => !f.isArchived && sections.has(f.sectionId))
+    .map((f) => ({
+      id: `${FIELD}${f.key}`,
+      label: f.label,
+      width: fieldWidths[f.type] ?? '12rem',
+      align: f.type === 'number' || f.type === 'score' || f.type === 'rating' ? ('right' as const) : undefined,
+      field: f,
+    }))
+}
+
+/** Every column a type's list can show, in the chooser's order: the built-in ones, further ones, the fields. */
+export function columnsFor(type: ItemType, ctx?: ListContext): ColumnDef[] {
+  if (!ctx) return byType[type]
+  return [...byType[type], ...providers.flatMap((p) => p.columns(type, ctx)), ...fieldColumns(type, ctx.catalogue)]
 }
 
 export function defaultColumns(type: ItemType): string[] {
@@ -312,8 +518,12 @@ export function defaultColumns(type: ItemType): string[] {
 }
 
 /** The columns to show for the chosen ids: known ones in their order, key and title always (first). */
-export function visibleColumns(type: ItemType, ids: readonly string[] | null | undefined): ColumnDef[] {
-  const all = new Map(byType[type].map((c) => [c.id, c]))
+export function visibleColumns(
+  type: ItemType,
+  ids: readonly string[] | null | undefined,
+  ctx?: ListContext,
+): ColumnDef[] {
+  const all = new Map(columnsFor(type, ctx).map((c) => [c.id, c]))
   const chosen = (ids?.length ? ids : defaults[type]).filter((id, i, list) => all.has(id) && list.indexOf(id) === i)
   for (const required of ['title', 'key']) if (!chosen.includes(required)) chosen.unshift(required)
   return chosen.map((id) => all.get(id)!)
@@ -379,15 +589,25 @@ export function sortValue(item: ItemRow, id: string, ctx: ListContext): unknown 
       return item.projectStartDate
     case 'end_date':
       return item.projectEndDate
-    default:
+    default: {
+      const field = fieldOfColumn(id, ctx)
+      if (field) {
+        const names = { personName: (p: string) => ctx.persons.get(p)?.displayName }
+        return sortValueOf(field, itemFieldValue(item, field, ctx), names)
+      }
+      for (const provider of providers) {
+        const value = provider.value(item, id, ctx)
+        if (value !== undefined) return value
+      }
       return undefined
+    }
   }
 }
 
-/** The item's status and why it is overdue, for the status cell. */
+/** The item's status and why it is overdue (status aging, a lead's next action, a timebox date), for the status cell. */
 export function statusOf(item: ItemRow, ctx: ListContext): { status: StatusRow | undefined; overdue: string | null } {
   const status = item.statusId ? ctx.statuses.get(item.statusId) : undefined
-  return { status, overdue: overdueReason(item, status, ctx.now) }
+  return { status, overdue: overdueReason(item, status, ctx.now) ?? timeboxReason(item, ctx) }
 }
 
 /** "CHF 12,500" */

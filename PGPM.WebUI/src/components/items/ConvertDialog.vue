@@ -7,27 +7,38 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotify } from '@/composables/useNotify'
 import { itemTypes } from '@/domain/itemTypes'
-import { convertedStatus, convertToProject, defaultStatus, selectableStatuses, titleError } from '@/local/items'
+import { useTemplates } from '@/local/catalogue'
+import { convertedStatus, convertToProject, titleError, today } from '@/local/items'
 import { useStatuses } from '@/local/lookups'
 import { repo } from '@/local/repo'
 import { itemKey, type ItemRow } from '@/local/rows'
+import { allowedStatuses, selectableTemplates, templateStatus } from '@/local/templates'
+import TemplatePicker from './TemplatePicker.vue'
 
 /**
  * *Convert to project* (docs/01 §8, §9; docs/03 §12.8): a new project from an idea or lead, made on this device – offline
- * too – in one batch, then its page opens. The `#template` slot is phase 4's (templates, sections and field values).
+ * too – in one batch, then its page opens. It asks for a template (or *Blank project*): its allowed statuses, default
+ * status and – from the start date – its milestones and gates; the sections and values that apply to projects come
+ * along either way.
  */
 const props = defineProps<{ source: ItemRow }>()
 const visible = defineModel<boolean>('visible', { default: false })
 const router = useRouter()
 const notify = useNotify()
 const statuses = useStatuses()
+const { templates } = useTemplates()
 
 const title = ref('')
 const statusId = ref<string | null>(null)
+const templateId = ref<string | null>(null)
+const startDate = ref(today())
 const error = ref<string | null>(null)
 const saving = ref(false)
 
-const projectStatuses = computed(() => selectableStatuses(statuses.all.value, 'project'))
+const pickable = computed(() => selectableTemplates([...templates.value.byId.values()]))
+const template = computed(() => (templateId.value ? (templates.value.byId.get(templateId.value) ?? null) : null))
+const projectStatuses = computed(() => allowedStatuses(statuses.all.value, template.value))
+const preselected = computed(() => templateStatus(statuses.all.value, template.value)?.id ?? null)
 const next = computed(() => convertedStatus(statuses.all.value, props.source.type))
 const label = computed(() => itemTypes[props.source.type].label)
 
@@ -36,13 +47,17 @@ watch(
   (open) => {
     if (!open) return
     title.value = props.source.title
-    statusId.value = defaultStatus(statuses.all.value, 'project')?.id ?? null
+    templateId.value = null
+    startDate.value = today()
+    statusId.value = preselected.value
     error.value = null
   },
   { immediate: true },
 )
-watch(projectStatuses, () => {
-  if (visible.value && !statusId.value) statusId.value = defaultStatus(statuses.all.value, 'project')?.id ?? null
+watch(preselected, (value, before) => {
+  if (!visible.value) return
+  const allowed = projectStatuses.value.some((s) => s.id === statusId.value)
+  if (!statusId.value || statusId.value === before || !allowed) statusId.value = value
 })
 
 async function convert() {
@@ -53,6 +68,8 @@ async function convert() {
     const result = await convertToProject(repo, props.source.id, statuses.all.value, {
       title: title.value,
       statusId: statusId.value,
+      templateId: templateId.value,
+      startDate: startDate.value || null,
     })
     visible.value = false
     notify.success(
@@ -77,6 +94,15 @@ async function convert() {
         <small v-if="error" class="field-error">{{ error }}</small>
       </div>
       <div class="field">
+        <label for="convert-template">Template</label>
+        <TemplatePicker v-model="templateId" :templates="pickable" input-id="convert-template" />
+      </div>
+      <div v-if="template?.milestones.length" class="field">
+        <label for="convert-start">Start date</label>
+        <InputText id="convert-start" v-model="startDate" type="date" />
+        <small class="field-hint">The template’s milestones are due relative to it.</small>
+      </div>
+      <div class="field">
         <label for="convert-status">Status</label>
         <Select
           v-model="statusId"
@@ -88,14 +114,13 @@ async function convert() {
           size="small"
         />
       </div>
-      <slot name="template">
-        <p class="muted hint">Templates come with phase 4: this is a blank project.</p>
-      </slot>
       <div class="carried">
         <span class="label">The project gets</span>
         <ul>
           <li>title, description, colour and cover image</li>
           <li>sharing, assigned persons and links</li>
+          <li v-if="source.type === 'idea'">the sections and field values that apply to projects</li>
+          <li v-if="template">the template’s sections, defaults, milestones and gates</li>
           <li>a link to this {{ label }} (its attachments stay here)</li>
         </ul>
         <p class="muted">
@@ -122,8 +147,7 @@ async function convert() {
   padding-left: 1.25rem;
 }
 
-.carried p,
-.hint {
+.carried p {
   margin: 0;
 }
 </style>

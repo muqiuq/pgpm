@@ -230,7 +230,7 @@ describe('idea / lead → project conversion (docs/01 §8, docs/03 §12.8)', () 
     const result = await convertToProject(ana.repo, idea.id, statuses)
     const project = result.project
     expect(result.sourceStatus?.name).toBe('Selected')
-    expect(result.copied).toEqual({ shares: 1, assignments: 1, links: 1 })
+    expect(result.copied).toEqual({ shares: 1, assignments: 1, links: 1, sections: 0, values: 0, milestones: 0 })
     expect(project).toMatchObject({
       type: 'project',
       title: 'Chat bot',

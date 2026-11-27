@@ -11,25 +11,29 @@ import CoverImage from '@/components/files/CoverImage.vue'
 import InlineField from '@/components/InlineField.vue'
 import AssignmentsPanel from '@/components/items/AssignmentsPanel.vue'
 import ColorPicker from '@/components/items/ColorPicker.vue'
+import ItemSections from '@/components/items/ItemSections.vue'
 import StatusBadge from '@/components/items/StatusBadge.vue'
 import MarkdownView from '@/components/markdown/MarkdownView.vue'
 import RelativeTime from '@/components/RelativeTime.vue'
 import { useNotify } from '@/composables/useNotify'
 import { useNow } from '@/composables/useNow'
 import { itemRoute, itemTypes } from '@/domain/itemTypes'
+import { useTemplates } from '@/local/catalogue'
 import { localDb } from '@/local/db'
 import { useMarkdownFiles } from '@/local/files'
 import { daysInStatus, overdueReason, selectableStatuses } from '@/local/items'
 import { useGroups, useStatuses, useUserPersons } from '@/local/lookups'
 import { repo } from '@/local/repo'
 import { itemKey, type ItemRow, type ItemShareRow, type ProjectTemplateRow, type Stored } from '@/local/rows'
+import { allowedStatuses } from '@/local/templates'
 import { useLive } from '@/local/useLive'
 import { formatDay, formatValue } from './itemList'
 
 /**
  * An item's *Overview* tab (docs/01 §4.4, §7–§10): the description rendered with *Edit* to its editing page, the
- * sections (phase 4 fills the `#sections` slot), the attachments; beside it the fixed fields of the type edited inline
- * (title, status, colour, pinned, the lead's and the project's fields), the cover image, the assigned persons and the
+ * sections of ideas and projects (`ItemSections`, the `#sections` slot's default), the attachments; beside it the fixed
+ * fields of the type edited inline (title, status – a project's among those its template allows –, colour, pinned, the
+ * lead's and the project's fields), the cover image, the assigned persons and the
  * facts. Every change is a patch of the local data (offline too); with *read* access it is all read-only.
  */
 const props = defineProps<{
@@ -48,6 +52,7 @@ const statuses = useStatuses()
 const groups = useGroups()
 const people = useUserPersons()
 const files = useMarkdownFiles(() => props.item.id)
+const { templates } = useTemplates()
 const info = computed(() => itemTypes[props.item.type])
 
 const template = useLive(
@@ -61,7 +66,12 @@ const template = useLive(
 )
 
 const status = computed(() => (props.item.statusId ? statuses.byId.value.get(props.item.statusId) : undefined))
-const options = computed(() => selectableStatuses(statuses.all.value, props.item.type, props.item.statusId))
+// A project's statuses: those its template allows (docs/01 §5; the server refuses others).
+const options = computed(() =>
+  props.item.type === 'project' && props.item.projectTemplateId
+    ? allowedStatuses(statuses.all.value, templates.value.byId.get(props.item.projectTemplateId), props.item.statusId)
+    : selectableStatuses(statuses.all.value, props.item.type, props.item.statusId),
+)
 const overdue = computed(() => overdueReason(props.item, status.value, now.value))
 const days = computed(() => daysInStatus(props.item, now.value))
 const shareList = computed(() =>
@@ -231,7 +241,14 @@ const fixed = computed<Fixed[]>(() => {
           <EmptyState v-else icon="pi pi-align-left" :title="`No ${info.descriptionLabel.toLowerCase()} yet.`" />
         </div>
       </section>
-      <slot name="sections" :item="item" :can-edit="canEdit" />
+      <slot name="sections" :item="item" :can-edit="canEdit">
+        <ItemSections
+          v-if="item.type === 'idea' || item.type === 'project'"
+          :item="item"
+          :can-edit="canEdit"
+          :files="files"
+        />
+      </slot>
       <AttachmentsPanel :item-id="item.id" :can-edit="canEdit" />
     </div>
     <div class="column">

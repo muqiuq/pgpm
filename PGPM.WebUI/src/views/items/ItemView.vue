@@ -16,7 +16,8 @@ import TabNav from '@/components/TabNav.vue'
 import { useActions } from '@/composables/useActions'
 import { useNow } from '@/composables/useNow'
 import { itemRoute, itemTabs, itemTypes, type ItemTab } from '@/domain/itemTypes'
-import { overdueReason } from '@/local/items'
+import { timeboxReason } from '@/domain/fields/renderValue'
+import { overdueReason, today } from '@/local/items'
 import { useGroups, useStatuses } from '@/local/lookups'
 import { useEditors } from '@/local/presence'
 import { repo } from '@/local/repo'
@@ -26,12 +27,14 @@ import { useSyncStore } from '@/stores/sync'
 import ItemHistory from './ItemHistory.vue'
 import ItemLinks from './ItemLinks.vue'
 import ItemOverview from './ItemOverview.vue'
+import ItemMilestones from './milestones/ItemMilestones.vue'
 import { useItem } from './useItem'
+import { useItemFields } from './useItemFields'
 
 /**
  * An item's page (docs/01 §4.4): the header line with type icon, key, title, status (with *overdue*), *Share* and the
- * ⋯ menu (delete); the tabs Overview · Milestones (projects, phase 4) · Links · Maps (phase 5) · History, each with its
- * own route (`/<list>/:id/<tab>`). Ideas and leads offer *Convert to project*. Everything is written to the local data
+ * ⋯ menu (delete); the tabs Overview · Milestones (projects: ItemMilestones) · Links · Maps (phase 5) · History, each
+ * with its own route (`/<list>/:id/<tab>`). Ideas and leads offer *Convert to project*. Everything is written to the local data
  * and synced; with *read* access the page is read-only.
  */
 const props = defineProps<{ type: ItemType; id: string; tab?: string }>()
@@ -74,7 +77,15 @@ const tabs = computed(() =>
 
 const key = computed(() => (item.value ? itemKey(item.value) : ''))
 const status = computed(() => (item.value?.statusId ? statuses.byId.value.get(item.value.statusId) : undefined))
-const overdue = computed(() => (item.value ? overdueReason(item.value, status.value, now.value) : null))
+// Status aging, a lead's next action – and a passed timebox date field of an idea or project (docs/01 §6.1).
+const fields = useItemFields(() => props.id)
+const overdue = computed(() => {
+  if (!item.value) return null
+  const aging = overdueReason(item.value, status.value, now.value)
+  if (aging || (props.type !== 'idea' && props.type !== 'project')) return aging
+  const timeboxes = fields.catalogue.value.fields.filter((f) => f.config?.timebox === true)
+  return timeboxReason(timeboxes, fields.byKey.value, today(now.value), status.value?.category === 'closed')
+})
 const shareText = computed(() => {
   if (!shares.value.length) return 'Private'
   const names = shares.value.map((s) => groups.value.find((g) => g.id === s.groupId)?.name ?? 'a group')
@@ -210,12 +221,7 @@ const more = computed<MenuItem[]>(() =>
         :origin="origin"
       />
       <ItemLinks v-else-if="activeTab === 'links'" :item="item" :can-edit="canEdit" />
-      <EmptyState
-        v-else-if="activeTab === 'milestones'"
-        icon="pi pi-flag"
-        title="Milestones and gates come with phase 4."
-        text="Milestones, gates and their Definition of Done will be planned and decided here."
-      />
+      <ItemMilestones v-else-if="activeTab === 'milestones'" :item="item" :can-edit="canEdit" />
       <EmptyState
         v-else-if="activeTab === 'maps'"
         icon="pi pi-map"

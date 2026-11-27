@@ -1744,6 +1744,7 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
 - `GateDecision.vue`: decision buttons, note, suggested status change (confirm).
 - Saved views: selector in `FilterBar`'s `#end` slot; `useLocalTable` takes a
   view `definition`.
+- As built in phase 4: §12.9.
 
 ### 12.8 Items, persons, statuses, search (phase 3 client, as built)
 
@@ -1805,7 +1806,7 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
   reachable through that link. The source moves to *Selected* (ideas) / *Won* (leads) when such a status exists. The
   client never patches `convertedToItemId` (server-owned): the server sets the origin's when it accepts a project with
   `originItemId`; until then the source counts as converted through the local project naming it (index
-  `originItemId`). Phase 4 adds the template, sections and field values.
+  `originItemId`). Phase 4 adds the template, sections and field values (§12.9).
 - **Persons, statuses, search** (`views/persons/`, `views/admin/StatusesView.vue`, `components/GlobalSearch.vue`,
   `local/search.ts`): the persons list (`list:person`) searches name, e-mail, job title, department and company, filters
   source, members/guests and department and shows active persons unless *With inactive*; *New person* (Persons: Edit)
@@ -1818,6 +1819,84 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
   offline (*Available online only*). Global search: local items and active persons, every word must occur, without
   diacritics; key, then title prefix, title, description; grouped *Items* / *Persons* (8 each) in an ARIA
   combobox/listbox with ↑/↓/Enter/Esc.
+
+### 12.9 Configuration and method features (phase 4 client, as built)
+
+- **Configuration on the device** (`local/catalogue.ts`): `useCatalogue()` (sections and field definitions the user
+  sees, archived ones too, by id/key/section, plus score.ts's `defsByKey`) and `useTemplates()` (templates with their
+  allowed statuses, sections, field defaults and milestones), both live; `loadCatalogue`/`loadTemplates` inside a
+  repository transaction. Row types for every configuration and milestone table in `local/rows.ts`; `milestones` and
+  `dod_items` have their server-owned members (`completedAt`, `decidedAt`/`decidedBy`, `stateChangedBy`/`At`) and
+  defaults in `local/tables.ts` (no Dexie version).
+- **Field widgets**: `domain/fields/fieldWidget.ts` (one switch: which widget, draft ⇄ stored value, `valueError` = the
+  server's `FieldValueRules` plus *required*) and `renderValue.ts` (texts, option parts with colour and points, unknown
+  ids as *(removed option)*, "4 / 5" / *n/a*, "58 / 65", sort and search values, `timeboxPassed`). Components in
+  `components/fields/`: `FieldEditor` (texts, numbers, dates, switches through `InlineField`; select and multiselect as
+  PrimeVue Select/MultiSelect saved as picked, options with colour dot and muted points, archived options offered only
+  where chosen; persons by `PersonPicker`, single fields replaced; date-time with `datetime-local`; Markdown rendered with
+  *Edit* → `<type>-field-edit` `/<type>/:id/fields/:key/edit`, `FieldEditView` with `MarkdownEditor` mode `field`, draft
+  key `items:<id>:field.<key>`, saved as a `value` patch with `old` = the text when editing began), `RatingInput` (one
+  button per value + *n/a*, a click on the chosen one clears, labels as tooltips), `ScoreBadge` (*incomplete* while an
+  input is missing, optional thresholds), `FieldValue` (read-only, list cells).
+- **Sections on ideas and projects** (`local/fields.ts`, `ItemSections` + `SectionPanel` in the Overview's `#sections`
+  slot): `item_sections` order (integers, new ones last + 10), open/collapsed from `collapsedByDefault` until toggled on
+  the page, scores also in the section header, sub-headings from `config.subheading`, archived fields hidden, a lock where
+  `canEdit = false` (inputs read-only; the server refuses such values anyway), a conflict marker per field value (opens
+  the conflict dialog). *Add section* (applying to the type, not archived; fills the fields' default values) and
+  *Remove section* (tombstones the row, values stay). One value row per field: `setFieldValue` inserts once, then
+  patches `value` (null clears; a younger duplicate row of two offline devices loses to the older one locally, as the
+  server merges it). Scores recomputed live from `useItemFields` (never stored).
+- **Creating items** (`local/templates.ts`, `ItemCreateDialog`, `TemplatePicker`): ideas get the sections *default for
+  ideas*, blank projects those *default for projects*, a project from a template – picked in the dialog, *Blank project*
+  first – its sections, the template's field defaults (else the field's own `defaultValue`; values of sections the user
+  may not edit are left out), its milestones and gates with their DoD (`due = start + offsetDays`, the start date asked in
+  the dialog, default today; gate status suggestions copied), all in the item's batch, offline. The status picker shows
+  the template's allowed statuses with its default preselected; *Share with* is preselected with the template's
+  `defaultShares` (else the creator's groups). A project's status select on its page is restricted the same way.
+- **Conversion** asks for a template too (and its start date when it has milestones); the project gets, besides phase
+  3's, the source's sections that apply to projects and the values of every field whose section applies to projects
+  (shown or hidden; same field = same value, overriding template defaults), except in sections the user may not edit.
+- **Lists**: a `field:<key>` column for every field of the sections that apply to the type (scores too; `FieldValue`
+  cells, a timebox date passed marked), sorted by `sortValueOf` (select: option order, rating *n/a* below 0, incomplete
+  scores last); field values are searched (texts, option labels, person names); `fields` filters applied (`eq`, `in`,
+  `contains`, `range`, `set`, `unset`; a field the user doesn't see matches only `unset`), edited in the *Filters* panel
+  (`FieldFilters`); `overdue` and the status cell include passed timebox dates (not in a closed status) – the seeded
+  *Running experiments* view works with status, `days_in_status` and `field:timebox_end`. `registerColumns()` is the hook
+  for phase 5's *quadrant* column. The projects list links *Gate decisions*.
+- **Milestones tab** (`views/items/milestones/`, `local/milestones.ts`, `domain/milestones.ts`): list in fractional
+  order (up/down) and an SVG mini timeline (gates as diamonds, milestones as dots, done filled, overdue red, today dashed,
+  undated ones counted); create dialog (kind, title, due date); per card inline title, status, due date + overdue,
+  colour, responsible persons (milestone assignments, `itemId` null, once per milestone, default role *Review board* for
+  gates), description (*Edit* → `/projects/:id/milestones/:mid/edit`, mode `field`, draft `milestones:<id>:description`),
+  DoD checklist (open/done/n·a; n/a without a note opens an inline note first; the note is kept on state changes;
+  progress = done ÷ (all − n/a) shown "3 / 5"; none or only n/a counts as complete). *Done* is free with a complete DoD;
+  otherwise – and for a gate without decision – a confirm lists what is missing and says the change is in the History
+  (the status patch is the record; the card then shows *Done without a complete DoD / a decision*). `GateDecision`: pick
+  pending/go/no-go/iterate/pivot/park, note, *Record decision* (one patch); after go / no-go it offers *Move project to
+  …* when the template allows that status, it isn't archived and the project isn't in it – the project moves only on
+  confirmation.
+- **Gate decisions** (`/gates`, `views/gates/`): every gate of the readable projects on the device; columns of
+  `COLUMNS.gate` (`status` is the gate's own), filters `decisions`, `templateIds`, `groupIds`, `assignedToMe`, `overdue`,
+  search over gate title and project key/title, default sort `-decided_at` (a decision not synced yet by its `updatedAt`),
+  `list:gate` state, saved views of `itemType: 'gate'` (`savedViews.ts` `ViewType`), URL `?decision&me&overdue&view`;
+  a row opens the project's Milestones tab.
+- **Admin pages** (*Configuration: Manage*, online only, each change followed by `engine.syncNow()`; reads from the
+  synced rows): *Sections & Fields* (`views/admin/sections/`: sections in order with up/down – every id sent –, archive,
+  section dialog with applies to / default for / collapsed / access per group; fields per section with up/down, archive,
+  delete after `…/usage` – blocked while a score uses it –, field dialog: key suggested from the label and locked after
+  create, type locked, sub-heading, required, per-type settings, options editor (ids from labels, locked once saved;
+  saved options can only be archived; colours, points), score editor (inputs from the numeric fields with their maxima,
+  op, n/a mode, max, caps, scale, normalise, decimals; `validateScoreConfig` before sending, the server's
+  `errors.config` codes as sentences, "shown as … / max"), default value); *Project Templates* (list with order and
+  archive; `/admin/templates/new`, `/admin/templates/:id` – a page sending the whole `TemplateInput`; existing milestones
+  keep their ids; removing a section drops its defaults; gate suggestions among the allowed statuses); *Assignment
+  roles* (`/admin/roles`, a tab next to *Statuses*, so the menu is unchanged); *Configuration packages* (built-in list
+  with import state, upload a JSON, dry run → diff grouped by entity, conflicts first, unchanged hidden by default,
+  *Overwrite* per conflict or all → dry run again → *Apply* (disabled while `needsAdmin && !isAdmin`), result toast;
+  export downloads `<name>.pgpm.json`).
+- **Assumption beyond §3.3**: the section dialog reads the groups through `GET /api/v1/config/sections` (`[SectionItem]`
+  with `access`) – `section_groups` isn't synced. While the server answers 404/405 the dialog says it can't read them and
+  offers *Leave the groups as they are* (sends `access: null`) or *Replace them*.
 
 ## 13. Maps [PNMTD canvas pieces + NEW editing]
 

@@ -40,16 +40,20 @@ const views: Record<string, () => Promise<RouteComponent>> = {
   trash: () => import('@/views/trash/TrashView.vue'),
   persons: () => import('@/views/persons/PersonsView.vue'),
   statuses: () => import('@/views/admin/StatusesView.vue'),
+  sections: () => import('@/views/admin/sections/SectionsView.vue'),
+  templates: () => import('@/views/admin/templates/TemplatesView.vue'),
+  packages: () => import('@/views/admin/packages/PackagesView.vue'),
 }
 
 /** Each menu entry's placeholder until its phase replaces the component (docs/05 §3). */
 const pages: Record<string, { phase: number; summary: string }> = {
   maps: { phase: 5, summary: 'Canvas and matrix maps of ideas, projects, milestones and shapes, with templates.' },
-  sections: { phase: 4, summary: 'Sections and fields of ideas and projects: ratings, scores, selects and more.' },
-  templates: { phase: 4, summary: 'Project templates: statuses, sections, defaults, milestones and gates.' },
-  packages: { phase: 4, summary: 'Import and export configuration packages such as the innovation method.' },
   system: { phase: 7, summary: 'Sync clients, live connections, storage and versions.' },
 }
+
+/** Configuration: Manage (docs/03 §6.2): the configuration pages besides the menu's. */
+const configuration: Right = ['Configuration', 'Manage']
+const adminCrumbs = [{ label: 'Administration' }]
 
 /** The menu's entries as routes: path, name, title, icon and right from navigation.ts, the phase from pages. */
 const menuRoutes: RouteRecordRaw[] = navigation.flatMap((group) =>
@@ -72,7 +76,8 @@ const menuRoutes: RouteRecordRaw[] = navigation.flatMap((group) =>
 export const routes: RouteRecordRaw[] = [
   { path: '/', redirect: { name: 'maps' } },
   ...menuRoutes,
-  // Per item type: the description's editing page (docs/03 §18.2) before the page with its tabs (§12.2).
+  // Per item type: the description's editing page (docs/03 §18.2) before the page with its tabs (§12.2); ideas and
+  // projects also a Markdown field's (`<type>-field-edit`), projects a milestone description's.
   ...itemTypeList.flatMap((type): RouteRecordRaw[] => {
     const info = itemTypes[type]
     return [
@@ -83,6 +88,28 @@ export const routes: RouteRecordRaw[] = [
         props: (route) => ({ type, id: route.params.id }),
         meta: { title: `Edit ${info.label}`, icon: info.icon },
       },
+      ...(type === 'idea' || type === 'project'
+        ? [
+            {
+              path: `/${info.list}/:id/fields/:key/edit`,
+              name: `${type}-field-edit`,
+              component: () => import('@/views/items/FieldEditView.vue'),
+              props: (route) => ({ type, id: route.params.id, fieldKey: route.params.key }),
+              meta: { title: `Edit ${info.label}`, icon: info.icon },
+            } satisfies RouteRecordRaw,
+          ]
+        : []),
+      ...(type === 'project'
+        ? [
+            {
+              path: `/${info.list}/:id/milestones/:mid/edit`,
+              name: 'milestone-edit',
+              component: () => import('@/views/items/milestones/MilestoneEditView.vue'),
+              props: (route) => ({ id: route.params.id, milestoneId: route.params.mid }),
+              meta: { title: 'Edit milestone', icon: 'pi pi-flag-fill' },
+            } satisfies RouteRecordRaw,
+          ]
+        : []),
       {
         path: `/${info.list}/:id/:tab(${itemTabs(type).join('|')})?`,
         name: info.page,
@@ -92,6 +119,32 @@ export const routes: RouteRecordRaw[] = [
       },
     ]
   }),
+  // The stop / go / scale record across the readable projects (docs/01 §11), linked from the projects list.
+  {
+    path: '/gates',
+    name: 'gates',
+    component: () => import('@/views/gates/GateDecisionsView.vue'),
+    meta: { title: 'Gate decisions', icon: 'pi pi-directions', crumbs: [{ label: 'Projects', to: '/projects' }] },
+  },
+  {
+    path: '/admin/templates/new',
+    name: 'template-new',
+    component: () => import('@/views/admin/templates/TemplateEditView.vue'),
+    meta: { title: 'New project template', right: configuration, icon: 'pi pi-clone', crumbs: adminCrumbs },
+  },
+  {
+    path: '/admin/templates/:id',
+    name: 'template',
+    component: () => import('@/views/admin/templates/TemplateEditView.vue'),
+    props: true,
+    meta: { title: 'Project template', right: configuration, icon: 'pi pi-clone', crumbs: adminCrumbs },
+  },
+  {
+    path: '/admin/roles',
+    name: 'roles',
+    component: () => import('@/views/admin/RolesView.vue'),
+    meta: { title: 'Assignment roles', right: configuration, icon: 'pi pi-id-card', crumbs: adminCrumbs },
+  },
   {
     path: '/persons/:id',
     name: 'person',

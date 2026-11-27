@@ -11,6 +11,7 @@ import { statusesApi, type StatusInput } from '@/api/config'
 import EmptyState from '@/components/EmptyState.vue'
 import MoreMenu from '@/components/MoreMenu.vue'
 import PageHeader from '@/components/PageHeader.vue'
+import TabNav from '@/components/TabNav.vue'
 import { useNotify } from '@/composables/useNotify'
 import { engine } from '@/local/boot'
 import { localDb } from '@/local/db'
@@ -31,6 +32,12 @@ const route = useRoute()
 const router = useRouter()
 const notify = useNotify()
 const online = useOnline()
+
+/** The statuses and the assignment roles (phase 4) share the page's tabs. */
+const tabs = [
+  { key: 'statuses', label: 'Statuses', to: { name: 'statuses' } },
+  { key: 'roles', label: 'Assignment roles', to: { name: 'roles' } },
+]
 
 const types: { label: string; value: ItemType }[] = [
   { label: 'Ideas', value: 'idea' },
@@ -139,6 +146,7 @@ function openDialog(status: StatusRow | null) {
         <Button label="New status" icon="pi pi-plus" size="small" :disabled="!online" @click="openDialog(null)" />
       </template>
     </PageHeader>
+    <TabNav :items="tabs" active="statuses" label="Statuses and roles" />
     <Message v-if="!online" severity="secondary" :closable="false" data-testid="offline-hint">
       Available online only: statuses can be changed with a connection.
     </Message>
