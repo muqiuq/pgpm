@@ -7,14 +7,13 @@ public enum PersonSource { Microsoft, Manual }
 
 /// <summary>
 /// A person of the directory (docs/02 §5 <c>persons</c>), minimal in phase 1: every user has one – a manual person
-/// created with a local user, or the Microsoft person a Microsoft sign-in links (or creates from the claims). Phase 2 makes
-/// it a synced row; phase 6 fills the directory fields from Microsoft Graph.
+/// created with a local user, or the Microsoft person a Microsoft sign-in links (or creates from the claims). A synced row
+/// every user receives; manual persons are patchable with Persons: Edit, a Microsoft person's directory fields never
+/// (phase 6 fills them from Microsoft Graph).
 /// </summary>
 [Audited]
-public sealed class PersonEntity
+public sealed class PersonEntity : Sync.SyncedEntity
 {
-    public Guid Id { get; set; }
-
     public PersonSource Source { get; set; }
 
     public Guid? EntraTenantId { get; set; }

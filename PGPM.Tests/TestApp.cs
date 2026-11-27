@@ -48,7 +48,8 @@ public sealed class TestApp(IReadOnlyDictionary<string, string?>? settings = nul
             // the cookie scheme's own (a forward to itself is none).
             s.PostConfigure<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme, o =>
             {
-                o.ForwardDefaultSelector = c => c.Request.Headers.ContainsKey(TestSignIn.UserHeader) ? TestSignIn.SchemeName : null;
+                o.ForwardDefaultSelector = c => c.Request.Headers.ContainsKey(TestSignIn.UserHeader) || c.Request.Headers.ContainsKey(TestSignIn.UserIdHeader)
+                ? TestSignIn.SchemeName : null;
                 o.ForwardSignIn = CookieAuthenticationDefaults.AuthenticationScheme;
                 o.ForwardSignOut = CookieAuthenticationDefaults.AuthenticationScheme;
             });
@@ -67,6 +68,15 @@ public sealed class TestApp(IReadOnlyDictionary<string, string?>? settings = nul
         {
             client.DefaultRequestHeaders.Add(TestSignIn.UserHeader, user);
         }
+        return client;
+    }
+
+    /// <summary>A client signed in as any user of the database (one a test created), with exactly these rights.</summary>
+    public HttpClient ClientFor(Guid userId, string rights = "")
+    {
+        var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Add(TestSignIn.UserIdHeader, userId.ToString());
+        client.DefaultRequestHeaders.Add(TestSignIn.RightsHeader, rights);
         return client;
     }
 
@@ -190,8 +200,18 @@ public sealed class TestSignIn(IOptionsMonitor<AuthenticationSchemeOptions> opti
     /// <summary>Another name for the user (the audit entries name it, the rate limits count per name).</summary>
     public const string NameHeader = "X-Test-Name";
 
+    /// <summary>Any user of the database by id (with <see cref="RightsHeader"/>'s rights, none without): the sync tests' own users.</summary>
+    public const string UserIdHeader = "X-Test-User-Id";
+
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        if (Request.Headers.TryGetValue(UserIdHeader, out var byId) && Guid.TryParse(byId, out var userId))
+        {
+            var own = Request.Headers.TryGetValue(RightsHeader, out var ownRights) ? TestUsers.Parse(ownRights.ToString()) : UserRights.None;
+            var ownIdentity = new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, userId.ToString()), new Claim(ClaimTypes.Name, $"user-{userId:N}"),
+                .. own.Claims()], SchemeName);
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(ownIdentity), SchemeName)));
+        }
         if (!Request.Headers.TryGetValue(UserHeader, out var user) || string.IsNullOrEmpty(user) || !TestUsers.Ids.TryGetValue(user!, out var id))
         {
             return Task.FromResult(AuthenticateResult.NoResult());

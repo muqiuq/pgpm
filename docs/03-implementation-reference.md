@@ -985,6 +985,97 @@ messages (only `hello`, `ack`, `pong`), so it adds no CSRF surface.
 - Close codes: `4401` session invalid, `4403` origin, `4409` reset required,
   `4429` too many connections (max. 10 per user).
 
+**Wire format** (phase 2, the contract between `PGPM/Sync` and `PGPM.WebUI/src/local`):
+
+- **Tables** are named by their snake_case table name: `groups`, `persons`, `items`, `item_shares`, `user_settings`
+  (phase 3+ add more; `changes` lists them in registry order, parents first). **Rows** are the data-model columns as
+  **camelCase** properties (`owner_user_id` → `ownerUserId`): uuids lower-case strings, timestamps ISO-8601 UTC
+  (`2026-11-27T09:12:00.123456Z`, microseconds), `date` as `yyyy-MM-dd`, `numeric` as a JSON number (`1234.50`),
+  enums lower case (`note`, `manual`, `read`), `text[]` as an array, jsonb as JSON, bytea as base64. Every row has
+  `seq`, `rev`, `deleted`, `deleteBatchId`, `createdAt`, `createdBy`, `updatedAt`, `updatedBy`; `items` also the computed
+  `access` (`read` | `edit` | `manage`). Never delivered: `groups.normalizedName`, `groups.entraAppRole`. A deleted row is
+  `{"id", "seq", "rev", "deleted": true}` (as the `current` of a result also with `deleteBatchId`, for *Restore*).
+- **Applying a page**: evictions first (delete the root and every row whose `itemId` is it), then the rows: a tombstone
+  deletes, a row replaces the local one when `rev ≥` the local `rev` (a re-stamp has the same rev and a new `access`),
+  then pending outbox patches are re-applied. The cursor moves to `cursor` (not to the highest seq seen). Rows of tables
+  the client doesn't know yet are ignored.
+- **Mutations** as `PGPM.WebUI/src/local/outbox.ts` types them: `{mutationId, batch, table, id, op, baseRev, changes,
+  row, clientChangedAt, force?}`. `changes` keys are wire keys or dotted members of a jsonb column (`value.viewport`);
+  `{"old": …}` without `"new"` removes a jsonb member (a column without `new` is set to null). An insert's `row` holds
+  the camelCase columns; server-owned ones are ignored (`items`: `number`, `ownerUserId`, `statusChangedAt`,
+  `originItemId`, `convertedToItemId`; `persons`: `source`, `entra*`, `directorySyncedAt`, `userId`; `user_settings`:
+  `userId`) and so are the synced-row columns and unknown keys (`access`).
+- **Results**: `accepted` `{id, rev, seq}` (+ `mergedInto` for a duplicate pair – `id` is the client's, `mergedInto` the
+  row it became); `partial` `{id, rev, seq, conflictFields}`; `conflict` with `kind` `field` (every key conflicted or was
+  a no-op: nothing applied; `conflictFields`, `current`), `deleted_by_other` (`current` = tombstone with
+  `deleteBatchId`) or `changed_since_delete` (`current` = row); `rejected` `{code, message, errors?, current?}` – no
+  `current` means: drop the local row. Codes: `missing_access`, `missing_right`, `parent_missing`, `validation_failed`
+  (`errors` by wire key), `not_patchable`, `duplicate_id`, `not_supported`. A row the user can't see (or that doesn't
+  exist) is `missing_access` without `current`. Every conflicting field is also in `conflicts[]` (`theirs`, `by` = the
+  display name of the last change-log entry of that field, `at`, `rev`).
+- **Resolutions**: send `resolved: [{table, id, field, resolution}]` (`mine` | `theirs` | `edited`) for every decided
+  field; *Keep mine* / *Edit* additionally push a normal patch (`old` = theirs).
+- **Duplicate pairs** (phase 2): `item_shares (itemId, groupId)` → `mergedInto`; `user_settings (userId, key)` → the
+  insert becomes a patch of `value` with `old` = the existing value (the later device wins, never a conflict).
+- **Phase 2 writes**: `items` inserts of `type: note` only (others `not_supported`, needs `Notes:Create`), patches with
+  *edit*, deletes with *manage*; `item_shares` inserts only for an item inserted by the same user in the same `batch`
+  (later changes: `PUT /api/v1/items/{id}/shares`), no patches or deletes; `persons` manual ones with `Persons:Edit`
+  (a Microsoft person: `notes` only; a user's own person: not `displayName`/`email`; a user's person is never deleted);
+  `user_settings` own rows; `groups` read-only.
+- **Reset**: `reset: true` comes with `cursor: 0`, no rows, the current `accessEpoch`; mutations of that request were
+  processed (their results are valid). Push the rest, wipe the synced stores, pull from 0 with the new epoch.
+- **Live**: `hello {clientId, since, accessEpoch, appVersion}` after an HTTP sync; `welcome {head}`; the open *… is
+  editing* notices of readable items; then `changes {changes, evictions, cursor, more}` pages, each to be acknowledged with
+  `ack {cursor}` (the next one only after it; 30 s without → close `1008`). `editing {itemId, target, userId, user (display
+  name), since}` / `editing_end {itemId, target, userId, user}` – never about one's own edits. `session {state}`:
+  `revoked` (deactivated, signed out everywhere – then close 4401), `expired` (the 30-day sign-in – 4401),
+  `rights_changed` (refetch `/auth/me`). `reset` is followed by close 4409. A wrong or missing `Origin` is refused with
+  HTTP 403 before the upgrade (a browser sees 1006; `4403` is not sent). `app {version}` and close 1001 at a deploy.
+  The server's `ping` every 25 s is answered with `pong`; the client's `ping` gets a `pong`.
+- **REST** (online): `PUT /api/v1/items/{id}/shares` `[{groupId, access}]` → the new list `[{id, groupId, groupName,
+  access}]`; `POST /api/v1/items/{id}/owner {userId}` → 204; `GET /api/v1/trash?page&pageSize` → `{items: [{batchId,
+  rootKind: "item", rootId, rootType: "note", title, deletedAt, deletedBy, deletedByName}], page, pageSize,
+  totalCount}`; `POST /api/v1/trash/{batchId}/restore` → `{batchId, restored, skipped}`; `DELETE /api/v1/trash/{batchId}`
+  (admin) → 204; `GET /api/v1/history?itemId&page&pageSize` → `{items: [{id, at, userId, userName, source, entity,
+  entityId, action, changes, clientChangedAt}], …}`; `POST` / `DELETE /api/v1/editing {itemId, target}` (edit access; the
+  `DELETE` carries the body too) → 204. Errors are ProblemDetails with `code` (`missing_access` + `level`, `item_deleted`).
+
+```jsonc
+// POST /api/v1/sync – a note with its initial share, offline-created
+{ "clientId": "0193a0c2-…", "appVersion": "0.1.0", "since": 41, "accessEpoch": 1, "pull": true,
+  "mutations": [
+    { "mutationId": "0193a0c3-…01", "batch": "0193a0c3-…00", "table": "items", "id": "0193a0c3-…10", "op": "insert",
+      "baseRev": null, "changes": null, "clientChangedAt": "2026-11-27T09:12:00Z",
+      "row": { "id": "0193a0c3-…10", "type": "note", "title": "Kick-off", "description": "Agenda", "pinned": false, "tags": [] } },
+    { "mutationId": "0193a0c3-…02", "batch": "0193a0c3-…00", "table": "item_shares", "id": "0193a0c3-…20", "op": "insert",
+      "baseRev": null, "changes": null, "clientChangedAt": "2026-11-27T09:12:00Z",
+      "row": { "id": "0193a0c3-…20", "itemId": "0193a0c3-…10", "groupId": "01970000-0000-7000-8000-000000000001", "access": "edit" } } ],
+  "resolved": [] }
+// → 200
+{ "head": 44, "cursor": 44, "more": false, "reset": false, "accessEpoch": 1,
+  "results": [ { "mutationId": "0193a0c3-…01", "status": "accepted", "id": "0193a0c3-…10", "rev": 1, "seq": 42 },
+               { "mutationId": "0193a0c3-…02", "status": "accepted", "id": "0193a0c3-…20", "rev": 1, "seq": 43 } ],
+  "conflicts": [],
+  "changes": {
+    "items": [ { "id": "0193a0c3-…10", "type": "note", "number": 7, "title": "Kick-off", "description": "Agenda", "color": null,
+      "imageFileId": null, "ownerUserId": "0193…a1", "statusId": null, "statusChangedAt": null, "tags": [], "originItemId": null,
+      "convertedToItemId": null, "pinned": false, "leadOrganisation": null, "leadValue": null, "leadCurrency": null,
+      "leadProbability": null, "leadDecisionDate": null, "leadNextAction": null, "leadNextActionDue": null, "leadSource": null,
+      "projectTemplateId": null, "projectStartDate": null, "projectEndDate": null, "seq": 42, "rev": 1, "deleted": false,
+      "deleteBatchId": null, "createdAt": "2026-11-27T09:12:01.204311Z", "createdBy": "0193…a1",
+      "updatedAt": "2026-11-27T09:12:01.204311Z", "updatedBy": "0193…a1", "access": "manage" } ],
+    "item_shares": [ { "id": "0193a0c3-…20", "itemId": "0193a0c3-…10", "groupId": "01970000-0000-7000-8000-000000000001",
+      "access": "edit", "seq": 43, "rev": 1, "deleted": false, "deleteBatchId": null, "createdAt": "…", "createdBy": "0193…a1",
+      "updatedAt": "…", "updatedBy": "0193…a1" } ],
+    "persons": [ { "id": "0193…", "seq": 44, "rev": 1, "deleted": true } ] },
+  "evictions": [] }
+// live, server → client (after the user's colleague edited the title)
+{ "type": "changes", "cursor": 45, "more": false, "evictions": [],
+  "changes": { "items": [ { "id": "0193a0c3-…10", "title": "Kick-off 2027", "rev": 2, "seq": 45, "access": "edit", "…": "…" } ] } }
+// client → server
+{ "type": "ack", "cursor": 45 }
+```
+
 ### 11.5 Server: push (`SyncWriter`)
 
 Based on PLM `SyncService.PushAsync` + `SequenceAllocator`, adapted to shared
@@ -1035,6 +1126,23 @@ pitfall: silently ignored fields).
 The same `SyncWriter` API is used by MCP tools, admin endpoints, restore and the
 directory job.
 
+**Implementation (phase 2).** `PGPM/Sync/`: `ISyncedEntity` + `SyncedEntity` (the columns), `SyncStampInterceptor`
+(seq/rev/`*_by`; a save outside a transaction gets one of its own so the counter's lock lasts until commit),
+`ChangeLogInterceptor` (`create`/`update`/`delete`/`restore` rows of tables with `History`), `SyncCommitInterceptor`
+(publishes the head after any commit that took seqs – sync, admin, seeds, sign-in), `SyncCounter` (`FOR UPDATE`, `SET
+LOCAL lock_timeout` via `set_config`, 503 `busy`), `SyncTables` + one `SyncTable<T>` descriptor per table (wire name =
+table name, `Visible`, `Patchable` incl. `col.*` jsonb paths, `ServerOwned`, `Hidden`, `Parents` with
+`DeletedWithParent`, `SamePair` + `DuplicateMerge`, hooks `AuthorizeInsert/Patch/Delete`, `PrepareInsert`, `AfterPatch`,
+`Validate`), `SyncWriter`/`SyncWrite` (one locked transaction, a savepoint per mutation, `sync_mutations` replay,
+`change_log` `conflict`/`conflict_resolved`/`share` entries, delete batches), `SyncService` (`POST /sync`), `SyncReader`
+(pull), `TrashService`, `TombstonePruner`/`LogPruner`; `PGPM/Sharing/` `AccessService` (+ `Viewer`) and
+`SharingService`; `PGPM/Sync/Live/` `LiveSyncHub`, `LiveConnection`, `EditingRegistry`. Descriptors: `GroupsTable`
+(`Sync/SyncTables.cs`), `PersonsTable` (`Persons/`), `ItemsTable` and `ItemSharesTable` (`Items/ItemTables.cs`),
+`UserSettingsTable` (`Settings/`). A new table = entity (`: SyncedEntity`) + model configuration (`Synced(e)`) +
+migration + descriptor in `SyncTables.All` after its parents; `SyncRegistryTests` fails until the descriptor exists
+and round-trips every whitelisted key. A patch whose keys all conflict (or are no-ops) is `conflict` with `kind:
+"field"`; an insert that fails a database constraint is `rejected` (`validation_failed`, unique: `duplicate_id`).
+
 ### 11.6 Server: pull, live feed, access changes
 
 **Pull** (PLM `SyncService.PullAsync`):
@@ -1083,6 +1191,17 @@ user may manage), `POST /api/v1/trash/{batchId}/restore` → `SyncWriter`
 un-deletes the batch rows (new `seq`, `rev + 1`, skips rows whose parent is gone
 and duplicate pairs) → live delivery; `DELETE /api/v1/trash/{batchId}` (admin)
 purges rows and files and raises the tombstone horizon.
+
+**Implementation notes (phase 2).** The tombstone horizon is the highest seq ever physically removed (purge, pruned
+tombstones, pruned evictions). A device resets when its cursor is below it **and** the horizon rose since the device last
+pulled from 0 (`sync_clients.horizon_seq`) – otherwise a fresh device paging through its first sync would reset forever
+after any purge. Deleting an item keeps its `item_shares` (they decide who sees the tombstone and may restore it); a purge
+removes them. Deleting a group leaves a tombstone (a query filter hides it from everything but the sync), removes its
+memberships and rights, tombstones its shares in an `other` batch and bumps its members' epochs. Group membership and
+admin-flag changes bump `users.access_epoch` (`UserAccounts`, `GroupService`, `MicrosoftSignInService`) and call
+`SessionCache.Forget`, whose `Forgotten` event makes the user's live connections check their session at once. Restoring
+share rows re-stamps their items. The pruners run with the background tasks (`BackgroundTasks:Enabled`); the live hub
+always (its shutdown sends `app`).
 
 ### 11.7 Client: sync engine
 
@@ -1476,6 +1595,7 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | `Sync:Live:Enabled` | true | NEW |
 | `Sync:Live:MaxConnectionsPerUser` | 10 | NEW |
 | `Sync:Live:AckTimeoutSeconds` / `HeartbeatSeconds` | 30 / 25 | NEW |
+| `Sync:Live:RevalidateSeconds` / `HelloTimeoutSeconds` | 60 / 15 | NEW (phase 2) |
 | `Packages:SeedOnFirstStart` | `core,innovation-ai` | NEW |
 | `Mcp:Enabled` / `WriteHours` / `ReadDaysAfterOnline` | true / 12 / 7 | PNMTD |
 | `BackgroundTasks:Enabled` | true | PNMTD |
@@ -1513,6 +1633,14 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | 27 | Seed groups by a custom migration with a `key_values` marker (doc: "via migration") | a deleted seed group stays deleted; phase 4's packages take the seeds over |
 | 28 | `ssoError=no-account` for an unknown account while `Entra:AutoProvision` is off (GGITSV knows only failed, cancelled, deactivated, account-conflict) | GGITSV always provisions |
 | 29 | Graph `/me` reads `userPrincipalName,mail` only (GGITSV also the on-premises names) | PGPM stores only `microsoft_user_name` |
+| 30 | `items` is one entity class with every type's columns and the `type` discriminator (doc 02: EF Core TPH) | the sync reads and writes rows generically by column |
+| 31 | No foreign keys from synced rows to `users` (`owner_user_id`, `created_by`, `updated_by`) nor yet to `statuses`, `files`, `project_templates`, other `items` | an item outlives its owner's account; the referenced tables come in phases 3–4 |
+| 32 | An item's delete batch doesn't contain its `item_shares` | they decide who sees the tombstone and who may restore it |
+| 33 | Deleted groups are tombstones with a query filter (phase 1: a hard delete) | clients must learn that the group is gone |
+| 34 | `sync_clients.horizon_seq`, `sync_mutations.(batch_id, table_name, row_id, op, status)`, `delete_batches.root_table`, `sync_evictions.at` added to doc 02 §11 | horizon resets only for devices that may hold purged rows; initial shares checked across requests; restore authorises against the root row; eviction pruning |
+| 35 | A wrong live `Origin` is HTTP 403 before the upgrade (close code `4403` is not used) | nothing of the session reaches a cross-site page |
+| 36 | `user_settings` duplicates (two devices, same key) are merged as a patch with `old` = the existing value: the later wins | personal UI state needs no conflict dialog |
+| 37 | Trigram index on `items.title` deferred to phase 3 (global search) | needs `pg_trgm`; nothing searches server-side yet |
 
 ## 16. Score evaluation [NEW]
 

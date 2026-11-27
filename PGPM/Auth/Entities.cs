@@ -98,17 +98,17 @@ public sealed class UserEntity
 
 /// <summary>
 /// A group (docs/02 §3 <c>groups</c>): rights per area, members, and an optional Entra app role that manages its
-/// membership at every Microsoft sign-in. Phase 2 makes it a synced row (names for the share picker).
+/// membership at every Microsoft sign-in. A synced row, read-only for clients (names for the share picker), delivered
+/// without <see cref="NormalizedName"/> and <see cref="EntraAppRole"/>. Deleting one leaves a tombstone (a query filter hides
+/// it from everything but the sync).
 /// </summary>
 [Audited]
-public sealed class GroupEntity
+public sealed class GroupEntity : Sync.SyncedEntity
 {
     /// <summary>The seeded groups (docs/03 §6.2), fixed ids (UUID v7 layout).</summary>
     public static readonly Guid MembersId = new("01970000-0000-7000-8000-000000000001");
 
     public static readonly Guid ViewersId = new("01970000-0000-7000-8000-000000000002");
-
-    public Guid Id { get; set; }
 
     public required string Name { get; set; }
 

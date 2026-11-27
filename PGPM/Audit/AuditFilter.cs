@@ -64,11 +64,18 @@ public sealed class AuditFilter(IDbContextFactory<PgpmDbContext> dbs, ILogger<Au
             if (scope.Persisted)
             {
                 db.AuditLog.Update(entry);
+                try
+                {
+                    await db.SaveChangesAsync(CancellationToken.None);
+                    return;
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    // Saved in a transaction that was rolled back afterwards (a sync write unit's): written anew.
+                    db.ChangeTracker.Clear();
+                }
             }
-            else
-            {
-                db.AuditLog.Add(entry);
-            }
+            db.AuditLog.Add(entry);
             await db.SaveChangesAsync(CancellationToken.None);
         }
         catch (Exception e)

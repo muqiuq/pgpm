@@ -80,7 +80,21 @@ public sealed class EndpointAuditTests
         ["PUT /api/v1/groups/{id:guid}/members"] = "admin",
         ["GET /api/v1/audit"] = "AuditLog:View",
         ["GET /api/v1/audit/events"] = "AuditLog:View",
+        // The sync core (docs/03 §11): rights and access are checked per mutation and per row.
+        ["POST /api/v1/sync"] = "signed-in",
+        ["GET /api/v1/sync/live"] = "signed-in",
+        ["PUT /api/v1/items/{id:guid}/shares"] = "signed-in",
+        ["POST /api/v1/items/{id:guid}/owner"] = "signed-in",
+        ["GET /api/v1/trash"] = "signed-in",
+        ["POST /api/v1/trash/{batchId:guid}/restore"] = "signed-in",
+        ["DELETE /api/v1/trash/{batchId:guid}"] = "admin",
+        ["GET /api/v1/history"] = "signed-in",
+        ["POST /api/v1/editing"] = "signed-in",
+        ["DELETE /api/v1/editing"] = "signed-in",
     };
+
+    /// <summary>Writes that need no right because the object's access decides (docs/03 §6.3): manage for sharing, edit for presence.</summary>
+    private static readonly string[] ObjectAccessWrites = ["/api/v1/sync", "/api/v1/items/", "/api/v1/trash/", "/api/v1/editing"];
 
     private sealed record EndpointInfo(string Key, string Method, string Pattern, RouteEndpoint Endpoint);
 
@@ -134,9 +148,10 @@ public sealed class EndpointAuditTests
         Assert.IsGreaterThanOrEqualTo(Matrix.Count, v1.Count);
         var wrong = v1.Where(e => RightOf(e.Endpoint) != Matrix[e.Key]).Select(e => $"{e.Key}: {RightOf(e.Endpoint)}, the matrix says {Matrix[e.Key]}");
         Assert.AreEqual("", string.Join("\n", wrong));
-        // A write needs a right, except one's own session and account.
+        // A write needs a right, except one's own session and account, and the writes the object's access decides.
         var selfService = v1.Where(e => e.Method != "GET" && Matrix[e.Key] == "signed-in").Select(e => e.Key).ToList();
-        Assert.IsTrue(selfService.All(k => k.Contains("/api/v1/auth/", StringComparison.Ordinal) || k.Contains("/api/v1/account/", StringComparison.Ordinal)),
+        Assert.IsTrue(selfService.All(k => k.Contains("/api/v1/auth/", StringComparison.Ordinal) || k.Contains("/api/v1/account/", StringComparison.Ordinal)
+                || ObjectAccessWrites.Any(w => k.Contains(w, StringComparison.Ordinal))),
             "writes with no right: " + string.Join(", ", selfService));
     }
 

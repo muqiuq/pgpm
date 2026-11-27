@@ -881,6 +881,389 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/{id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ItemShareRequest"][];
+                    "text/json": components["schemas"]["ItemShareRequest"][];
+                    "application/*+json": components["schemas"]["ItemShareRequest"][];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ItemShareItem"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{id}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ItemOwnerRequest"];
+                    "text/json": components["schemas"]["ItemOwnerRequest"];
+                    "application/*+json": components["schemas"]["ItemOwnerRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                    sort?: string;
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedOfTrashItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trash/{batchId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    batchId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrashRestoreResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trash/{batchId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    batchId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    itemId?: string;
+                    page?: number;
+                    pageSize?: number;
+                    sort?: string;
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedOfHistoryEntryItem"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/editing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EditingRequest"];
+                    "text/json": components["schemas"]["EditingRequest"];
+                    "application/*+json": components["schemas"]["EditingRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EditingRequest"];
+                    "text/json": components["schemas"]["EditingRequest"];
+                    "application/*+json": components["schemas"]["EditingRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SyncRequest"];
+                    "text/json": components["schemas"]["SyncRequest"];
+                    "application/*+json": components["schemas"]["SyncRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SyncResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -1344,6 +1727,11 @@ export interface components {
             hasPassword: boolean;
             hasMicrosoftAccount: boolean;
         };
+        EditingRequest: {
+            /** Format: uuid */
+            itemId?: null | string;
+            target?: null | string;
+        };
         GroupDetail: {
             /** Format: uuid */
             id: string;
@@ -1390,6 +1778,44 @@ export interface components {
                 [key: string]: components["schemas"]["Level"];
             };
         };
+        HistoryEntryItem: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            at: string;
+            /** Format: uuid */
+            userId: null | string;
+            userName: null | string;
+            source: string;
+            entity: string;
+            /** Format: uuid */
+            entityId: string;
+            action: string;
+            changes: null | components["schemas"]["JsonNode"];
+            /** Format: date-time */
+            clientChangedAt: null | string;
+        };
+        /** @enum {unknown} */
+        ItemAccess: "none" | "read" | "edit" | "manage";
+        ItemOwnerRequest: {
+            /** Format: uuid */
+            userId?: null | string;
+        };
+        ItemShareItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            groupId: string;
+            groupName: string;
+            access: components["schemas"]["ItemAccess"];
+        };
+        ItemShareRequest: {
+            /** Format: uuid */
+            groupId?: null | string;
+            access?: null | components["schemas"]["ItemAccess"];
+        };
+        JsonNode: unknown;
+        JsonObject: Record<string, never>;
         /** @enum {unknown} */
         Level: "None" | "Create" | "Edit" | "Use" | "View" | "Manage";
         LoginRequest: {
@@ -1422,6 +1848,24 @@ export interface components {
         };
         PagedOfAuditEntryItem: {
             items: components["schemas"]["AuditEntryItem"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalCount: number;
+        };
+        PagedOfHistoryEntryItem: {
+            items: components["schemas"]["HistoryEntryItem"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalCount: number;
+        };
+        PagedOfTrashItem: {
+            items: components["schemas"]["TrashItem"][];
             /** Format: int32 */
             page: number;
             /** Format: int32 */
@@ -1467,6 +1911,110 @@ export interface components {
             microsoft: boolean;
             local: boolean;
         };
+        SyncConflict: {
+            /** Format: uuid */
+            mutationId: string;
+            table: string;
+            /** Format: uuid */
+            id: string;
+            field: string;
+            theirs: null | components["schemas"]["JsonNode"];
+            by: null | string;
+            /** Format: date-time */
+            at: null | string;
+            /** Format: int32 */
+            rev: number;
+        };
+        SyncEviction: {
+            kind: string;
+            /** Format: uuid */
+            id: string;
+        };
+        SyncMutationIn: {
+            /** Format: uuid */
+            mutationId?: string;
+            /** Format: uuid */
+            batch?: null | string;
+            table?: string;
+            /** Format: uuid */
+            id?: string;
+            op?: components["schemas"]["SyncOp"];
+            /** Format: int32 */
+            baseRev?: null | number;
+            changes?: null | {
+                [key: string]: components["schemas"]["JsonObject"];
+            };
+            row?: null | components["schemas"]["JsonObject"];
+            /** Format: date-time */
+            clientChangedAt?: null | string;
+            force?: null | boolean;
+        };
+        SyncMutationResult: {
+            /** Format: uuid */
+            mutationId?: string;
+            status?: components["schemas"]["SyncStatus"];
+            /** Format: uuid */
+            id?: null | string;
+            /** Format: int32 */
+            rev?: null | number;
+            /** Format: int64 */
+            seq?: null | number;
+            /** Format: uuid */
+            mergedInto?: null | string;
+            conflictFields?: null | string[];
+            kind?: null | string;
+            code?: null | string;
+            message?: null | string;
+            errors?: null | {
+                [key: string]: string[];
+            };
+            current?: null | components["schemas"]["JsonObject"];
+        };
+        /** @enum {unknown} */
+        SyncOp: "insert" | "patch" | "delete";
+        SyncRequest: {
+            /** Format: uuid */
+            clientId?: null | string;
+            appVersion?: null | string;
+            /** Format: int64 */
+            since?: number;
+            /** Format: int32 */
+            accessEpoch?: null | number;
+            /** Format: int32 */
+            limit?: null | number;
+            mutations?: null | components["schemas"]["SyncMutationIn"][];
+            resolved?: null | components["schemas"]["SyncResolution"][];
+            pull?: boolean;
+            /** Format: int32 */
+            pending?: null | number;
+            /** Format: int32 */
+            conflicts?: null | number;
+        };
+        SyncResolution: {
+            table?: null | string;
+            /** Format: uuid */
+            id?: null | string;
+            field?: null | string;
+            resolution?: null | string;
+        };
+        SyncResponse: {
+            /** Format: int64 */
+            head: number;
+            /** Format: int64 */
+            cursor: number;
+            more: boolean;
+            reset: boolean;
+            /** Format: int32 */
+            accessEpoch: number;
+            results: components["schemas"]["SyncMutationResult"][];
+            conflicts: components["schemas"]["SyncConflict"][];
+            changes: {
+                [key: string]: components["schemas"]["JsonObject"][];
+            };
+            evictions: components["schemas"]["SyncEviction"][];
+        };
+        /** @enum {unknown} */
+        SyncStatus: "accepted" | "partial" | "conflict" | "rejected";
         TemporaryPassword: {
             password: string;
             /** Format: date-time */
@@ -1484,6 +2032,28 @@ export interface components {
             otpauthUri: string;
             /** Format: date-time */
             expiresAt: string;
+        };
+        TrashItem: {
+            /** Format: uuid */
+            batchId: string;
+            rootKind: string;
+            /** Format: uuid */
+            rootId: string;
+            rootType: string;
+            title: string;
+            /** Format: date-time */
+            deletedAt: string;
+            /** Format: uuid */
+            deletedBy: null | string;
+            deletedByName: null | string;
+        };
+        TrashRestoreResult: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: int32 */
+            restored: number;
+            /** Format: int32 */
+            skipped: number;
         };
         UpdateUserRequest: {
             displayName?: null | string;

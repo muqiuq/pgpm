@@ -149,7 +149,11 @@ person for Microsoft users, otherwise a manual person created with the user.
 | `normalized_name` | text | unique |
 | `description` | text null | max 500; delivered to clients |
 | `entra_app_role` | text null | membership managed by this Entra app role (set at every SSO sign-in); unique where set, upper-cased; **not delivered** |
-| + synced-row columns | | |
+| + synced-row columns | | `normalized_name` unique where not deleted |
+
+Deleting a group (admin) leaves a tombstone (hidden from everything but the sync by a query filter): its memberships and
+rights are removed, its `entra_app_role` cleared, its shares tombstoned in the same `other` batch, and its members'
+`access_epoch` bumped.
 
 ### `user_groups` (PNMTD)
 
@@ -232,7 +236,9 @@ Section restrictions (§7.3) narrow field visibility/editability further.
 Unique (`item_id`, `group_id`) where not deleted. Index (`group_id`, `item_id`).
 Clients may **insert** shares together with a new item (offline-capable create
 dialog, same outbox batch). Later changes go through the online endpoint
-`PUT /api/v1/items/{id}/shares` (needs *manage*).
+`PUT /api/v1/items/{id}/shares` (needs *manage*). Deleting an item keeps its
+shares (they decide who sees the tombstone and may restore it); a purge removes
+them; deleting a group tombstones its shares.
 
 ### `map_shares` [S, ro after creation]
 
@@ -305,7 +311,12 @@ One row per tenant: `tenant_id` PK, `delta_link`, `last_started_at`,
 Display key `<prefix>-<number>` with `N`, `I`, `L`, `P`; numbers from
 `number_counters (type text PK, next_value int)`, incremented in the push
 transaction. Indexes: (`type`, `deleted`), `status_id`, `owner_user_id`,
-`GIN(tags)`, trigram on `title`.
+`GIN(tags)`, trigram on `title` (phase 3).
+
+Phase 2: one entity class (`ItemEntity`) with every column (doc 03 §15 #30); no
+foreign keys yet to `statuses`, `files`, `project_templates` or other items, none
+to `users` (an item outlives its owner's account); CHECKs `type`, `type = 'note'
+OR status_id IS NOT NULL`, title 1–300 characters, `lead_probability` 0–100.
 
 ### `assignments` [S]
 
@@ -728,8 +739,10 @@ Global (not per user) because data is shared.
 
 ### 11.2 `sync_mutations` (server-only)
 
-Idempotency log: `mutation_id` PK, `user_id`, `client_id`, `result` jsonb (stored
-answer, replayed on retry), `processed_at` (pruned after 30 days).
+Idempotency log: `mutation_id` PK, `user_id`, `client_id`, `batch_id`,
+`table_name`, `row_id`, `op`, `status`, `result` jsonb (stored answer and its field
+conflicts, replayed on retry), `processed_at` (pruned after 30 days). The batch
+columns let a share insert find its item's insert in an earlier request.
 
 ### 11.3 `delete_batches` (server-only)
 
@@ -737,7 +750,8 @@ answer, replayed on retry), `processed_at` (pruned after 30 days).
 |---|---|---|
 | `id` | uuid PK | = `delete_batch_id` on the rows |
 | `root_kind` | text | `item` \| `map` \| `other` |
-| `root_id` | uuid null | the deleted item or map |
+| `root_table` | text | the root row's table (wire name): a restore needs the right to delete that row |
+| `root_id` | uuid | the deleted item or map (for `other`: the row the delete started with) |
 | `deleted_at`, `deleted_by` | | |
 | `restored_at`, `restored_by` | null | set on restore |
 | `purged_at`, `purged_by` | null | set on permanent delete |
@@ -755,10 +769,13 @@ answer, replayed on retry), `processed_at` (pruned after 30 days).
 
 - `sync_clients`: `id` (client-generated), `user_id`, `user_agent`,
   `app_version`, `last_seen_at`, `last_seq`, `pending_count`, `conflict_count`,
-  `live_connected` (bool). Deleting a row makes that client reset.
-- `sync_state`: single row, `tombstone_horizon_seq bigint`.
+  `live_connected` (bool), `horizon_seq` (the tombstone horizon when the device
+  last pulled from 0). Deleting a row makes that client reset.
+- `sync_state`: single row, `tombstone_horizon_seq bigint` – the highest seq ever
+  physically removed. A cursor below it resets only if the horizon rose after the
+  device's last pull from 0.
 - `sync_evictions`: `id` bigint PK, `user_id`, `seq` (from `sync_counter`),
-  `root_kind` (`item` \| `map`), `root_id`. Written when a user **loses** access
+  `root_kind` (`item` \| `map`), `root_id`, `at`. Written when a user **loses** access
   to an item or map; delivered with the pull/live feed to that user only; the
   client deletes the root and everything below it. Pruned after 90 days (older
   cursors reset anyway).
@@ -825,7 +842,8 @@ secrets only as `kind: "secret"`, never a value. Indexes (`at`), (`subject_id`, 
 ### `user_settings` [S] (own rows only)
 
 `id`, `user_id`, `key`, `value` jsonb, synced-row columns; unique (`user_id`,
-`key`).
+`key`) where not deleted. A second insert of the same key (another device,
+offline) becomes a patch of `value` – the later one wins, no conflict.
 
 ```jsonc
 // list:<type> – last used list state

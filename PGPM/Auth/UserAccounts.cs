@@ -114,6 +114,7 @@ public sealed partial class UserAccounts(PgpmDbContext db, SessionCache? session
             Log(AuditEvents.UserAdminChanged, user, who, admin ? $"{user.Username} is an admin now" : $"{user.Username} is no longer an admin");
             user.IsAdmin = admin;
             user.SecurityStamp = NewStamp();
+            user.AccessEpoch++;
         }
         if (user.IsActive != isActive)
         {
@@ -136,6 +137,8 @@ public sealed partial class UserAccounts(PgpmDbContext db, SessionCache? session
                 Log(AuditEvents.UserGroupsChanged, user, who, $"{user.Username}: {Names(before)} → {Names(after)}");
                 user.Groups.RemoveAll(m => removed.Any(g => g.Id == m.GroupId));
                 user.Groups.AddRange(added.Select(g => new UserGroupEntity { UserId = user.Id, GroupId = g.Id }));
+                // What the user may see changed: their devices reset (docs/02 §11.5).
+                user.AccessEpoch++;
             }
         }
         await UserPersons.FollowUserAsync(db, user, ct);
@@ -177,6 +180,11 @@ public sealed partial class UserAccounts(PgpmDbContext db, SessionCache? session
     {
         var user = await GetAsync(id, ct);
         await GuardLastAdminAsync(user, staysAdmin: false, ct);
+        // The person stays, without its user: let go here (not by the foreign key's SET NULL), so it is a synced change.
+        foreach (var person in await db.Persons.Where(p => p.UserId == user.Id).ToListAsync(ct))
+        {
+            person.UserId = null;
+        }
         db.Users.Remove(user);
         Log(AuditEvents.UserDeleted, user, who, $"{user.Username} deleted");
         await SaveAsync(ct);

@@ -20,13 +20,14 @@ public sealed class SessionCache(IMemoryCache cache)
 {
     public static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(1);
 
-    public sealed record Entry(string Stamp, bool IsActive, bool IsTotpEnabled, UserRights Rights, IReadOnlyList<Guid> GroupIds);
+    /// <summary><see cref="AccessEpoch"/>: the live channel resets the user's clients when it changes (docs/03 §11.6).</summary>
+    public sealed record Entry(string Stamp, bool IsActive, bool IsTotpEnabled, UserRights Rights, IReadOnlyList<Guid> GroupIds, int AccessEpoch = 1);
 
     /// <summary>The user's entry from the database: the flag, the highest level their groups give per area, their groups.</summary>
     public static async Task<Entry?> LoadAsync(PgpmDbContext db, Guid id, CancellationToken ct = default)
     {
         var user = await db.Users.AsNoTracking().Where(u => u.Id == id)
-            .Select(u => new { u.SecurityStamp, u.IsActive, u.IsTotpEnabled, u.IsAdmin }).SingleOrDefaultAsync(ct);
+            .Select(u => new { u.SecurityStamp, u.IsActive, u.IsTotpEnabled, u.IsAdmin, u.AccessEpoch }).SingleOrDefaultAsync(ct);
         if (user is null)
         {
             return null;
@@ -34,7 +35,7 @@ public sealed class SessionCache(IMemoryCache cache)
         var groupIds = await db.UserGroups.AsNoTracking().Where(m => m.UserId == id).Select(m => m.GroupId).ToListAsync(ct);
         var levels = await db.GroupRights.AsNoTracking().Where(r => groupIds.Contains(r.GroupId)).Select(r => new { r.Area, r.Level }).ToListAsync(ct);
         return new Entry(user.SecurityStamp, user.IsActive, user.IsTotpEnabled,
-            new UserRights(user.IsAdmin, UserRights.Combine(levels.Select(l => (l.Area, l.Level)))), groupIds);
+            new UserRights(user.IsAdmin, UserRights.Combine(levels.Select(l => (l.Area, l.Level)))), groupIds, user.AccessEpoch);
     }
 
     public async Task<Entry?> GetAsync(Guid userId, Func<Task<Entry?>> load) =>
@@ -45,10 +46,18 @@ public sealed class SessionCache(IMemoryCache cache)
         });
 
     /// <summary>
-    /// After a change of the user's stamp, flags, groups or rights: the next request loads them again. Phase 2's live
-    /// channel also tells the user's clients (<c>session/rights_changed</c>) to fetch <c>/auth/me</c> again.
+    /// After a change of the user's stamp, flags, groups or rights: the next request loads them again, and the user's live
+    /// connections check their session at once (<see cref="Forgotten"/>: <c>session</c> messages, <c>reset</c> after an
+    /// access epoch change, docs/03 §11.6).
     /// </summary>
-    public void Forget(Guid userId) => cache.Remove(Key(userId));
+    public void Forget(Guid userId)
+    {
+        cache.Remove(Key(userId));
+        Forgotten?.Invoke(userId);
+    }
+
+    /// <summary>Raised by <see cref="Forget"/> (the live sync hub listens).</summary>
+    public event Action<Guid>? Forgotten;
 
     private static string Key(Guid userId) => $"session:{userId}";
 

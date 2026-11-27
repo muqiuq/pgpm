@@ -53,6 +53,14 @@ public static class AuditEvents
     // Persons (phase 1: only what a user's sign-in does to their person).
     public const string PersonCreated = "person.created";
     public const string PersonLinked = "person.linked";
+
+    // Items: sharing and ownership (the field changes are in the change log).
+    public const string ItemSharesChanged = "item.shares_changed";
+    public const string ItemOwnerChanged = "item.owner_changed";
+
+    // The Trash.
+    public const string TrashRestored = "trash.restored";
+    public const string TrashPurged = "trash.purged";
 }
 
 /// <summary>The types of subject an entry can be about (<c>audit_log.subject_type</c>).</summary>
@@ -61,6 +69,7 @@ public static class AuditSubjects
     public const string User = "user";
     public const string Group = "group";
     public const string Person = "person";
+    public const string Item = "item";
 }
 
 /// <summary>The colour of an event's tag.</summary>
@@ -103,6 +112,7 @@ public static class AuditCatalog
         Add(AuditSubjects.Group, AuditEvents.GroupCreated, AuditEvents.GroupUpdated, AuditEvents.GroupRightsChanged,
             AuditEvents.GroupMembersChanged, AuditEvents.GroupDeleted, AuditEvents.MembershipAdded, AuditEvents.MembershipRemoved);
         Add(AuditSubjects.Person, AuditEvents.PersonCreated, AuditEvents.PersonLinked);
+        Add(AuditSubjects.Item, AuditEvents.ItemSharesChanged, AuditEvents.ItemOwnerChanged, AuditEvents.TrashRestored, AuditEvents.TrashPurged);
     }
 
     public static IReadOnlyList<AuditEventInfo> All => Entries;

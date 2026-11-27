@@ -4,6 +4,7 @@ using PGPM.Audit;
 using PGPM.Auth;
 using PGPM.Data;
 using PGPM.Hosting;
+using PGPM.Sync;
 
 namespace PGPM;
 
@@ -29,23 +30,28 @@ public partial class Program
         // The build writes the OpenAPI document by starting the host without a database (GetDocument.Insider).
         var documentBuild = Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
 
-        // Each feature registers itself (docs/03 §3.1). Later phases add AddSync, AddFiles, AddPgpmMcp, …
+        // Each feature registers itself (docs/03 §3.1). Later phases add AddFiles, AddPgpmMcp, …
         builder.Services.AddPgpmData(builder.Configuration);
         builder.Services.AddPgpmApi();
         builder.Services.AddPgpmOpenApi();
         builder.Services.AddPgpmAuth(builder.Configuration);
         builder.Services.AddAudit();
         builder.Services.AddPgpmHosting(builder.Configuration);
+        builder.Services.AddSync(builder.Configuration);
 
-        // First: every other hosted service starts on a migrated database.
+        // First: every other hosted service starts on a migrated database. The live hub is no background task: it runs in
+        // the tests too.
         if (!documentBuild)
         {
             builder.Services.AddHostedService<DatabaseMigrationService>();
+            builder.Services.AddLiveSyncHub();
         }
 
-        // Background tasks (docs/03 §9) go after it, inside
-        //   if (!documentBuild && builder.Configuration.GetValue("BackgroundTasks:Enabled", true)) { … }
-        // so the integration tests (BackgroundTasks__Enabled=false) run without them. None exist in phase 0.
+        // Background tasks (docs/03 §9), without which the integration tests run (BackgroundTasks__Enabled=false).
+        if (!documentBuild && builder.Configuration.GetValue("BackgroundTasks:Enabled", true))
+        {
+            builder.Services.AddSyncTasks();
+        }
 
         // Console only: in a container that is `docker compose logs`, rotated by the log driver.
         builder.Logging.ClearProviders();
@@ -58,7 +64,7 @@ public partial class Program
         // The order matters (docs/03 §3.1). First the client's real address and scheme (Proxy setting). There is no HTTPS
         // redirect: TLS ends at the reverse proxy.
         app.UseForwardedHeaders();
-        app.UseWebSockets(HostingSetup.WebSocketOptions); // the live sync channel (phase 2: /api/v1/sync/live)
+        app.UseWebSockets(HostingSetup.WebSocketOptions); // the live sync channel: /api/v1/sync/live
         app.UseSecurityHeaders();          // CSP and friends, for every response
         app.UseApiErrors();                // ProblemDetails, on /api only
         app.UseSpaFiles();                 // the web UI's files, anonymous (the shell holds no data)
@@ -69,6 +75,7 @@ public partial class Program
         app.UseWhen(c => !HostingSetup.IsMcpPath(c.Request.Path), b => b.UseAuthentication());
         app.UseAuthorization();            // deny by default: the fallback policy wants a signed-in user
         app.UseSessionGates();             // a temporary password, a required 2FA setup, the day's code: first
+        app.UseChangeContext();            // changes of synced rows are the signed-in user's (change_log, updated_by)
 
         // The container's health check: 200 while the database answers, 503 when it does not. Nothing else, so it may be
         // reachable from anywhere.

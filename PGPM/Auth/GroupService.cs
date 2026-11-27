@@ -107,16 +107,36 @@ public sealed class GroupService(PgpmDbContext db, SessionCache sessions, IHttpC
         }
     }
 
-    /// <summary>Its members lose what it gave them; their accounts stay.</summary>
+    /// <summary>
+    /// Its members lose what it gave them; their accounts stay. The group stays as a tombstone for the clients (its name
+    /// freed), its shares are removed with it, and its members' devices reset (their access changed).
+    /// </summary>
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
         var group = await db.Groups.SingleOrDefaultAsync(g => g.Id == id, ct) ?? throw ApiException.NotFound("Group");
         var members = await MemberNamesAsync(id, ct);
         var memberIds = await db.UserGroups.Where(m => m.GroupId == id).Select(m => m.UserId).ToListAsync(ct);
+        var who = AuditWho.From(accessor);
         AuditLog.Record(db, AuditEvents.GroupDeleted, $"{group.Name} deleted; members then: {(members.Count == 0 ? "none" : string.Join(", ", members))}",
-            AuditWho.From(accessor), Target(group));
-        db.Groups.Remove(group);
+            who, Target(group));
+        db.UserGroups.RemoveRange(await db.UserGroups.Where(m => m.GroupId == id).ToListAsync(ct));
+        db.GroupRights.RemoveRange(await db.GroupRights.Where(r => r.GroupId == id).ToListAsync(ct));
+        var batch = new Sync.DeleteBatchEntity
+        {
+            Id = Lib.Helper.Ids.New(), RootKind = Sync.DeleteRootKind.Other, RootTable = "groups", RootId = id, DeletedAt = Lib.Helper.Clock.UtcNow,
+            DeletedBy = who.UserId,
+        };
+        db.DeleteBatches.Add(batch);
+        group.Deleted = true;
+        group.DeleteBatchId = batch.Id;
+        group.EntraAppRole = null;
+        foreach (var share in await db.ItemShares.Where(s => s.GroupId == id && !s.Deleted).ToListAsync(ct))
+        {
+            share.Deleted = true;
+            share.DeleteBatchId = batch.Id;
+        }
         await db.SaveChangesAsync(ct);
+        await Sharing.AccessService.BumpAccessEpochAsync(db, memberIds, ct);
         memberIds.ForEach(sessions.Forget);
     }
 
@@ -149,7 +169,10 @@ public sealed class GroupService(PgpmDbContext db, SessionCache sessions, IHttpC
             db.UserGroups.RemoveRange(removed);
             db.UserGroups.AddRange(added.Select(u => new UserGroupEntity { UserId = u, GroupId = id }));
             await db.SaveChangesAsync(ct);
-            removed.Select(m => m.UserId).Concat(added).ToList().ForEach(sessions.Forget);
+            // What they may see changed: their devices reset (docs/02 §11.5).
+            var changed = removed.Select(m => m.UserId).Concat(added).ToList();
+            await Sharing.AccessService.BumpAccessEpochAsync(db, changed, ct);
+            changed.ForEach(sessions.Forget);
         }
         return await GetAsync(id, ct);
     }

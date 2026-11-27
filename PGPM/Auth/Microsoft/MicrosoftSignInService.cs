@@ -138,6 +138,7 @@ public sealed class MicrosoftSignInService(PgpmDbContext db, SessionCache sessio
             if (shouldBe && member is null)
             {
                 user.Groups.Add(new UserGroupEntity { UserId = user.Id, GroupId = group.Id });
+                user.AccessEpoch++;
                 AuditLog.Record(db, AuditEvents.MembershipAdded, $"{user.Username} → {group.Name}: the Microsoft sign-in carries the app role {group.EntraAppRole}",
                     who, AuditTarget.Group(group.Id, group.Name));
             }
@@ -145,6 +146,7 @@ public sealed class MicrosoftSignInService(PgpmDbContext db, SessionCache sessio
             {
                 user.Groups.Remove(member);
                 db.UserGroups.Remove(member);
+                user.AccessEpoch++;
                 AuditLog.Record(db, AuditEvents.MembershipRemoved,
                     $"{user.Username} ← {group.Name}: the Microsoft sign-in no longer carries the app role {group.EntraAppRole}",
                     who, AuditTarget.Group(group.Id, group.Name));
@@ -165,6 +167,7 @@ public sealed class MicrosoftSignInService(PgpmDbContext db, SessionCache sessio
             return;
         }
         user.Groups.Add(new UserGroupEntity { UserId = user.Id, GroupId = group.Id });
+        user.AccessEpoch++;
         AuditLog.Record(db, AuditEvents.MembershipAdded, $"{user.Username} → {group.Name}: no group after the app roles, the default group (Entra:DefaultGroupId)",
             who, AuditTarget.Group(group.Id, group.Name));
     }

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using PGPM.Audit;
 using PGPM.Auth;
 using PGPM.Auth.Rights;
@@ -26,7 +27,7 @@ public sealed class SeedGroups : ICustomMigration
         };
         foreach (var (id, name, description, rights) in groups)
         {
-            if (db.Groups.Any(g => g.Id == id || g.NormalizedName == GroupEntity.Normalize(name)))
+            if (db.Groups.IgnoreQueryFilters().Any(g => g.Id == id) || db.Groups.Any(g => g.NormalizedName == GroupEntity.Normalize(name)))
             {
                 continue;
             }
