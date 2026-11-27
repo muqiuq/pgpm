@@ -3,6 +3,10 @@ import { computed, ref, watch } from 'vue'
 import { darkClass } from '@/design/preset'
 
 export type Theme = 'system' | 'light' | 'dark'
+/** The Markdown editor's two modes (docs/03 §18, PNMTD docs/locations-knowledge-plan.md §5.4). */
+export type EditorMode = 'visual' | 'markdown'
+/** Descriptions and fields remember their mode apart (docs/03 §18.2: `page` and `field`). */
+export type EditorModes = { page: EditorMode; field: EditorMode }
 
 const storageKey = 'pgpm.preferences'
 
@@ -13,6 +17,8 @@ interface Stored {
   navFolds?: Record<string, boolean>
   /** Column widths a person dragged, in px, per table and column (useColumnWidths). */
   tableWidths?: TableWidths
+  /** The Markdown editor's last mode, per kind of text (docs/03 §18.2). */
+  editorModes?: Partial<EditorModes>
 }
 
 export type TableWidths = Record<string, Record<string, number>>
@@ -24,6 +30,8 @@ function read(): Stored {
     return {}
   }
 }
+
+const isMode = (value: unknown): value is EditorMode => value === 'visual' || value === 'markdown'
 
 /** Only tables of columns of finite numbers: whatever else was stored is dropped. */
 function widthsOf(value: unknown): TableWidths {
@@ -41,7 +49,7 @@ function widthsOf(value: unknown): TableWidths {
 
 /**
  * Per-browser preferences (PNMTD, docs/03 §12.1): theme, the drawer as a rail and its folded groups, the widths of
- * columns a person dragged. Phase 3 adds the Markdown editor's last modes.
+ * columns a person dragged, and the Markdown editor's last mode for descriptions and for fields (docs/03 §18).
  */
 export const usePreferences = defineStore('preferences', () => {
   const stored = read()
@@ -50,6 +58,11 @@ export const usePreferences = defineStore('preferences', () => {
   const navFolds = ref<Record<string, boolean>>(
     stored.navFolds && typeof stored.navFolds === 'object' ? { ...stored.navFolds } : {},
   )
+  const modes = stored.editorModes ?? {}
+  const editorModes = ref<EditorModes>({
+    page: isMode(modes.page) ? modes.page : 'visual',
+    field: isMode(modes.field) ? modes.field : 'visual',
+  })
   const tableWidths = ref<TableWidths>(widthsOf(stored.tableWidths))
   const systemDark = ref(false)
 
@@ -87,7 +100,7 @@ export const usePreferences = defineStore('preferences', () => {
 
   watch([theme, systemDark], apply, { immediate: true })
   watch(
-    [theme, drawerCollapsed, navFolds, tableWidths],
+    [theme, drawerCollapsed, navFolds, tableWidths, editorModes],
     () =>
       localStorage.setItem(
         storageKey,
@@ -96,6 +109,7 @@ export const usePreferences = defineStore('preferences', () => {
           drawerCollapsed: drawerCollapsed.value,
           navFolds: navFolds.value,
           tableWidths: tableWidths.value,
+          editorModes: editorModes.value,
         }),
       ),
     { deep: true },
@@ -120,6 +134,7 @@ export const usePreferences = defineStore('preferences', () => {
     drawerCollapsed,
     navFolds,
     tableWidths,
+    editorModes,
     railHeld,
     holdRail,
     isDark,

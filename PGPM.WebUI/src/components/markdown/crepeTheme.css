@@ -1,0 +1,160 @@
+/*
+ * Crepe in PGPM's look (PNMTD docs/locations-knowledge-plan.md §5.2): its common styles, without LaTeX's
+ * (KaTeX) and the AI feature's, and the frame theme's variables taken from base.css's tokens, light
+ * and dark. Crepe's own rules are all under .milkdown; the variables are set under .pgpm-md-editor,
+ * so nothing reaches the rest of the app.
+ */
+@import '@milkdown/crepe/theme/common/prosemirror.css';
+@import '@milkdown/crepe/theme/common/reset.css';
+@import '@milkdown/crepe/theme/common/block-edit.css';
+@import '@milkdown/crepe/theme/common/code-mirror.css';
+@import '@milkdown/crepe/theme/common/cursor.css';
+@import '@milkdown/crepe/theme/common/image-block.css';
+@import '@milkdown/crepe/theme/common/link-tooltip.css';
+@import '@milkdown/crepe/theme/common/list-item.css';
+@import '@milkdown/crepe/theme/common/placeholder.css';
+@import '@milkdown/crepe/theme/common/toolbar.css';
+@import '@milkdown/crepe/theme/common/table.css';
+@import '@milkdown/crepe/theme/common/top-bar.css';
+
+.pgpm-md-editor {
+  /* Code colours, for CodeMirror in Crepe's code blocks (crepeSetup.ts). */
+  --md-code-comment: var(--p-surface-500);
+  --md-code-keyword: var(--p-purple-700);
+  --md-code-string: var(--p-green-700);
+  --md-code-number: var(--p-orange-700);
+  --md-code-attr: var(--p-sky-700);
+  --md-code-title: var(--p-blue-700);
+  --md-code-deleted: var(--p-red-700);
+}
+
+:root.pgpm-dark .pgpm-md-editor {
+  --md-code-comment: var(--p-surface-400);
+  --md-code-keyword: var(--p-purple-300);
+  --md-code-string: var(--p-green-300);
+  --md-code-number: var(--p-orange-300);
+  --md-code-attr: var(--p-sky-300);
+  --md-code-title: var(--p-blue-300);
+  --md-code-deleted: var(--p-red-300);
+}
+
+.pgpm-md-editor .milkdown {
+  --crepe-color-background: var(--pgpm-panel);
+  --crepe-color-on-background: var(--pgpm-text);
+  --crepe-color-surface: var(--pgpm-panel);
+  --crepe-color-surface-low: var(--pgpm-bg);
+  --crepe-color-on-surface: var(--pgpm-text);
+  --crepe-color-on-surface-variant: var(--pgpm-muted);
+  /* Crepe draws its toolbar icons in the outline colour too: a mid tone, legible as an icon (4.7:1). */
+  --crepe-color-outline: var(--p-surface-500);
+  --crepe-color-primary: var(--p-primary-color);
+  --crepe-color-secondary: var(--p-highlight-background);
+  --crepe-color-on-secondary: var(--p-highlight-color);
+  --crepe-color-inverse: var(--p-surface-800);
+  --crepe-color-on-inverse: var(--p-surface-0);
+  --crepe-color-inline-code: var(--p-red-700);
+  --crepe-color-error: var(--pgpm-fail);
+  --crepe-color-hover: var(--p-content-hover-background);
+  --crepe-color-selected: var(--p-highlight-background);
+  --crepe-color-inline-area: var(--pgpm-bg);
+
+  --crepe-base-font-size: 15px;
+  --crepe-font-title: var(--pgpm-font);
+  --crepe-font-default: var(--pgpm-font);
+  --crepe-font-code: var(--pgpm-mono);
+
+  --crepe-shadow-1: 0 1px 3px rgb(15 23 42 / 0.12), 0 1px 2px rgb(15 23 42 / 0.2);
+  --crepe-shadow-2: 0 4px 12px rgb(15 23 42 / 0.14), 0 1px 3px rgb(15 23 42 / 0.2);
+}
+
+:root.pgpm-dark .pgpm-md-editor .milkdown {
+  --crepe-color-outline: var(--p-surface-400);
+  --crepe-color-inline-code: var(--p-red-300);
+  --crepe-color-inverse: var(--p-surface-100);
+  --crepe-color-on-inverse: var(--p-surface-900);
+  --crepe-shadow-1: 0 1px 3px rgb(0 0 0 / 0.5), 0 0 0 1px var(--pgpm-border);
+  --crepe-shadow-2: 0 4px 12px rgb(0 0 0 / 0.55), 0 0 0 1px var(--pgpm-border);
+}
+
+/* The editor fills its box and scrolls inside; the top bar stays at its top (§5.9). */
+.pgpm-visual-editor {
+  height: 100%;
+  overflow: auto;
+}
+
+.pgpm-md-editor .milkdown {
+  min-height: 100%;
+}
+
+.pgpm-md-editor .milkdown .milkdown-top-bar {
+  border-bottom: 1px solid var(--pgpm-border);
+}
+
+/* Writing room: the block handle sits in the left margin. */
+.pgpm-md-editor .milkdown .ProseMirror {
+  padding: var(--pgpm-space-4) var(--pgpm-space-6) 4rem 56px;
+  max-width: 64rem;
+  line-height: 1.55;
+}
+
+/* Headings as MarkdownView shows them, so that what is written is what is read. */
+.pgpm-md-editor .milkdown .ProseMirror h1 {
+  font-size: 1.6em;
+}
+
+.pgpm-md-editor .milkdown .ProseMirror h2 {
+  font-size: 1.4em;
+}
+
+.pgpm-md-editor .milkdown .ProseMirror h3 {
+  font-size: 1.2em;
+}
+
+.pgpm-md-editor .milkdown .ProseMirror :is(h4, h5, h6) {
+  font-size: 1.05em;
+}
+
+.pgpm-md-editor .milkdown .ProseMirror :is(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--pgpm-font);
+  font-weight: 600;
+  margin-top: 1em;
+}
+
+/* A mermaid block's diagram under its code (crepeSetup.ts, §5.8). */
+.pgpm-md-editor .pgpm-crepe-diagram {
+  display: flex;
+  justify-content: center;
+  padding: var(--pgpm-space-2);
+  overflow-x: auto;
+}
+
+.pgpm-md-editor .pgpm-crepe-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.pgpm-md-editor .pgpm-crepe-diagram.failed {
+  display: block;
+  color: var(--pgpm-muted);
+}
+
+.pgpm-md-editor .pgpm-crepe-diagram.failed strong {
+  color: var(--pgpm-fail);
+}
+
+.pgpm-md-editor .pgpm-crepe-diagram.failed pre {
+  margin-top: var(--pgpm-space-1);
+  font-family: var(--pgpm-mono);
+  font-size: 0.857rem;
+  white-space: pre-wrap;
+}
+
+/* An upload in flight (crepeSetup.ts). */
+.pgpm-md-editor .pgpm-upload-placeholder {
+  display: inline-block;
+  padding: 0 var(--pgpm-space-2);
+  border: 1px dashed var(--pgpm-border);
+  border-radius: var(--p-border-radius-sm);
+  color: var(--pgpm-muted);
+  font-size: 0.9em;
+}

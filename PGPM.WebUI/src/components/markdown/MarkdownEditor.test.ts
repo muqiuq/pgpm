@@ -1,0 +1,540 @@
+/* eslint-disable vue/one-component-per-file -- stand-ins for the components around the one tested */
+import { flushPromises } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import PrimeVue from 'primevue/config'
+import ConfirmationService from 'primevue/confirmationservice'
+import ToastService from 'primevue/toastservice'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, h, nextTick } from 'vue'
+import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
+import { usePreferences } from '@/stores/preferences'
+import Tooltip from 'primevue/tooltip'
+import { mount } from '@vue/test-utils'
+import { mountWithUi } from '@/test/mount'
+import MarkdownEditor from './MarkdownEditor.vue'
+import { draftStoreKey, fileSinkKey, type Draft, type DraftStore, type FileSink } from './services'
+import type { MarkdownSave } from './types'
+import { noStorageMessage } from './useUpload'
+
+// The two editors are their own chunks; here, stand-ins that behave as their contracts say. The
+// visual one writes `-` where the text has `*` (as Crepe does, §5.4). `live` is what an editor holds
+// before v-model has it (Crepe writes its Markdown after a pause in typing); `holdReady` keeps the
+// visual one starting until `start()`.
+const editors = vi.hoisted(() => ({
+  visualLive: null as string | null,
+  codeLive: null as string | null,
+  holdReady: false,
+  start: [] as (() => void)[],
+  inserted: [] as string[],
+}))
+vi.mock('./VisualEditor.vue', async () => {
+  const { defineComponent, h, onMounted } = await import('vue')
+  return {
+    __esModule: true,
+    default: defineComponent({
+      props: { modelValue: { type: String, required: true } },
+      emits: ['ready', 'update:modelValue'],
+      setup: (props, { expose, emit }) => {
+        expose({
+          flush: () => editors.visualLive ?? props.modelValue,
+          markdown: () => props.modelValue,
+          focus() {},
+          insertMarkdown() {},
+        })
+        onMounted(() => {
+          const ready = () => emit('ready', props.modelValue.replace(/^\* /gm, '- '))
+          if (editors.holdReady) {
+            editors.start.push(ready)
+          } else {
+            ready()
+          }
+        })
+        return () => h('div', { class: 'visual-stand-in' }, props.modelValue)
+      },
+    }),
+  }
+})
+vi.mock('./CodeEditor.vue', async () => {
+  const { defineComponent, h } = await import('vue')
+  return {
+    __esModule: true,
+    default: defineComponent({
+      props: { modelValue: { type: String, required: true }, readonly: { type: Boolean, default: false } },
+      emits: ['update:modelValue'],
+      setup: (props, { emit, expose }) => {
+        expose({
+          value: () => editors.codeLive ?? props.modelValue,
+          focus() {},
+          insertMarkdown: (text: string) => editors.inserted.push(text),
+          revealLine() {},
+        })
+        return () =>
+          h('textarea', {
+            class: 'code-stand-in',
+            value: props.modelValue,
+            readonly: props.readonly,
+            onInput: (e: Event) => emit('update:modelValue', (e.target as HTMLTextAreaElement).value),
+          })
+      },
+    }),
+  }
+})
+vi.mock('./MonacoDiff.vue', () => ({
+  __esModule: true,
+  default: defineComponent({ setup: () => () => h('div', { class: 'diff' }) }),
+}))
+
+let phone = false
+beforeEach(() => {
+  setActivePinia(createPinia())
+  localStorage.clear()
+  phone = false
+  editors.visualLive = null
+  editors.codeLive = null
+  editors.holdReady = false
+  editors.start = []
+  editors.inserted = []
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query.includes('max-width: 599px') ? phone : query.includes('min-width: 960px'),
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }))
+})
+
+afterEach(() => {
+  document.body.innerHTML = ''
+})
+
+type Props = InstanceType<typeof MarkdownEditor>['$props']
+
+function mountEditor(
+  props: Partial<Props> & { modelValue: string },
+  services: { fileSink?: FileSink; drafts?: DraftStore } = {},
+) {
+  const provide: Record<symbol, unknown> = {}
+  if (services.fileSink) provide[fileSinkKey as symbol] = services.fileSink
+  if (services.drafts) provide[draftStoreKey as symbol] = services.drafts
+  return mountWithUi(MarkdownEditor, {
+    props: { mode: 'page', layout: 'inline', 'onUpdate:modelValue': () => {}, ...props } as Props,
+    attachTo: document.body,
+    global: { plugins: [[PrimeVue, { unstyled: true }], ToastService, ConfirmationService], provide },
+  })
+}
+
+/** A paste of files into the textarea (the Markdown mode on a phone). */
+function pasteFiles(editor: ReturnType<typeof mountEditor>, files: File[]) {
+  const paste = new Event('paste', { bubbles: true, cancelable: true }) as Event & { clipboardData: unknown }
+  paste.clipboardData = { files, getData: () => '' }
+  editor.find('textarea').element.dispatchEvent(paste)
+}
+
+const button = (label: string) =>
+  Array.from(document.body.querySelectorAll('button')).find((b) => b.textContent?.trim() === label)
+
+describe('MarkdownEditor', () => {
+  it('opens in the remembered mode, apart for pages and fields', async () => {
+    usePreferences().editorModes = { page: 'markdown', field: 'visual' }
+    const page = mountEditor({ modelValue: 'text' })
+    await flushPromises()
+    expect(page.find('.code-stand-in').exists()).toBe(true)
+    const field = mountEditor({ modelValue: 'text', mode: 'field' })
+    await flushPromises()
+    expect(field.find('.visual-stand-in').exists()).toBe(true)
+  })
+
+  it('uses the textarea for the Markdown mode on a phone', async () => {
+    phone = true
+    usePreferences().editorModes.page = 'markdown'
+    const editor = mountEditor({ modelValue: '# Hi' })
+    await flushPromises()
+    expect(editor.find('textarea.md-textarea').exists()).toBe(true)
+    expect(editor.find('.code-stand-in').exists()).toBe(false)
+  })
+
+  it('switches to Visual at once when nothing would be rewritten', async () => {
+    usePreferences().editorModes.page = 'markdown'
+    const editor = mountEditor({ modelValue: '- a\n- b\n' })
+    await flushPromises()
+    ;(editor.vm as unknown as { $: { setupState: { setMode(m: string): void } } }).$.setupState.setMode('visual')
+    await flushPromises()
+    expect(usePreferences().editorModes.page).toBe('visual')
+    expect(document.body.textContent).not.toContain('will rewrite')
+  })
+
+  it('asks before the visual editor rewrites lines, and stays when told to', async () => {
+    usePreferences().editorModes.page = 'markdown'
+    const editor = mountEditor({ modelValue: '* a\n* b\n\ntext\n' })
+    await flushPromises()
+    ;(editor.vm as unknown as { $: { setupState: { setMode(m: string): void } } }).$.setupState.setMode('visual')
+    await flushPromises()
+    expect(document.body.textContent).toContain('The visual editor will rewrite 2 lines')
+    button('Stay')!.click()
+    await flushPromises()
+    expect(usePreferences().editorModes.page).toBe('markdown')
+    expect(editor.find('.visual-stand-in').exists()).toBe(false)
+  })
+
+  it('switches anyway, leaving the text as it was until it is edited', async () => {
+    usePreferences().editorModes.page = 'markdown'
+    const update = vi.fn()
+    const editor = mountEditor({ modelValue: '* a\n', 'onUpdate:modelValue': update })
+    await flushPromises()
+    ;(editor.vm as unknown as { $: { setupState: { setMode(m: string): void } } }).$.setupState.setMode('visual')
+    await flushPromises()
+    button('Switch anyway')!.click()
+    await flushPromises()
+    expect(usePreferences().editorModes.page).toBe('visual')
+    expect(editor.find('.visual-stand-in').isVisible()).toBe(true)
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('saves with Ctrl/⌘ S, carrying the base revision and the text it started from', async () => {
+    const save = vi.fn<(s: MarkdownSave) => void>()
+    const editor = mountEditor({ modelValue: 'text', baseRevision: 7, onSave: save })
+    await flushPromises()
+    await editor.setProps({ modelValue: 'text, edited' })
+    await editor.find('section').trigger('keydown', { key: 's', ctrlKey: true })
+    expect(save).toHaveBeenCalledWith({ markdown: 'text, edited', base: 'text', revision: 7, overwrite: false })
+  })
+
+  it('offers a draft from a crash, and a restored draft from an older revision saves against that one', async () => {
+    localStorage.setItem(
+      'pgpm.draft.items:1:description',
+      JSON.stringify({ revision: 3, base: 'old text', text: 'my lost text', savedAt: new Date().toISOString() }),
+    )
+    const update = vi.fn()
+    const save = vi.fn<(s: MarkdownSave) => void>()
+    const editor = mountEditor({
+      modelValue: 'saved text',
+      baseRevision: 5,
+      draftKey: 'items:1:description',
+      'onUpdate:modelValue': update,
+      onSave: save,
+    })
+    await flushPromises()
+    expect(document.body.textContent).toContain('You have unsaved changes from')
+    button('Restore')!.click()
+    expect(update).toHaveBeenCalledWith('my lost text')
+    await editor.setProps({ modelValue: 'my lost text' })
+    await editor.find('section').trigger('keydown', { key: 's', metaKey: true })
+    expect(save.mock.calls[0]![0]).toMatchObject({ markdown: 'my lost text', base: 'old text', revision: 3 })
+  })
+
+  it('keeps a draft while the text differs, and clears it once saved', async () => {
+    vi.useFakeTimers()
+    const editor = mountEditor({ modelValue: 'start', draftKey: 'field:x', baseRevision: 1 })
+    await editor.setProps({ modelValue: 'changed' })
+    vi.advanceTimersByTime(1000)
+    expect(JSON.parse(localStorage.getItem('pgpm.draft.field:x')!)).toMatchObject({ text: 'changed', revision: 1 })
+    ;(editor.vm as unknown as { saved(): void }).saved()
+    expect(localStorage.getItem('pgpm.draft.field:x')).toBeNull()
+    vi.useRealTimers()
+  })
+
+  it('reports unsaved changes, the details’ too', async () => {
+    const dirty = vi.fn()
+    const editor = mountEditor({ modelValue: 'a', onDirty: dirty })
+    await editor.setProps({ modelValue: 'b' })
+    expect(dirty).toHaveBeenLastCalledWith(true)
+    await editor.setProps({ modelValue: 'a' })
+    expect(dirty).toHaveBeenLastCalledWith(false)
+    await editor.setProps({ detailsDirty: true })
+    expect(dirty).toHaveBeenLastCalledWith(true)
+  })
+
+  it('offers Save mine anyway after a conflict, on top of their text', async () => {
+    const save = vi.fn<(s: MarkdownSave) => void>()
+    const conflict = vi.fn()
+    mountEditor({
+      modelValue: 'mine',
+      baseRevision: 4,
+      onSave: save,
+      conflict: { by: 'Anna Muster', at: '2026-11-14T10:42:00Z', theirs: 'theirs' },
+      'onUpdate:conflict': conflict,
+    })
+    await flushPromises()
+    expect(document.body.textContent).toContain('Anna Muster changed this text at')
+    expect(document.body.textContent).toContain('Their changes')
+    expect(document.body.textContent).toContain('My changes')
+    button('Save mine anyway')!.click()
+    await nextTick()
+    expect(conflict).toHaveBeenCalledWith(null)
+    expect(save.mock.calls[0]![0]).toEqual({ markdown: 'mine', base: 'theirs', revision: 4, overwrite: true })
+  })
+
+  it('carries their revision with Save mine anyway, when the conflict has one', async () => {
+    const save = vi.fn<(s: MarkdownSave) => void>()
+    mountEditor({
+      modelValue: 'mine',
+      baseRevision: 4,
+      onSave: save,
+      conflict: { by: 'Anna Muster', at: '2026-11-14T10:42:00Z', theirs: 'theirs', base: 'start', revision: 6 },
+    })
+    await flushPromises()
+    button('Save mine anyway')!.click()
+    expect(save.mock.calls[0]![0]).toMatchObject({ base: 'theirs', revision: 6, overwrite: true })
+  })
+
+  it('takes theirs: their text, nothing unsaved, no draft', async () => {
+    const update = vi.fn()
+    const takeTheirs = vi.fn()
+    const dirty = vi.fn()
+    const conflict = vi.fn()
+    localStorage.setItem(
+      'pgpm.draft.items:2:description',
+      JSON.stringify({ revision: 4, base: 'start', text: 'mine', savedAt: new Date().toISOString() }),
+    )
+    const editor = mountEditor({
+      modelValue: 'start',
+      baseRevision: 4,
+      draftKey: 'items:2:description',
+      'onUpdate:modelValue': update,
+      'onUpdate:conflict': conflict,
+      onTakeTheirs: takeTheirs,
+      onDirty: dirty,
+    })
+    await editor.setProps({ modelValue: 'mine' })
+    await editor.setProps({ conflict: { by: 'Anna Muster', at: '2026-11-14T10:42:00Z', theirs: 'theirs' } })
+    await flushPromises()
+    button('Take theirs')!.click()
+    await nextTick()
+    expect(conflict).toHaveBeenCalledWith(null)
+    expect(update).toHaveBeenLastCalledWith('theirs')
+    expect(takeTheirs).toHaveBeenCalledWith('theirs')
+    await editor.setProps({ modelValue: 'theirs', conflict: null })
+    expect(dirty).toHaveBeenLastCalledWith(false)
+    expect(localStorage.getItem('pgpm.draft.items:2:description')).toBeNull()
+  })
+
+  it('refuses pasted files where uploads are off', async () => {
+    phone = true
+    usePreferences().editorModes.page = 'markdown'
+    const editor = mountEditor({ modelValue: '', uploads: false })
+    await flushPromises()
+    pasteFiles(editor, [new File(['x'], 'shot.png', { type: 'image/png' })])
+    await flushPromises()
+    expect(document.body.textContent).toContain('Files can’t be added here.')
+  })
+
+  it('refuses files with a notice when no FileSink is provided, leaving the text as it was', async () => {
+    phone = true
+    usePreferences().editorModes.page = 'markdown'
+    const update = vi.fn()
+    const editor = mountEditor({ modelValue: 'text', 'onUpdate:modelValue': update })
+    await flushPromises()
+    pasteFiles(editor, [new File(['x'], 'shot.png', { type: 'image/png' })])
+    await flushPromises()
+    expect(document.body.textContent).toContain(noStorageMessage)
+    expect(update).toHaveBeenLastCalledWith('text')
+  })
+
+  it('hands pasted files to the provided FileSink and inserts what it stored', async () => {
+    phone = true
+    usePreferences().editorModes.page = 'markdown'
+    const store = vi.fn<FileSink['store']>(async (file, kind, onProgress) => {
+      onProgress?.(1)
+      return {
+        id: '0193',
+        url: `/api/v1/files/0193/${file.name}`,
+        name: file.name,
+        contentType: file.type,
+        size: file.size,
+        ...(kind === 'image' ? { width: 1, height: 1 } : {}),
+      }
+    })
+    const update = vi.fn()
+    // v-model as a view has it: the placeholder goes in, then the file's link takes its place.
+    const editor = mountEditor(
+      {
+        modelValue: '',
+        'onUpdate:modelValue': (value: string) => {
+          update(value)
+          void editor.setProps({ modelValue: value })
+        },
+      },
+      { fileSink: { store } },
+    )
+    await flushPromises()
+    pasteFiles(editor, [new File(['%PDF'], 'manual.pdf', { type: 'application/pdf' })])
+    await flushPromises()
+    expect(store).toHaveBeenCalledTimes(1)
+    expect(store.mock.calls[0]![0].name).toBe('manual.pdf')
+    expect(store.mock.calls[0]![1]).toBe('attachment')
+    expect(update).toHaveBeenLastCalledWith('[manual.pdf](/api/v1/files/0193/manual.pdf)')
+  })
+
+  it('links to an item with pickItem, in the Markdown mode too', async () => {
+    usePreferences().editorModes.page = 'markdown'
+    const pickItem = vi.fn(async () => ({ label: 'P-0042 Website [relaunch]', href: '/projects/0193' }))
+    mountEditor({ modelValue: '', pickItem })
+    await flushPromises()
+    const link = document.body.querySelector<HTMLButtonElement>('button[aria-label="Link to an item…"]')!
+    link.click()
+    await flushPromises()
+    expect(pickItem).toHaveBeenCalledTimes(1)
+    expect(editors.inserted).toEqual(['[P-0042 Website \\[relaunch\\]](/projects/0193)'])
+  })
+
+  it('shows no Link to an item… without pickItem, and inserts nothing when the pick is cancelled', async () => {
+    usePreferences().editorModes.page = 'markdown'
+    const none = mountEditor({ modelValue: '' })
+    await flushPromises()
+    expect(none.find('button[aria-label="Link to an item…"]').exists()).toBe(false)
+    none.unmount()
+    const editor = mountEditor({ modelValue: '', pickItem: async () => null })
+    await flushPromises()
+    await editor.find('button[aria-label="Link to an item…"]').trigger('click')
+    await flushPromises()
+    expect(editors.inserted).toEqual([])
+  })
+
+  it('keeps drafts in the provided DraftStore, read later as IndexedDB answers', async () => {
+    vi.useFakeTimers()
+    const stored = new Map<string, Draft>([
+      ['notes:9:content', { revision: 2, base: 'saved', text: 'from the store', savedAt: new Date().toISOString() }],
+    ])
+    let answer: (draft: Draft | null) => void = () => {}
+    const drafts: DraftStore = {
+      read: (key) => new Promise((resolve) => (answer = () => resolve(stored.get(key) ?? null))),
+      write: vi.fn((key: string, draft: Draft) => void stored.set(key, draft)),
+      remove: vi.fn((key: string) => void stored.delete(key)),
+    }
+    const editor = mountEditor({ modelValue: 'saved', draftKey: 'notes:9:content', baseRevision: 2 }, { drafts })
+    // Typing before the store answered writes nothing over its draft.
+    await editor.setProps({ modelValue: 'typed' })
+    vi.advanceTimersByTime(1000)
+    expect(drafts.write).not.toHaveBeenCalled()
+    answer(null)
+    await vi.runAllTimersAsync()
+    expect(document.body.textContent).toContain('You have unsaved changes from')
+    button('Discard')!.click()
+    expect(drafts.remove).toHaveBeenCalledWith('notes:9:content')
+    await editor.setProps({ modelValue: 'typed again' })
+    vi.advanceTimersByTime(1000)
+    expect(stored.get('notes:9:content')).toMatchObject({ text: 'typed again', base: 'saved', revision: 2 })
+    vi.useRealTimers()
+  })
+
+  it('writes the draft at once when the tab is hidden', async () => {
+    const editor = mountEditor({ modelValue: 'saved', draftKey: 'notes:3:content', baseRevision: 1 })
+    await flushPromises()
+    await editor.setProps({ modelValue: 'typed just before closing' })
+    window.dispatchEvent(new Event('pagehide'))
+    expect(JSON.parse(localStorage.getItem('pgpm.draft.notes:3:content')!)).toMatchObject({
+      text: 'typed just before closing',
+      base: 'saved',
+    })
+    editor.unmount()
+  })
+
+  it('fills the editing page: its slots, the folded details and Save', async () => {
+    const save = vi.fn<(s: MarkdownSave) => void>()
+    const Page = defineComponent({
+      setup: () => () =>
+        h(
+          MarkdownEditor,
+          {
+            modelValue: 'text',
+            mode: 'page',
+            backLabel: 'P-0042',
+            baseRevision: 2,
+            detailsSummary: 'summary · 2 tags',
+            onSave: save,
+          },
+          {
+            title: () => h('input', { class: 'title-field', value: 'Website relaunch' }),
+            status: () => h('span', { class: 'status-field' }, 'Active'),
+            others: () => h('span', 'Anna Muster is editing this description'),
+            details: () => h('div', { class: 'details-field' }, 'tags'),
+          },
+        ),
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: Page }] })
+    await router.push('/')
+    const app = mount(RouterView, {
+      attachTo: document.body,
+      global: {
+        plugins: [router, [PrimeVue, { unstyled: true }], ToastService, ConfirmationService],
+        directives: { tooltip: Tooltip },
+      },
+    })
+    await flushPromises()
+    expect(app.find('.editing-header .title-field').exists()).toBe(true)
+    expect(app.find('.editing-header .status-field').text()).toBe('Active')
+    expect(app.text()).toContain('Anna Muster is editing this description')
+    expect(app.find('.details-toggle').text()).toContain('summary · 2 tags')
+    expect(app.find('.details-field').isVisible()).toBe(false)
+    await app.find('.details-toggle').trigger('click')
+    expect(app.find('.details-field').isVisible()).toBe(true)
+    expect(app.find('[aria-label="Editor"]').exists()).toBe(true)
+
+    Array.from(document.body.querySelectorAll('button'))
+      .find((b) => b.textContent?.trim() === 'Save')!
+      .click()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true }))
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(save.mock.calls[0]![0]).toMatchObject({ markdown: 'text', revision: 2 })
+    app.unmount()
+  })
+
+  // What PNMTD found driving its knowledge base: Save right after typing sent the text before it.
+  it('saves what the visual editor holds, before it has reported it', async () => {
+    const save = vi.fn<(s: MarkdownSave) => void>()
+    const editor = mountEditor({ modelValue: 'before', onSave: save })
+    await flushPromises()
+    editors.visualLive = 'before and after'
+    await editor.find('section').trigger('keydown', { key: 's', ctrlKey: true })
+    expect(save.mock.calls[0]![0].markdown).toBe('before and after')
+  })
+
+  it('saves what the code editor holds, before v-model has it', async () => {
+    usePreferences().editorModes.page = 'markdown'
+    const save = vi.fn<(s: MarkdownSave) => void>()
+    const editor = mountEditor({ modelValue: 'before', onSave: save })
+    await flushPromises()
+    editors.codeLive = 'typed just now'
+    await editor.find('section').trigger('keydown', { key: 's', ctrlKey: true })
+    expect(save.mock.calls[0]![0].markdown).toBe('typed just now')
+  })
+
+  it('writes the draft from what the editor holds when it closes', async () => {
+    const editor = mountEditor({ modelValue: 'saved', draftKey: 'items:7:description', baseRevision: 2 })
+    await flushPromises()
+    editors.visualLive = 'saved, and a last word'
+    editor.unmount()
+    expect(JSON.parse(localStorage.getItem('pgpm.draft.items:7:description')!)).toMatchObject({
+      text: 'saved, and a last word',
+    })
+  })
+
+  it('shows the text read-only while the visual editor starts, so nothing typed is lost', async () => {
+    editors.holdReady = true
+    const editor = mountEditor({ modelValue: '# Hi' })
+    await flushPromises()
+    const waiting = editor.find('.md-starting textarea')
+    expect((waiting.element as HTMLTextAreaElement).readOnly).toBe(true)
+    expect((waiting.element as HTMLTextAreaElement).value).toBe('# Hi')
+    expect(editor.find('.visual-stand-in').isVisible()).toBe(false)
+    editors.start.forEach((ready) => ready())
+    await flushPromises()
+    expect(editor.find('.md-starting').exists()).toBe(false)
+    expect(editor.find('.visual-stand-in').isVisible()).toBe(true)
+  })
+
+  it('takes no typing in the code editor while the visual editor is prepared for a switch', async () => {
+    usePreferences().editorModes.page = 'markdown'
+    editors.holdReady = true
+    const editor = mountEditor({ modelValue: '* a\n' })
+    await flushPromises()
+    expect((editor.find('.code-stand-in').element as HTMLTextAreaElement).readOnly).toBe(false)
+    ;(editor.vm as unknown as { $: { setupState: { setMode(m: string): void } } }).$.setupState.setMode('visual')
+    await flushPromises()
+    expect((editor.find('.code-stand-in').element as HTMLTextAreaElement).readOnly).toBe(true)
+    editors.start.forEach((ready) => ready())
+    await flushPromises()
+    button('Stay')!.click()
+    await flushPromises()
+    expect((editor.find('.code-stand-in').element as HTMLTextAreaElement).readOnly).toBe(false)
+  })
+})

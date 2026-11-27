@@ -70,6 +70,18 @@ export const routes: RouteRecordRaw[] = [
     component: placeholder,
     meta: { title: 'Account', icon: 'pi pi-user', phase: 1, summary: 'Your password, 2FA, sessions and MCP tokens.' },
   },
+  // The Markdown editor and renderer side by side, for checking them by hand (docs/03 §18): development only, the
+  // build leaves it out.
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/dev/markdown',
+          name: 'dev-markdown',
+          component: () => import('@/views/dev/MarkdownPlayground.vue'),
+          meta: { title: 'Markdown playground', public: true },
+        },
+      ]
+    : []),
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
