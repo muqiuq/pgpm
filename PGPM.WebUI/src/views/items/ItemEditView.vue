@@ -3,37 +3,74 @@ import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ItemPicker from '@/components/items/ItemPicker.vue'
 import MarkdownEditor from '@/components/markdown/MarkdownEditor.vue'
-import type { EditConflict, MarkdownSave, Revision } from '@/components/markdown/types'
+import { provideMarkdownServices } from '@/components/markdown/services'
+import type { EditConflict, ItemLink, MarkdownSave, Revision } from '@/components/markdown/types'
 import { useNotify } from '@/composables/useNotify'
-import { conflicts as actions } from '@/local/boot'
+import { itemPath, itemTypes } from '@/domain/itemTypes'
+import { appFiles, conflicts as actions } from '@/local/boot'
 import type { ConflictEntry } from '@/local/conflicts'
 import { localDb } from '@/local/db'
+import { useMarkdownFiles } from '@/local/files'
 import { useOnline, useUserPersons } from '@/local/lookups'
 import { announceEditing, useEditors } from '@/local/presence'
 import { repo } from '@/local/repo'
-import { itemKey } from '@/local/rows'
+import { itemKey, type ItemRow, type ItemType } from '@/local/rows'
 import { useSession } from '@/stores/session'
-import { useNote } from './useNote'
+import { useItem } from './useItem'
 
 /**
- * Editing a note's content (docs/03 §18.2, §18.5, §18.6): the Markdown editor on its own page. Drafts go to IndexedDB
- * (App.vue's DraftStore, key `items:<id>:description`). Saving is one patch `{description: {old: <text when editing
- * began>, new}}` through the local repository – offline too. When the synced text changes while the editor is open, the
- * editor shows *Their changes* / *My changes* at once; from the conflict dialog (`?conflict=<id>`) it opens in that
- * view. *… is editing* through the editing endpoints and the live channel (online only). Files come with phase 3.
+ * Editing an item's description (notes: content) on its own page (docs/03 §18.2, §18.5, §18.6), for every type. Drafts
+ * go to IndexedDB (key `items:<id>:description`). Saving is one patch `{description: {old: <text when editing began>,
+ * new}}` through the local repository – offline too. Pasted and dropped files go through the offline file pipeline
+ * (images `embedded`, other files attachments of the item, docs/03 §18.4); *Link to an item…* searches the local
+ * items. When the synced text changes while the editor is open, it shows *Their changes* / *My changes* at once; from
+ * the conflict dialog (`?conflict=<id>`) it opens in that view. *… is editing* online.
  */
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ type: ItemType; id: string }>()
 const route = useRoute()
 const router = useRouter()
 const session = useSession()
 const notify = useNotify()
 const online = useOnline()
 const people = useUserPersons()
-const { note, loaded, canEdit } = useNote(() => props.id)
+const { item, loaded, canEdit } = useItem(
+  () => props.type,
+  () => props.id,
+)
+const files = useMarkdownFiles(() => props.id)
 const editors = useEditors(() => props.id, {
   target: 'description',
   me: () => (session.user ? { id: session.user.id, name: session.user.displayName } : null),
+})
+const info = computed(() => itemTypes[props.type])
+
+// The files of this text are this item's (docs/03 §18.4).
+provideMarkdownServices({
+  fileSink: { store: (file, kind, progress) => appFiles.sink(props.id).store(file, kind, progress) },
+})
+
+const picking = ref(false)
+let resolvePick: ((link: ItemLink | null) => void) | null = null
+function pickItem(): Promise<ItemLink | null> {
+  resolvePick?.(null)
+  picking.value = true
+  return new Promise((resolve) => (resolvePick = resolve))
+}
+function picked(other: ItemRow) {
+  // The editor escapes the label (linkText) itself.
+  resolvePick?.({ label: `${itemKey(other)} ${other.title}`, href: itemPath(other) })
+  resolvePick = null
+}
+watch(picking, (open) => {
+  if (!open && resolvePick) {
+    // Closed without a pick: after the pick event, if any.
+    setTimeout(() => {
+      resolvePick?.(null)
+      resolvePick = null
+    })
+  }
 })
 
 const editor = ref<InstanceType<typeof MarkdownEditor> | null>(null)
@@ -48,12 +85,16 @@ let seen: string | null = null
 /** A conflict of the sync this page resolves (from the conflict dialog). */
 const resolving = ref<ConflictEntry | null>(null)
 
-const back = () => router.push({ name: 'note', params: { id: props.id } })
+const back = () => {
+  const target =
+    typeof route.query.return === 'string' && route.query.return.startsWith('/') ? route.query.return : null
+  return target ? router.push(target) : router.push({ name: info.value.page, params: { id: props.id } })
+}
 
 watch(
-  [loaded, note],
+  [loaded, item],
   async () => {
-    const row = note.value
+    const row = item.value
     if (!loaded.value || !row || content.value !== null) return
     opened = row.description ?? null
     seen = opened
@@ -79,11 +120,11 @@ watch(
 
 // Someone else saved the text meanwhile (visible live): the editor shows both before anything is saved.
 watch(
-  () => note.value?.description ?? null,
+  () => item.value?.description ?? null,
   (theirs) => {
     if (content.value === null || saving.value || theirs === seen) return
     seen = theirs
-    const row = note.value!
+    const row = item.value!
     conflict.value = {
       by: people.nameOf(row.updatedBy, 'Someone'),
       at: row.updatedAt,
@@ -105,7 +146,10 @@ watch(
   },
   { immediate: true },
 )
-onBeforeUnmount(() => stopAnnouncing?.())
+onBeforeUnmount(() => {
+  stopAnnouncing?.()
+  resolvePick?.(null)
+})
 
 async function save(change: MarkdownSave) {
   saving.value = true
@@ -131,7 +175,7 @@ async function save(change: MarkdownSave) {
 async function takeTheirs(theirs: string) {
   seen = theirs === '' ? null : theirs
   opened = seen
-  baseRevision.value = note.value?._local?.serverRev ?? note.value?.rev ?? baseRevision.value
+  baseRevision.value = item.value?._local?.serverRev ?? item.value?.rev ?? baseRevision.value
   if (resolving.value) {
     try {
       await actions.keepTheirs(resolving.value)
@@ -154,35 +198,39 @@ const othersText = computed(() =>
 
 <template>
   <div v-if="!loaded" class="center"><ProgressSpinner style="width: 32px; height: 32px" /></div>
-  <div v-else-if="!note || note.deleted" class="page">
-    <Message severity="warn" :closable="false">This note is not on this device (any more).</Message>
+  <div v-else-if="!item || item.deleted" class="page">
+    <Message severity="warn" :closable="false">This {{ info.label }} is not on this device (any more).</Message>
   </div>
   <div v-else-if="!canEdit" class="page">
-    <Message severity="secondary" :closable="false">You can read this note, not change it.</Message>
+    <Message severity="secondary" :closable="false">You can read this {{ info.label }}, not change it.</Message>
   </div>
-  <MarkdownEditor
-    v-else-if="content !== null"
-    ref="editor"
-    v-model="content"
-    v-model:conflict="conflict"
-    mode="page"
-    layout="page"
-    :base-revision="baseRevision"
-    :draft-key="`items:${id}:description`"
-    :back-label="itemKey(note)"
-    :saving="saving"
-    placeholder="Write the note…"
-    @save="save"
-    @cancel="back"
-    @take-theirs="takeTheirs"
-  >
-    <template #title>
-      <span class="mono muted">{{ itemKey(note) }}</span> {{ note.title }}
-    </template>
-    <template v-if="othersText" #others>
-      <span class="others"><i class="pi pi-pencil" aria-hidden="true" /> {{ othersText }}</span>
-    </template>
-  </MarkdownEditor>
+  <template v-else-if="content !== null">
+    <MarkdownEditor
+      ref="editor"
+      v-model="content"
+      v-model:conflict="conflict"
+      mode="page"
+      layout="page"
+      :base-revision="baseRevision"
+      :draft-key="`items:${id}:description`"
+      :back-label="itemKey(item)"
+      :saving="saving"
+      :files="files"
+      :pick-item="pickItem"
+      :placeholder="type === 'note' ? 'Write the note…' : `Describe the ${info.label}…`"
+      @save="save"
+      @cancel="back"
+      @take-theirs="takeTheirs"
+    >
+      <template #title>
+        <span class="mono muted">{{ itemKey(item) }}</span> {{ item.title }}
+      </template>
+      <template v-if="othersText" #others>
+        <span class="others"><i class="pi pi-pencil" aria-hidden="true" /> {{ othersText }}</span>
+      </template>
+    </MarkdownEditor>
+    <ItemPicker v-model:visible="picking" header="Link to an item" :exclude="[id]" @pick="picked" />
+  </template>
 </template>
 
 <style scoped>

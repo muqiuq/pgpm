@@ -111,3 +111,83 @@ export async function call<T>(request: Promise<{ data?: T; error?: unknown; resp
   }
   return data as T
 }
+
+/** What {@link fetchApi} sends: a JSON body (any object), or raw bytes. */
+export interface FetchOptions {
+  method?: string
+  /** An object or array goes as JSON; a Blob, ArrayBuffer or typed array as raw bytes. */
+  body?: unknown
+  signal?: AbortSignal
+  headers?: Record<string, string>
+}
+
+function isRaw(body: unknown): body is BodyInit {
+  return (
+    body instanceof ArrayBuffer ||
+    ArrayBuffer.isView(body) ||
+    (typeof Blob !== 'undefined' && body instanceof Blob) ||
+    typeof body === 'string'
+  )
+}
+
+/**
+ * A v1 call outside openapi-fetch – raw bytes (file chunks and downloads, docs/03 §10.2), and the phase 3 endpoints
+ * until openapi.json has them – with the rules of {@link call}: same origin, the CSRF header on unsafe methods, an
+ * {@link ApiError} for an error answer (status 0: not reached), the error listeners told. Answers the Response.
+ */
+export async function fetchApi(path: string, options: FetchOptions = {}): Promise<Response> {
+  const method = (options.method ?? 'GET').toUpperCase()
+  const headers = new Headers(options.headers)
+  let body: BodyInit | undefined
+  if (options.body !== undefined) {
+    if (isRaw(options.body)) {
+      body = options.body
+      if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/octet-stream')
+    } else {
+      body = JSON.stringify(options.body)
+      headers.set('Content-Type', 'application/json')
+    }
+  }
+  if (unsafe(method) && typeof document !== 'undefined') {
+    const token = readCookie('XSRF-TOKEN')
+    if (token) headers.set('X-XSRF-TOKEN', token)
+  }
+  const base = typeof location !== 'undefined' ? location.origin : 'http://localhost'
+  const url = new URL(path, base)
+  let response: Response
+  try {
+    response = await globalThis.fetch(url.toString(), {
+      method,
+      headers,
+      body,
+      signal: options.signal,
+      credentials: 'same-origin',
+      cache: 'no-store',
+    })
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') throw e
+    const error = new ApiError(0, undefined)
+    listeners.forEach((l) => l(error, url.pathname))
+    throw error
+  }
+  if (!response.ok) {
+    let problem: unknown
+    try {
+      problem = await response.json()
+    } catch {
+      problem = undefined
+    }
+    const retryAfter = Number.parseInt(response.headers.get('Retry-After') ?? '', 10)
+    const failure = new ApiError(response.status, problem, Number.isNaN(retryAfter) ? undefined : retryAfter)
+    listeners.forEach((l) => l(failure, url.pathname))
+    throw failure
+  }
+  return response
+}
+
+/** {@link fetchApi}, answering the JSON body (undefined for 204 or an empty body). */
+export async function fetchJson<T>(path: string, options: FetchOptions = {}): Promise<T> {
+  const response = await fetchApi(path, options)
+  const text = response.status === 204 ? '' : await response.text()
+  return (text ? JSON.parse(text) : undefined) as T
+}

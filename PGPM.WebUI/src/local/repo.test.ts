@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { memoryDb } from '@/test/memoryDb'
 import type { PgpmDb } from './db'
-import { LocalWriteError, Repo } from './repo'
+import { inTransaction, LocalWriteError, Repo } from './repo'
 import type { ItemRow } from './rows'
 
 const me = '01970000-0000-7000-8000-000000000101'
@@ -158,5 +158,31 @@ describe('the repository (docs/03 §11.3): row and outbox entry in one transacti
     await expect(repo.patch('item_shares', 's1', { access: 'edit' })).rejects.toMatchObject({ code: 'read_only' })
     await expect(repo.remove('item_shares', 's1')).rejects.toMatchObject({ code: 'read_only' })
     await expect(repo.create('nope', {})).rejects.toMatchObject({ code: 'unknown_table' })
+  })
+
+  it('keeps the transaction across helpers that end with a write (Dexie promises, not native ones)', async () => {
+    // A helper whose last step is `await tx.create(…)`: a native promise there lost Dexie's zone, and the next write
+    // of its caller committed the transaction early.
+    const helper = async (tx: Parameters<Parameters<Repo['transaction']>[0]>[0], title: string) => {
+      const row = await tx.create<ItemRow>('items', { type: 'note', title })
+      return row
+    }
+    // A helper that awaits another helper last answers through inTransaction.
+    const outer = (tx: Parameters<Parameters<Repo['transaction']>[0]>[0]) =>
+      inTransaction(
+        (async () => {
+          const row = await helper(tx, 'One')
+          return row
+        })(),
+      )
+    await repo.transaction(async (tx) => {
+      const one = await outer(tx)
+      await helper(tx, 'Two')
+      await tx.patch('items', one.id, { title: 'One, changed' })
+      await tx.db.synced('items').count()
+      await tx.create('items', { type: 'note', title: 'Three' })
+    })
+    expect((await db.synced('items').toArray()).map((r) => r.title).sort()).toEqual(['One, changed', 'Three', 'Two'])
+    expect(new Set((await db.outbox.toArray()).map((e) => e.batch)).size).toBe(1)
   })
 })

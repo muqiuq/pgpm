@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteComponent, type RouteRecordRaw } from 'vue-router'
 import type { Right } from '@/api/rights'
+import { itemTabs, itemTypeList, itemTypes, typeOfList } from '@/domain/itemTypes'
 import { navigation } from '@/layouts/navigation'
 import { useSession } from '@/stores/session'
 import { decide } from './guard'
@@ -24,24 +25,25 @@ declare module 'vue-router' {
 
 const placeholder = () => import('@/views/PlaceholderView.vue')
 
+const itemList = () => import('@/views/items/ItemsView.vue')
+const itemPage = () => import('@/views/items/ItemView.vue')
+const itemEdit = () => import('@/views/items/ItemEditView.vue')
+
 /** The menu entries that are pages already; the others show their placeholder. */
 const views: Record<string, () => Promise<RouteComponent>> = {
   users: () => import('@/views/admin/UsersView.vue'),
   groups: () => import('@/views/admin/GroupsView.vue'),
   'audit-log': () => import('@/views/admin/AuditLogView.vue'),
-  notes: () => import('@/views/notes/NotesView.vue'),
+  ...Object.fromEntries(itemTypeList.map((t) => [itemTypes[t].list, itemList])),
   trash: () => import('@/views/trash/TrashView.vue'),
+  persons: () => import('@/views/persons/PersonsView.vue'),
+  statuses: () => import('@/views/admin/StatusesView.vue'),
 }
 
 /** Each menu entry's placeholder until its phase replaces the component (docs/05 §3). */
 const pages: Record<string, { phase: number; summary: string }> = {
   maps: { phase: 5, summary: 'Canvas and matrix maps of ideas, projects, milestones and shapes, with templates.' },
-  projects: { phase: 3, summary: 'Projects with templates, statuses, sections, milestones and gates.' },
-  leads: { phase: 3, summary: 'External opportunities from New to Won or Lost, converted into projects.' },
-  ideas: { phase: 3, summary: 'Candidate use cases with assessments, scores and review-board decisions.' },
-  persons: { phase: 3, summary: 'The people directory: Microsoft Entra users and manual externals.' },
   'admin-mcp': { phase: 6, summary: 'MCP tokens of all users and the MCP log.' },
-  statuses: { phase: 3, summary: 'Statuses per item type: open, active or closed, and how long an item may stay.' },
   sections: { phase: 4, summary: 'Sections and fields of ideas and projects: ratings, scores, selects and more.' },
   templates: { phase: 4, summary: 'Project templates: statuses, sections, defaults, milestones and gates.' },
   packages: { phase: 4, summary: 'Import and export configuration packages such as the innovation method.' },
@@ -55,6 +57,8 @@ const menuRoutes: RouteRecordRaw[] = navigation.flatMap((group) =>
     path: item.to,
     name: item.name,
     component: views[item.name] ?? placeholder,
+    // The item lists are one view for every type.
+    ...(typeOfList(item.name) ? { props: { type: typeOfList(item.name) } } : {}),
     meta: {
       title: item.label,
       icon: item.icon,
@@ -68,20 +72,32 @@ const menuRoutes: RouteRecordRaw[] = navigation.flatMap((group) =>
 export const routes: RouteRecordRaw[] = [
   { path: '/', redirect: { name: 'maps' } },
   ...menuRoutes,
-  // A note's editing page (docs/03 §18.2) before its page with the tabs.
+  // Per item type: the description's editing page (docs/03 §18.2) before the page with its tabs (§12.2).
+  ...itemTypeList.flatMap((type): RouteRecordRaw[] => {
+    const info = itemTypes[type]
+    return [
+      {
+        path: `/${info.list}/:id/edit`,
+        name: info.edit,
+        component: itemEdit,
+        props: (route) => ({ type, id: route.params.id }),
+        meta: { title: `Edit ${info.label}`, icon: info.icon },
+      },
+      {
+        path: `/${info.list}/:id/:tab(${itemTabs(type).join('|')})?`,
+        name: info.page,
+        component: itemPage,
+        props: (route) => ({ type, id: route.params.id, tab: route.params.tab || undefined }),
+        meta: { title: info.title, icon: info.icon, crumbs: [{ label: info.plural, to: `/${info.list}` }] },
+      },
+    ]
+  }),
   {
-    path: '/notes/:id/edit',
-    name: 'note-edit',
-    component: () => import('@/views/notes/NoteEditView.vue'),
+    path: '/persons/:id',
+    name: 'person',
+    component: () => import('@/views/persons/PersonView.vue'),
     props: true,
-    meta: { title: 'Edit note', icon: 'pi pi-file-edit' },
-  },
-  {
-    path: '/notes/:id/:tab(overview|history)?',
-    name: 'note',
-    component: () => import('@/views/notes/NoteView.vue'),
-    props: true,
-    meta: { title: 'Note', icon: 'pi pi-file-edit', crumbs: [{ label: 'Notes', to: '/notes' }] },
+    meta: { title: 'Person', icon: 'pi pi-address-book', crumbs: [{ label: 'Persons', to: '/persons' }] },
   },
   {
     path: '/admin/groups/:id',

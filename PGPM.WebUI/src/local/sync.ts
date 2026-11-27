@@ -122,6 +122,11 @@ export interface EngineOptions {
   onReset?: () => void
   onAppVersion?: (version: string) => void
   onEditing?: (message: EditingMessage) => void
+  /**
+   * After every successful run of the leader (its push reached the server): the file pipeline uploads the bytes of
+   * the `files` rows the server has now and prefetches images (docs/03 §10.2). Not awaited; must not throw.
+   */
+  afterRun?: (result: SyncResult) => unknown
   /** Listen to window/document events (online, visibilitychange, the worker's pgpm-sync). Default true. */
   listen?: boolean
   timing?: Partial<Timing>
@@ -610,6 +615,11 @@ export class SyncEngine {
     this.timers.retry = undefined
     if (result.ok) {
       this.errorAttempt = 0
+      try {
+        void Promise.resolve(this.options.afterRun?.(result)).catch(() => undefined)
+      } catch {
+        // The uploads retry with the next run.
+      }
       if (!this.isLive) this.setConnection('online')
       if (this.live && !this.status.liveRefused && (this.reopenLive || (!this.live.live && !this.live.connecting))) {
         this.reopenLive = false

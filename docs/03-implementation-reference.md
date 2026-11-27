@@ -843,6 +843,28 @@ PLM pitfall carried over as a to-do: uploads restart from chunk 0 after an
 interruption; resuming from `received` is a cheap improvement (PLM
 docs/19 §5.3).
 
+**Client as built (phase 3).** `local/files.ts` `FilePipeline` (app instance `appFiles` in `local/boot.ts`, the
+calls in `api/files.ts` over `fetchApi` – raw bodies, outside the generated client). Checks (blocked extensions incl.
+double ones, attachments ≤ 25 MB, images through PNMTD's preparation to ≤ 2 MB), sha256, dimensions and the thumbnail
+(canvas WebP ≤ 32 KB, base64; none where the browser can't encode WebP) happen before **one** repository transaction
+that writes the `files` row and the `blobs` bytes (an ArrayBuffer: older Safari versions lost Blobs, and Dexie's
+`update()` turns an ArrayBuffer into a plain object – blob rows are changed with get + put). The engine's `afterRun`
+hook (after every successful run of the leader) calls `flushPendingUploads()`, then `prefetch()`: pending rows whose
+insert the server accepted (`_local.serverRev` set) go up in 4 MiB chunks; the next chunk number is kept after each
+one, so an interrupted upload **resumes** (the to-do above is done); a chunk past 0 refused with 409 or a wrong
+`received` starts over from chunk 0 once, so does a 409/422 of the commit; the commit's row is applied at once.
+Network errors and 5xx stop the run and keep the state; any other 4xx is kept on the blob as *Failed* (with *Retry*).
+The budget (200 MB) takes the sizes from the `files` rows and the order from the `cachedAt` index (bytes are never
+read for it): uploaded or downloaded bytes go oldest first, on-demand attachments before prefetched images, never
+unuploaded bytes; prefetch (`cover`, `map_image`, `embedded`) only fills the budget by evicting attachments. Markdown
+attachment links are not fetched on sight (the resolver answers the server URL online, null offline); images resolve
+through `fileBlob()` (sha256 checked) to blob: URLs. Removing a cover deletes its file only when it belongs to the
+item and no other local item shows it (a converted project reuses the idea's cover, §12.8); otherwise only
+`imageFileId` is cleared. A removed, never-synced file goes with its bytes; other bytes go once the server confirmed
+the delete. Server behaviour assumed beyond §10.2: chunk n > 0 of an unknown or stale upload answers 409; a checksum
+mismatch on commit 409 or 422; a chunk for a file already available 409 `already_available` (treated as uploaded);
+the error's `detail` is shown to the user.
+
 ---
 
 ## 11. Offline, PWA and synchronization [PLM, adapted]
@@ -1529,6 +1551,80 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
 - `GateDecision.vue`: decision buttons, note, suggested status change (confirm).
 - Saved views: selector in `FilterBar`'s `#end` slot; `useLocalTable` takes a
   view `definition`.
+
+### 12.8 Items, persons, statuses, search (phase 3 client, as built)
+
+- **Local database v2** (`local/tables.ts`): every synced table of the data model is registered now – statuses,
+  assignments, item links, files, sections, field definitions/values, item sections, templates and their children,
+  saved views, assignment roles, milestones, DoD items, maps, map shares/layers/elements – with their indexes and
+  parents (eviction cascade: an item takes its shares, assignments, links, files, field values, sections and
+  milestones, a milestone its DoD items and assignments, a map its shares, layers, elements and files), so phases 4 and
+  5 need no Dexie version. `items` got the index `originItemId` (`revised: 2`, the version-1 schema kept under
+  `before`, so the upgrade adds it). Read-only for clients: statuses, groups, sections, field definitions, templates
+  and their children, assignment roles. `src/test/fakeSyncServer.ts` mirrors all of them (patchable whitelists,
+  visibility through the item or map, duplicate pairs merged, an item's children deleted in its batch), plus the file
+  and statuses endpoints as a `fetch` (`fetchFor(userId)`).
+- **Dexie zones**: the repository's operations answer Dexie promises (`inTransaction()`); a helper taking a
+  `RepoTransaction` that ends by awaiting another async helper answers through `inTransaction` too. Dexie keeps its
+  transaction zone across one native `await` only – otherwise the caller's next write lands outside the transaction
+  and it commits early (`PrematureCommitError`).
+- **Generic item views** (`views/items/`, `domain/itemTypes.ts`): one list (`ItemsView` → `ItemList`, keyed per
+  type), page (`ItemView`, tabs `/<list>/:id/<tab>`: overview · milestones (projects; phase 4 placeholder) · links ·
+  maps (phase 5 placeholder) · history) and editing page (`ItemEditView`, `<type>-edit`) for notes, ideas, leads and
+  projects; routes `notes|ideas|leads|projects`, `note|idea|lead|project`. The conflict dialog's *Edit* of a
+  description opens the editing page of the item's type. `ItemOverview` shows the description (*Edit*), a
+  `#sections` slot for phase 4, attachments (`AttachmentsPanel`), and beside it the fixed fields inline (title, status
+  `Select` with `StatusBadge`, colour – `ColorPicker`, 12 presets + hex –, pinned, the lead's fields with value +
+  currency, probability, dates, next action highlighted when due, the project's dates, template and origin), the cover
+  (`CoverImage`), the persons (`AssignmentsPanel`) and the facts. `InlineField` got `type: 'date'` and a `format` prop.
+  Validation mirrors the server (title 1–300, currency `^[A-Z]{3}$`, probability 0–100, end ≥ start).
+- **Lists** (`views/items/ItemList.vue`, `itemList.ts`) over `useLocalTable` with `multiSort`: the sort is a
+  comma-separated string (`status,-updated_at`) in the ref and the URL; PrimeVue adds a column with Ctrl/⌘-click, not
+  Shift as docs/01 §4.3 says (its meta key is fixed). Filters use the saved-view vocabulary of §17 with ids
+  (`statusIds`, `categories`, `templateIds`, `groupIds`, `assignedToMe` via `session.personId`, `overdue` = longer in
+  the status than `max_days` or a lead's past next-action date, never in a closed status, `hasLink`; `fields` kept and
+  ignored until phase 4) plus `ownerIds`, `personIds`, `colors`, created/modified day ranges, `pinned`, `mine`,
+  `hideClosed`; quick filters on the bar, the rest in a *Filters* popover. Columns use the `COLUMNS` ids of
+  `tools/check-packages.py`; unknown ids (`field:…`) are dropped; key and title always show. `list:<type>` keeps
+  `{viewId, search, filters, sort[], columns, pageSize}`; `?view=<id>` applies a view. Saved views
+  (`local/savedViews.ts`, `SavedViewMenu` in the bar's `#end`): own and shared views (shared first), *All …*, *Save as
+  new view…* (shared needs Configuration: Manage), *Update*, *Rename…*, *Delete…* for the owner (a shared view: the
+  owner with Configuration: Manage); a changed state shows *(modified)*. Bulk actions on the selected rows (assign a
+  person with a role, status, colour, delete) run in one outbox batch each; rows without *edit* (*manage* to delete)
+  are skipped and counted in the toast. *Add to map* comes with phase 5.
+- **Create dialog** (`ItemCreateDialog`): title, the type's default status (changeable), *Share with* preselected with
+  the creator's groups at *edit*; projects are blank with a `#template` slot for phase 4. Item and shares in one batch
+  (`local/items.ts` `createItem`), works offline.
+- **Assignments** (`AssignmentsPanel`, `PersonPicker`, `RoleInput`): type-ahead over the synced persons (inactive ones
+  not offered, still shown where assigned), once per item (assigning again changes the role), role free text with the
+  `assignment_roles` suggestions (docs/01 §4.1's defaults until phase 4 syncs some), order by fractional
+  `sortOrder`. *Assigned to me* uses `/auth/me`'s `personId`.
+- **Links tab** (`ItemLinks`): outgoing and incoming links by relation (*contributes to* / *contributed to by*, *is
+  learning of* / *has learning*, *depends on* / *is needed by*, *related to*), the contributing items by their status's
+  order (the funnel); an item not on the device shows as *Restricted*. *Add link…* (relation, then `ItemPicker`, a
+  local search) needs *edit* on the link's source – for an inverse relation that is the picked item. Duplicates are not
+  created (the server would merge them anyway). The seeded *Learnings* view works through `hasLink`.
+- **Conversion** idea/lead → project (`convertToProject`, `ConvertDialog`), on the device in one batch, offline too:
+  the project gets title (editable), description, colour, the cover image **by reference** (the same file id; the
+  client can't copy bytes it may not have), the source's shares (inserted with the project, as the create dialog does),
+  assignments and outgoing links, `originItemId` = the source, and a `related` link back to the source. Decision on
+  attachments: they **stay on the source** (no `files` rows are copied – a row can't point at another file's bytes),
+  reachable through that link. The source moves to *Selected* (ideas) / *Won* (leads) when such a status exists. The
+  client never patches `convertedToItemId` (server-owned): the server sets the origin's when it accepts a project with
+  `originItemId`; until then the source counts as converted through the local project naming it (index
+  `originItemId`). Phase 4 adds the template, sections and field values.
+- **Persons, statuses, search** (`views/persons/`, `views/admin/StatusesView.vue`, `components/GlobalSearch.vue`,
+  `local/search.ts`): the persons list (`list:person`) searches name, e-mail, job title, department and company, filters
+  source, members/guests and department and shows active persons unless *With inactive*; *New person* (Persons: Edit)
+  creates a manual person offline. The person page shows every field, the linked user and *All assignments* (item or
+  milestone with the role, *Restricted* for items not on the device); *Edit* changes a manual person (not a user's name
+  and e-mail), a Microsoft person's notes only; manual persons can be deactivated. Statuses: one list per type
+  (`?type=`) over the synced rows; *New*, edit (colour presets + hex, icon `pi-…` with preview, category, default, max.
+  days), up/down (`PUT …/order` with every id of the type), *Set as default*, archive/unarchive (not the default) through
+  `api/config.ts` – `fetchJson` until openapi.json has the endpoints –, each followed by `engine.syncNow()`, disabled
+  offline (*Available online only*). Global search: local items and active persons, every word must occur, without
+  diacritics; key, then title prefix, title, description; grouped *Items* / *Persons* (8 each) in an ARIA
+  combobox/listbox with ↑/↓/Enter/Esc.
 
 ## 13. Maps [PNMTD canvas pieces + NEW editing]
 

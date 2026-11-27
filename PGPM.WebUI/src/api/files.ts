@@ -1,0 +1,51 @@
+import type { Row } from '@/local/outbox'
+import { fetchApi, fetchJson } from './client'
+
+/**
+ * The file transfer of docs/03 §10.2 (PLM's chunked protocol, plaintext): the metadata (`files` rows) syncs like any
+ * row; the bytes go through these calls. Raw bodies, so they go through `fetchApi` rather than the generated client.
+ *
+ * | Call | Body | Answer |
+ * |---|---|---|
+ * | `PUT /api/v1/files/{id}/chunks/{n}` | raw bytes ≤ 4 MiB; chunk 0 starts over | `{received}` |
+ * | `POST /api/v1/files/{id}/commit` | `{sha256, size}` | the `files` row (status `available`) |
+ * | `GET /api/v1/files/{id}/{name}` | – | the bytes (Range, ETag = sha256) |
+ */
+export interface FileTransport {
+  putChunk(id: string, index: number, bytes: ArrayBuffer, signal?: AbortSignal): Promise<{ received: number }>
+  commit(id: string, body: { sha256: string; size: number }, signal?: AbortSignal): Promise<Row>
+  download(id: string, name: string, signal?: AbortSignal): Promise<{ bytes: ArrayBuffer; type: string }>
+}
+
+/** A file's URL in Markdown and for the browser: `/api/v1/files/{id}/{name}` (docs/03 §18.3). */
+export function fileUrl(id: string, name: string): string {
+  return `/api/v1/files/${id}/${encodeURIComponent(name || 'file')}`
+}
+
+/** The file id of a URL of PGPM's file store (relative or on this origin); null for any other URL. */
+export function fileIdOf(url: string): string | null {
+  let path = url
+  try {
+    const base = typeof location !== 'undefined' ? location.origin : 'http://localhost'
+    const parsed = new URL(url, base)
+    if (parsed.origin !== base) return null
+    path = parsed.pathname
+  } catch {
+    return null
+  }
+  const match = /^\/api\/v1\/files\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i.exec(path)
+  return match ? match[1]!.toLowerCase() : null
+}
+
+export const filesApi: FileTransport = {
+  putChunk: (id, index, bytes, signal) =>
+    fetchJson(`/api/v1/files/${id}/chunks/${index}`, { method: 'PUT', body: bytes, signal }),
+  commit: (id, body, signal) => fetchJson(`/api/v1/files/${id}/commit`, { method: 'POST', body, signal }),
+  async download(id, name, signal) {
+    const response = await fetchApi(fileUrl(id, name), { signal })
+    return {
+      bytes: await response.arrayBuffer(),
+      type: response.headers.get('Content-Type') ?? 'application/octet-stream',
+    }
+  },
+}

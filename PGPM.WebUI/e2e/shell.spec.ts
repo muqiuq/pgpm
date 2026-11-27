@@ -52,8 +52,9 @@ test('the shell shows the PGPM menu, folded administration and the placeholders'
   await expect(page.getByRole('heading', { level: 1, name: 'Project Templates' })).toBeVisible()
   await expect(page.getByText('Coming in phase 4')).toBeVisible()
 
-  // The app bar: search placeholder, sync indicator, theme toggle, the drawer's footer with the server's version.
-  await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible()
+  // The app bar: the global search (a combobox, phase 3), sync indicator, theme toggle, the drawer's footer with the
+  // server's version.
+  await expect(page.getByRole('combobox', { name: 'Search' })).toBeVisible()
   await expect(page.getByTestId('sync-indicator')).toContainText('Live')
   await page.getByRole('button', { name: 'Dark theme' }).click()
   await expect(page.locator('html')).toHaveClass(/pgpm-dark/)

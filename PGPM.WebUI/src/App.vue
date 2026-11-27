@@ -9,7 +9,7 @@ import DailyTotpDialog from '@/components/auth/DailyTotpDialog.vue'
 import { provideMarkdownServices } from '@/components/markdown/services'
 import AppLayout from '@/layouts/AppLayout.vue'
 import AuthLayout from '@/layouts/AuthLayout.vue'
-import { onSyncNotice } from '@/local/boot'
+import { appFiles, onSyncNotice } from '@/local/boot'
 import { databaseBlocked } from '@/local/db'
 import { appDrafts } from '@/local/drafts'
 import { applyUpdate, waitingWorker } from '@/pwa/register'
@@ -20,8 +20,9 @@ usePreferences()
 const route = useRoute()
 const toast = useToast()
 
-// The editor's drafts in IndexedDB with the localStorage mirror (docs/03 §18.5); files come with phase 3.
-provideMarkdownServices({ drafts: appDrafts })
+// The editor's drafts in IndexedDB with the localStorage mirror (docs/03 §18.5); file URLs in texts from the local
+// blob store (§18.4). The FileSink is the editing page's: it knows the item the files go to.
+provideMarkdownServices({ drafts: appDrafts, resolveFileUrl: appFiles.resolveFileUrl })
 
 // The sync's notices: conflicts once per run, refused changes, removed access (docs/03 §11.7, §11.8).
 const off = onSyncNotice((notice) =>

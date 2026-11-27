@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { effectScope, ref, type EffectScope } from 'vue'
+import { computed, effectScope, ref, type EffectScope } from 'vue'
 import type { PgpmDb } from '@/local/db'
 import { Repo } from '@/local/repo'
 import type { ItemRow } from '@/local/rows'
@@ -125,5 +125,103 @@ describe('useLocalTable (docs/03 §12.3): synced rows, searched, filtered, sorte
 
     const next = table()
     await until(() => next.sort.value === '-title' && next.search.value === 'b', 'the restored state')
+  })
+
+  /** A list with several sort columns, shown columns, a saved view and a filter. */
+  function viewTable() {
+    const scope = effectScope()
+    scopes.push(scope)
+    const pinned = ref(false)
+    const columns = ref(['key', 'title'])
+    const viewId = ref<string | null>(null)
+    const t = scope.run(() =>
+      useLocalTable<Note>({
+        rows: () => db.synced('items').toArray() as unknown as Promise<Note[]>,
+        text: (n) => n.title,
+        filters: computed(() => ({ pinned: pinned.value || undefined })),
+        match: (n, f) => !n.deleted && (!f.pinned || n.pinned),
+        defaultSort: '-updatedAt',
+        multiSort: true,
+        pageSize: 50,
+        settingsKey: 'list:idea',
+        remember: () => ({ pinned: pinned.value }),
+        restore: (f) => (pinned.value = f.pinned === true),
+        columns,
+        viewId,
+        db: () => db,
+        repo,
+      }),
+    )!
+    return { t, pinned, columns, viewId }
+  }
+
+  it('sorts by several columns, as PrimeVue’s multiSortMeta says', async () => {
+    await db
+      .synced('items')
+      .bulkPut([
+        note('n5', 'Budget 2027', { pinned: true, updatedAt: '2026-11-01T00:00:00Z' }),
+        note('n6', 'Archive', { pinned: true, updatedAt: '2026-11-02T00:00:00Z' }),
+      ])
+    const { t } = viewTable()
+    await until(() => t.loaded.value, 'the rows')
+    t.onSort({
+      multiSortMeta: [
+        { field: 'pinned', order: 1 },
+        { field: 'title', order: -1 },
+      ],
+    })
+    expect(t.sort.value).toBe('pinned,-title')
+    // Pinned first (true before false), then the title descending, ties by id.
+    expect(t.items.value.map((n) => n.id)).toEqual(['n5', 'n3', 'n6', 'n1', 'n2'])
+    expect(t.tableProps.value).toMatchObject({
+      sortMode: 'multiple',
+      removableSort: true,
+      multiSortMeta: [
+        { field: 'pinned', order: 1 },
+        { field: 'title', order: -1 },
+      ],
+    })
+    t.onSort({ multiSortMeta: [] })
+    expect(t.sort.value).toBe('-updatedAt')
+  })
+
+  it('applies a saved view’s definition, answers the current one, and remembers view and columns', async () => {
+    const { t, pinned, columns, viewId } = viewTable()
+    await until(() => t.restored.value && t.loaded.value, 'the rows')
+    t.applyState({ search: 'zurich', filters: { pinned: false }, sort: ['title', '-updatedAt'], columns: ['title'] })
+    viewId.value = 'v1'
+    expect(t.search.value).toBe('zurich')
+    expect(t.sort.value).toBe('title,-updatedAt')
+    expect(columns.value).toEqual(['title'])
+    expect(t.currentState()).toEqual({
+      search: 'zurich',
+      filters: { pinned: false },
+      sort: ['title', '-updatedAt'],
+      columns: ['title'],
+    })
+    pinned.value = true
+    expect(t.currentState().filters).toEqual({ pinned: true })
+    await until(
+      async () =>
+        ((await db.synced('user_settings').where('key').equals('list:idea').first())?.value as { viewId?: string })
+          ?.viewId === 'v1',
+      'the remembered view',
+      4000,
+    )
+    const row = await db.synced('user_settings').where('key').equals('list:idea').first()
+    expect(row!.value).toMatchObject({
+      viewId: 'v1',
+      search: 'zurich',
+      sort: ['title', '-updatedAt'],
+      columns: ['title'],
+      filters: { pinned: true },
+    })
+
+    const next = viewTable()
+    await until(() => next.t.restored.value, 'the restored state')
+    expect(next.viewId.value).toBe('v1')
+    expect(next.columns.value).toEqual(['title'])
+    expect(next.pinned.value).toBe(true)
+    expect(next.t.sort.value).toBe('title,-updatedAt')
   })
 })
