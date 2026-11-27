@@ -30,6 +30,23 @@ async function audit(page: Page, what: string) {
   expect(found, `axe on ${what}`).toEqual([])
 }
 
+/**
+ * An inline field shows its whole value when there is room: a fresh item's values are short, so none may be cut – the
+ * button's negative margin once took 4 px from every value ("No" showed as "Nc").
+ */
+async function valuesShownWhole(page: Page, what: string) {
+  const cut = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('.inline-field .shown .text')]
+      .filter((text) => {
+        const range = document.createRange()
+        range.selectNodeContents(text)
+        return range.getBoundingClientRect().width > text.getBoundingClientRect().width + 0.5
+      })
+      .map((text) => text.textContent?.trim()),
+  )
+  expect(cut, `values cut off on ${what}`).toEqual([])
+}
+
 let team: Team
 
 test.beforeEach(async ({ baseURL }) => {
@@ -108,6 +125,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       const title = `Accessible idea ${Date.now().toString(36)}`
       await newIdea(page, title)
       await audit(page, 'an idea’s Overview')
+      await valuesShownWhole(page, 'an idea’s Overview')
       const tabs = page.getByRole('navigation', { name: 'Idea', exact: true })
       for (const tab of ['Links', 'Maps', 'History']) {
         await tabs.getByRole('link', { name: tab, exact: true }).click()
@@ -183,6 +201,7 @@ test.describe('phone (390 × 844)', () => {
     const title = `Phone idea ${Date.now().toString(36)}`
     await newIdea(page, title)
     await audit(page, 'an idea on a phone')
+    await valuesShownWhole(page, 'an idea on a phone')
     expect(await sideways(), 'an idea scrolls sideways').toBe(false)
 
     await newCanvas(page, `Phone map ${Date.now().toString(36)}`)

@@ -301,7 +301,9 @@ function onKey(event: KeyboardEvent) {
   display: inline-flex;
   align-items: center;
   gap: var(--pgpm-space-2);
-  max-width: 100%;
+  /* The margin pulls the hover background out to the left; the parent sizes to the margin box, so 100 % alone would
+     take that space from the text, which is cut by a few pixels ("No" showed as "Nc"). */
+  max-width: calc(100% + var(--pgpm-space-1));
   min-height: 28px;
   padding: 0 var(--pgpm-space-1);
   margin-left: calc(-1 * var(--pgpm-space-1));
