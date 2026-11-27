@@ -1,0 +1,75 @@
+# PGPM's production stack (docs/03 §2.4, as PNMTD's). Local changes go into docker-compose.override.yml (gitignored),
+# so `git pull` can replace this file.
+#
+#   cp .env.example .env    # then set PGPM_DB_PASSWORD, Auth__InitialAdmin__Password and PublicUrl
+#   docker compose up -d
+#
+# The repository's start.sh is the debugging setup; this file only ever runs a published image. TLS ends at a reverse
+# proxy in front of it, which must pass WebSocket upgrades (Upgrade/Connection headers) and allow idle connections of
+# 60 s or more (the live sync channel, docs/03 §3.1).
+name: pgpm
+
+services:
+  db:
+    image: docker.io/library/postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pgpm
+      POSTGRES_DB: pgpm
+      POSTGRES_PASSWORD: "${PGPM_DB_PASSWORD:?PGPM_DB_PASSWORD is not set in .env}"
+    volumes:
+      # A new PostgreSQL major is a backup, a new image here, a restore — never just a new tag.
+      - pgpm-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -h 127.0.0.1 -U pgpm -d pgpm"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  pgpm:
+    image: ${PGPM_IMAGE:-uisach/pgpm}:${PGPM_IMAGE_TAG:-v0.1.0}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # For the reverse proxy on this host; PGPM_BIND_ADDRESS=0.0.0.0 for one elsewhere (then set Proxy in .env).
+      - "${PGPM_BIND_ADDRESS:-127.0.0.1}:${PGPM_PORT:-7330}:8080"
+    # Every setting in .env reaches the app: PublicUrl, Proxy, TZ, Auth__*, Entra__*, …
+    env_file:
+      - .env
+    environment:
+      Database__Host: db
+      Database__Name: pgpm
+      Database__Username: pgpm
+      Database__Password: ${PGPM_DB_PASSWORD}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - pgpm-keys:/var/lib/pgpm/keys               # sessions and 2FA secrets (Data Protection): back it up
+      # Attachments (docs/03 §10): a folder on this host, not a volume, owned by the app's user (uid 1654, 0750):
+      #   mkdir -p files && sudo chown 1654:1654 files && chmod 0750 files
+      # PGPM_FILES_DIR in .env moves it. Back it up with the database.
+      - ${PGPM_FILES_DIR:-./files}:/var/lib/pgpm/files
+    healthcheck:                                   # here as well: Podman's OCI images drop HEALTHCHECK
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s                            # a new release applies its migrations first
+      retries: 3
+    stop_grace_period: 40s                         # .NET's shutdown timeout is 30 s; Docker's default grace 10 s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  pgpm-pgdata:
+  pgpm-keys:

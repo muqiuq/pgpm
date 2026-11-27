@@ -3,3 +3,41 @@ extdocs/
 
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# .NET build output (from PNMTD's Visual Studio template, trimmed)
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Ll]og/
+[Tt]est[Rr]esult*/
+artifacts/
+.vs/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+*.binlog
+*.log
+*.tmp
+*.pdb
+*.swp
+**/packages.lock.json.bak
+__pycache__/
+*.pyc
+
+# local scratch (start.sh, run-tests.sh, tools/*.sh)
+.tmpcheck/
+dev.env
+.env
+!deploy/.env.example
+
+# The web UI, built into the image only (Dockerfile)
+/PGPM/wwwroot/
+
+# The uploaded files of ./start.sh
+.pgpm-files/

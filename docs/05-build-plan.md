@@ -39,7 +39,8 @@ Nothing else blocks phase 0.
 - From PNMTD: `global.json`, `Directory.Build.props`, `Directory.Packages.props`
   (trimmed to the packages of doc 03 §2.1 + `EFCore.NamingConventions`,
   `Microsoft.AspNetCore.Authentication.OpenIdConnect`), `dotnet-tools.json`,
-  `.editorconfig`, `.gitignore`, `.dockerignore`.
+  `.gitignore`, `.dockerignore`; `.editorconfig` after GGITSV/PLM (PNMTD has
+  none, doc 03 §15 #19).
 - Backend skeleton: `Program.cs` (CLI switch, feature registration, middleware
   order of doc 03 §3.1 incl. security headers/CSP and `UseWebSockets`),
   `PgpmDbContext` (snake_case, UTC converter), `DatabaseMigrationService`,

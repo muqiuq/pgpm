@@ -1,0 +1,287 @@
+/*
+ * Base styles (PNMTD's, docs/03 §12.1): 14 px text, a 4/8 px spacing scale, the status colours, the note colours
+ * (the item colour palette), light and dark. PrimeVue's tokens are CSS variables (--p-…); everything here builds on them.
+ */
+
+:root {
+  font-size: 14px;
+  --pgpm-font: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --pgpm-mono: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --pgpm-space-1: 4px;
+  --pgpm-space-2: 8px;
+  --pgpm-space-3: 12px;
+  --pgpm-space-4: 16px;
+  --pgpm-space-6: 24px;
+
+  --pgpm-header-height: 48px;
+  --pgpm-page-header-height: 40px;
+  --pgpm-drawer-width: 232px;
+  --pgpm-rail-width: 56px;
+
+  /* Light: high contrast (preset.ts). Panels stand off a slate 100 page by a slate 300 border; muted
+     text is slate 700 (10:1 on white), status text 700 (5:1 and more). */
+  --pgpm-bg: var(--p-surface-100);
+  --pgpm-panel: var(--p-surface-0);
+  --pgpm-border: var(--p-surface-300);
+  --pgpm-text: var(--p-surface-900);
+  --pgpm-muted: var(--p-surface-700);
+
+  /* Status colours, legible on both themes. */
+  --pgpm-ok: var(--p-green-700);
+  --pgpm-ok-soft: var(--p-green-100);
+  --pgpm-fail: var(--p-red-700);
+  --pgpm-fail-soft: var(--p-red-100);
+  --pgpm-warn: var(--p-amber-700);
+  --pgpm-warn-soft: var(--p-amber-100);
+  --pgpm-none: var(--p-surface-500);
+  --pgpm-none-soft: var(--p-surface-100);
+
+  /* Note colours: an item's colour (docs/02-data-model.md §1) is stored by name and shaded per theme. */
+  --pgpm-note-yellow: var(--p-yellow-100);
+  --pgpm-note-green: var(--p-green-100);
+  --pgpm-note-blue: var(--p-sky-100);
+  --pgpm-note-pink: var(--p-pink-100);
+  --pgpm-note-purple: var(--p-purple-100);
+  --pgpm-note-grey: var(--p-surface-100);
+
+  color-scheme: light;
+}
+
+:root.pgpm-dark {
+  /* Dark: a little more contrast than Aura's (preset.ts). Borders zinc 600, muted text zinc 300. */
+  --pgpm-bg: var(--p-surface-950);
+  --pgpm-panel: var(--p-surface-900);
+  --pgpm-border: var(--p-surface-600);
+  --pgpm-text: var(--p-surface-0);
+  --pgpm-muted: var(--p-surface-300);
+
+  --pgpm-ok: var(--p-green-400);
+  --pgpm-ok-soft: color-mix(in srgb, var(--p-green-500) 18%, transparent);
+  --pgpm-fail: var(--p-red-400);
+  --pgpm-fail-soft: color-mix(in srgb, var(--p-red-500) 20%, transparent);
+  --pgpm-warn: var(--p-amber-400);
+  --pgpm-warn-soft: color-mix(in srgb, var(--p-amber-500) 20%, transparent);
+  --pgpm-none: var(--p-surface-500);
+  --pgpm-none-soft: var(--p-surface-800);
+
+  --pgpm-note-yellow: color-mix(in srgb, var(--p-yellow-500) 24%, var(--p-surface-900));
+  --pgpm-note-green: color-mix(in srgb, var(--p-green-500) 24%, var(--p-surface-900));
+  --pgpm-note-blue: color-mix(in srgb, var(--p-sky-500) 24%, var(--p-surface-900));
+  --pgpm-note-pink: color-mix(in srgb, var(--p-pink-500) 24%, var(--p-surface-900));
+  --pgpm-note-purple: color-mix(in srgb, var(--p-purple-500) 24%, var(--p-surface-900));
+  --pgpm-note-grey: var(--p-surface-800);
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--pgpm-font);
+  font-size: 1rem;
+  line-height: 1.43;
+  color: var(--pgpm-text);
+  background: var(--pgpm-bg);
+  font-feature-settings: 'cv11', 'tnum';
+}
+
+/* Grayscale smoothing only for light text on dark: on light, it thins dark text on macOS. */
+:root.pgpm-dark body {
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  min-height: 100%;
+}
+
+a {
+  color: var(--p-primary-color);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: 1.2857rem; /* 18 px */
+}
+
+h2 {
+  font-size: 1.1429rem; /* 16 px */
+}
+
+h3 {
+  font-size: 1rem;
+}
+
+code,
+.mono {
+  font-family: var(--pgpm-mono);
+  font-size: 0.9286rem; /* 13 px */
+}
+
+.muted {
+  color: var(--pgpm-muted);
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* One line, cut with an ellipsis. */
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* A panel: the plain surface pages are built of (instead of heavy cards). */
+.panel {
+  background: var(--pgpm-panel);
+  border: 1px solid var(--pgpm-border);
+  border-radius: var(--p-border-radius-md);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--pgpm-space-2);
+  min-height: 40px;
+  padding: 0 var(--pgpm-space-3);
+  border-bottom: 1px solid var(--pgpm-border);
+  font-weight: 600;
+}
+
+.panel-body {
+  padding: var(--pgpm-space-3);
+}
+
+/* Label/value pairs. */
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--pgpm-space-2) var(--pgpm-space-4);
+  margin: 0;
+  align-items: center;
+}
+
+.facts > dt {
+  color: var(--pgpm-muted);
+}
+
+.facts > dd {
+  margin: 0;
+  min-width: 0;
+}
+
+/* Forms: label above the field, 12 px between rows. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pgpm-space-3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pgpm-space-1);
+}
+
+.field > label {
+  font-weight: 500;
+}
+
+.field-error {
+  color: var(--p-red-700);
+  font-size: 0.9286rem;
+}
+
+:root.pgpm-dark .field-error {
+  color: var(--p-red-500);
+}
+
+.field-hint {
+  color: var(--pgpm-muted);
+  font-size: 0.9286rem;
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--pgpm-space-2);
+  align-items: center;
+}
+
+/* Page content below its header line. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pgpm-space-3);
+  padding: var(--pgpm-space-3) var(--pgpm-space-4) var(--pgpm-space-6);
+}
+
+/* Two columns from 1200 px, one below (docs/03 §12.1). */
+.two-columns {
+  display: grid;
+  gap: var(--pgpm-space-3);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (min-width: 1200px) {
+  .two-columns {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+}
+
+/* Two columns of fields in a form, one on a phone. */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--pgpm-space-3) var(--pgpm-space-4);
+}
+
+.form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.row-muted {
+  opacity: 0.6;
+}
+
+@media (max-width: 599px) {
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page {
+    padding: var(--pgpm-space-2) var(--pgpm-space-2) var(--pgpm-space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

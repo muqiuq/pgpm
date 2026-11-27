@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="PGPM/PGPM.csproj" />
+  <Project Path="PGPM.Lib/PGPM.Lib.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="PGPM.Tests/PGPM.Tests.csproj" />
+    <Project Path="PGPM.Contract.Tests/PGPM.Contract.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,36 @@
+# PGPM code style. PNMTD has no .editorconfig; this follows GGITSV's and PLM's (same conventions as
+# PNMTD's newer code). Rules are suggestions for the IDE: the build enforces warnings
+# (TreatWarningsAsErrors), not style.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml,props,targets,csproj,slnx,xml,vue,ts,js,mjs,css,html,webmanifest}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# Namespaces file-scoped; usings outside, System first.
+csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_using_directive_placement = outside_namespace:suggestion
+dotnet_sort_system_directives_first = true
+
+# Braces always; var where the type is apparent.
+csharp_prefer_braces = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+
+# Expression bodies only where they stay readable.
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+
+# Written by `dotnet ef migrations add`, reviewed but not hand-edited.
+[PGPM/Data/Migrations/*.cs]
+generated_code = true

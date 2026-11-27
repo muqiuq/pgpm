@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Against a running container only (docs/05 §5): HttpClient, no reference to the app, so the same tests verify any
+       build or deployment. PGPM_CONTRACT_URL names it (tools/contract.sh sets it); without it the tests are skipped.
+       Later phases add Npgsql for what the API stored (login, sync round trip). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <EnableMSTestRunner>true</EnableMSTestRunner>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MSTest.TestFramework" />
+    <PackageReference Include="MSTest.TestAdapter" />
+    <PackageReference Include="MSTest.Analyzers" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

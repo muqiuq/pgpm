@@ -1,0 +1,79 @@
+# Build and test on .NET 10 and the web UI in containers (docs/05 §5), as PNMTD's dotnet.yml.
+name: Build and test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # The integration tests' PostgreSQL, where tools/test-db.sh puts it locally.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: test
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        global-json-file: global.json
+    - name: Restore (locked)
+      run: dotnet restore PGPM.slnx --locked-mode
+    - name: Build
+      run: dotnet build PGPM.slnx --no-restore
+    - name: OpenAPI document up to date
+      # The Debug build writes it (docs/03 §3.3); the UI's types are generated from the committed copy.
+      run: |
+        if [ -n "$(git status --porcelain -- PGPM.WebUI/src/api/openapi.json)" ]; then
+          git diff -- PGPM.WebUI/src/api/openapi.json | head -50
+          echo "PGPM.WebUI/src/api/openapi.json differs from the API: build and commit it." >&2
+          exit 1
+        fi
+    - name: No model change without its migration
+      run: dotnet tool restore && dotnet ef migrations has-pending-model-changes --project PGPM/PGPM.csproj --no-build
+    # tools/dotnet-test.sh: dotnet test, and each failed test as an annotation on the run's page.
+    - name: Test (time zone east of UTC)
+      run: PGPM_TEST_TZ=Europe/Zurich TZ=Europe/Zurich tools/dotnet-test.sh --project PGPM.Tests/PGPM.Tests.csproj --no-build
+    - name: Test (time zone west of UTC)
+      run: PGPM_TEST_TZ=America/New_York TZ=America/New_York tools/dotnet-test.sh --project PGPM.Tests/PGPM.Tests.csproj --no-build
+
+  # The web UI, in node containers as everywhere: the package check, the registry's signatures, types against
+  # openapi.json, vue-tsc, ESLint, Prettier, Vitest, the build; and the shell scripts.
+  web:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Web UI and scripts
+      run: ENGINE=docker ./run-tests.sh --only web,shell
+
+  # The image for real: the contract tests and the browser tests (Playwright, incl. the offline shell), in Docker as
+  # locally in Podman.
+  stack:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        global-json-file: global.json
+    - name: Contract and browser tests against the image
+      run: ENGINE=docker ./run-tests.sh --only contract,e2e
+    - name: Keep the screenshots
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: playwright
+        path: PGPM.WebUI/test-results/
+        if-no-files-found: ignore

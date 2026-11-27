@@ -1,0 +1,16 @@
+<Project>
+  <!-- Every project in the solution (docs/03-implementation-reference.md §2.1). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- The release: /api/v1/info and the UI show it. -->
+    <Version>0.1.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <!-- New code from day one: no warning survives a build (PNMTD's goal, without its legacy NoWarn list). -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Lock files: the image restores in locked mode, so a lock file out of step fails the build. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+</Project>

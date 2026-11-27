@@ -1,0 +1,31 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- .NET 10 (LTS): the Microsoft packages stay on 10.0.x, not 11 (docs/03 §2.1). -->
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
+    <!-- Writes the v1 OpenAPI document at build time (PGPM.WebUI/src/api/openapi.json, docs/03 §3.3). -->
+    <PackageVersion Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" />
+    <!-- Pinned: Npgsql and EFCore.NamingConventions ask for older 10.0.x, the Design package (build only) brings 10.0.15. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.15" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- snake_case tables and columns (docs/03 §15 #1; PNMTD quotes PascalCase columns instead). -->
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <!-- Microsoft SSO (docs/03 §5, from GGITSV): referenced from phase 1. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.15" />
+    <!-- The MCP server (docs/03 §7): referenced from phase 6. -->
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
+    <!-- Markdown → text/HTML on the server (MCP, search, export): referenced from phase 3. -->
+    <PackageVersion Include="Markdig" Version="1.6.0" />
+    <!-- Tests: MSTest 4 on Microsoft.Testing.Platform (global.json), as in PNMTD. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.11.0" />
+    <PackageVersion Include="MSTest.TestFramework" Version="4.5.2" />
+    <PackageVersion Include="MSTest.TestAdapter" Version="4.5.2" />
+    <PackageVersion Include="MSTest.Analyzers" Version="4.5.2" />
+  </ItemGroup>
+</Project>

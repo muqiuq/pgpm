@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# PGPM.Contract.Tests against the real image (docs/05 §5): ./start.sh with names, volumes and a port of their own
+# (http://localhost:7332/), the tests with PGPM_CONTRACT_URL pointing at it, the stack removed again.
+#
+#   tools/contract.sh            all of it
+#   KEEP=1 tools/contract.sh     leave the stack running afterwards
+#   PGPM_CONTRACT_URL=https://pgpm.example.com dotnet test --project PGPM.Contract.Tests/PGPM.Contract.Tests.csproj
+#                                the same tests against a deployment, without this script
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+ENGINE="${ENGINE:-podman}"
+KEEP="${KEEP:-0}"
+CONTRACT_NAME="${CONTRACT_NAME:-pgpm-contract}"
+export ENGINE NAME="$CONTRACT_NAME" DB_NAME="${CONTRACT_NAME}-db" NETWORK="$CONTRACT_NAME" PG_VOLUME="${CONTRACT_NAME}-pgdata" \
+  KEYS_VOLUME="${CONTRACT_NAME}-keys" PORT="${CONTRACT_PORT:-7332}" WEB="" FILES_DIR="$PWD/.tmpcheck/${CONTRACT_NAME}-files"
+
+mkdir -p .tmpcheck
+export ENV_FILE="$PWD/.tmpcheck/${CONTRACT_NAME}.env"
+
+remove_stack() {
+  ./stop.sh >/dev/null 2>&1 || true
+  "$ENGINE" volume rm -f "$PG_VOLUME" "$KEYS_VOLUME" >/dev/null 2>&1 || true
+  if [[ -d "$FILES_DIR" ]] && ! rm -rf "$FILES_DIR" 2>/dev/null; then
+    "$ENGINE" run --rm --user 0 --entrypoint sh -v "$FILES_DIR:/files" "${IMAGE:-pgpm:dev}" -c 'find /files -mindepth 1 -delete' >/dev/null 2>&1 || true
+    rm -rf "$FILES_DIR"
+  fi
+  rm -f "$ENV_FILE"
+}
+remove_stack
+trap '[[ "$KEEP" == "1" ]] || remove_stack' EXIT
+
+(umask 077 && printf '%s\n' '# tools/contract.sh' >"$ENV_FILE")
+log="$(mktemp "$PWD/.tmpcheck/contract.XXXXXX")"
+echo "Starting ${NAME} on port ${PORT}…"
+./start.sh >"$log" 2>&1 || { cat "$log" >&2; exit 1; }
+rm -f "$log"
+
+PGPM_CONTRACT_URL="http://localhost:${PORT}" dotnet test --project PGPM.Contract.Tests/PGPM.Contract.Tests.csproj

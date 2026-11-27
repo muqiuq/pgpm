@@ -60,7 +60,7 @@ Paths below are relative to the respective project root.
 | Item | Value (as in PNMTD) |
 |---|---|
 | SDK | .NET 10 (`global.json`: `10.0.100`, `rollForward: latestFeature`, `"test": {"runner": "Microsoft.Testing.Platform"}`) |
-| Build props | `net10.0`, `LangVersion latest`, `Nullable enable`, `ImplicitUsings`, `Deterministic`, `RestorePackagesWithLockFile=true` (Docker restores `--locked-mode`) |
+| Build props | `net10.0`, `LangVersion latest`, `Nullable enable`, `ImplicitUsings`, `Deterministic`, `RestorePackagesWithLockFile=true` (Docker restores `--locked-mode`), **`TreatWarningsAsErrors=true`** from day one (PNMTD still carries a `NoWarn` list for its pre-1.0 code) |
 | Packages | central (`ManagePackageVersionsCentrally`, `CentralPackageTransitivePinningEnabled`), Microsoft packages on 10.0.x |
 | Web | ASP.NET Core controllers, `Microsoft.AspNetCore.OpenApi` 10.0.x, `Microsoft.Extensions.ApiDescription.Server` (writes `openapi.json` at build) |
 | DB | PostgreSQL 18, EF Core 10.0.x, `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3, code-first migrations, `dotnet-ef` as local tool |
@@ -132,13 +132,22 @@ pgpm/
 Copy from PNMTD and rename:
 
 - `start.sh`: Podman by default (`ENGINE=docker`), builds `pgpm:dev`, runs
-  Postgres + app; `WEB=dev` adds Vite HMR in a node container; `SEED=1` demo
-  data; settings from `dev.env` (0600, generated on first run). Rule: node never
-  runs on the host (`tools/npm.sh`).
-- `run-tests.sh`: groups `web, dotnet, contract, deploy, e2e, shell`, `--only`,
-  `--list`, `step NAME cmd…` helper logging to `.tmpcheck/`; dotnet tests against
-  a throwaway Postgres (`tools/test-db.sh`, port 55432, fsync off), run once in a
-  time zone east and once west of UTC.
+  Postgres + app on `http://localhost:7330/`; `WEB=dev` adds Vite HMR in a node
+  container (port 5173); `SEED=1` demo data once a seed command exists (phase 3);
+  settings from `dev.env` (0600, generated on first run with the DB password and
+  `Auth__InitialAdmin__Password`). Rule: node never runs on the host
+  (`tools/npm.sh`, volumes `pgpm-web-node-modules`, `pgpm-npm-cache`).
+- `run-tests.sh`: groups `dotnet, web, contract, e2e, shell` (dotnet first: its
+  Debug build writes `openapi.json`, which `web` checks the TS types against;
+  `deploy` joins with the `deploy/*.sh` scripts), `--only`, `--list`,
+  `step NAME cmd…` helper logging to `.tmpcheck/`; dotnet tests against a
+  throwaway Postgres (`tools/test-db.sh`, port 55432, fsync off – a PostgreSQL
+  another project already runs on that port, e.g. PNMTD's `pnmtd-test-pg`, is
+  used as it is, the tests create databases of their own), run once in a time
+  zone east and once west of UTC (`PGPM_TEST_TZ` and `TZ`). `contract` and `e2e`
+  start stacks of their own through `start.sh` (`tools/contract.sh` on port 7332,
+  `tools/e2e.sh` on 7331, Playwright in its image inside the app container's
+  network so `localhost` is a secure context for the service worker).
 - `Dockerfile`: 3 stages – `node:24-slim` (`npm ci --ignore-scripts`,
   `RUN --network=none npm run build`), `dotnet/sdk:10.0` (`restore --locked-mode`,
   copy `dist` to `wwwroot/`, publish with `--network=none`), `dotnet/aspnet:10.0`
@@ -173,11 +182,15 @@ simpler at the root scope).
   4. `/healthz` → `MapControllers` → `MapPgpmMcp` → SPA fallback (`index.html`)
 
 CSP additions for PGPM (PNMTD allows only `'self'`): `worker-src 'self'`,
-`img-src 'self' blob:` (images and thumbnails are shown from IndexedDB via
-`URL.createObjectURL`). Keep `assetsInlineLimit: 0` in `vite.config.ts`. The live channel is a
+`manifest-src 'self'`, `img-src 'self' blob:` (images and thumbnails are shown
+from IndexedDB via `URL.createObjectURL`; no `data:` – the phase-0 shell needs
+none). Keep `assetsInlineLimit: 0` in `vite.config.ts`. The live channel is a
 same-origin WebSocket (`wss://<host>/api/v1/sync/live`, `app.UseWebSockets()`
 with `KeepAliveInterval = 25 s`); add the `wss://<host>` origin to `connect-src`
-explicitly (older Safari versions don't match `ws(s)` with `'self'`). The
+explicitly (older Safari versions don't match `ws(s)` with `'self'`): taken from
+`PublicUrl` when set, else from the request's own host (`PGPM/Hosting/HostingSetup.cs`).
+The UI's CSP goes on every response but `/api` and `/healthz` (API CSP
+`default-src 'none'` + `no-store`). The
 reverse proxy must forward `Upgrade`/`Connection` headers and allow idle
 connections ≥ 60 s.
 
@@ -190,8 +203,14 @@ connections ≥ 60 s.
   classes (found by reflection, `ShouldRun`/`Run`) – e.g. seeding default
   statuses, the default layer for old maps.
 - `PgpmDesignTimeDbContextFactory` so `dotnet ef migrations add` never connects.
-- All `DateTime` through a UTC converter into `timestamptz`; enums as text
-  (`HasConversion<string>()`); lazy loading off.
+- All `DateTime` through a UTC converter into `timestamptz`; enums as
+  lower-case text by convention (`LowerCaseEnumConverter`, data model §1 – the
+  CHECK constraint comes with each table's migration); lazy loading off.
+- snake_case also renames the migrations history's columns
+  (`"__EFMigrationsHistory"(migration_id, product_version)`).
+- Guid keys: Npgsql (EF 9+) generates UUID v7 on the client by default;
+  `PGPM.Lib/Helper/Ids` (`New()`, `IsVersion7()`) for code and the sync push's
+  id check.
 - A Postgres unique violation becomes 409 `duplicate_key`.
 
 ### 3.3 API
@@ -809,8 +828,12 @@ docs/19 §5.3).
 PLM `public/sw.js` behaviours, implemented as `PGPM.WebUI/src/sw.ts` with
 `vite-plugin-pwa` (`strategies: 'injectManifest'`, `injectRegister: false`):
 
-- **Precache** = `self.__WB_MANIFEST` (generated: all hashed JS/CSS/fonts/icons,
-  `index.html`). `cleanupOutdatedCaches()`. Install must fail if the shell can't
+- **Precache** = `self.__WB_MANIFEST` (generated: all hashed JS/CSS, the woff2
+  fonts, the manifest and its icons, `index.html` – not PrimeIcons' svg/ttf/eot
+  fallback fonts). `precache()` + `cleanupOutdatedCaches()` + `clientsClaim()`;
+  the precached files are served by a route of PGPM's own (not
+  `precacheAndRoute`), so navigations take the race below first and the bypass
+  rules (`src/pwa/swRules.ts`) apply to every route. Install must fail if the shell can't
   be cached (PLM `CRITICAL` rule – Workbox precache does this by default).
   The lazy editor chunks (Crepe, Monaco incl. its workers, Mermaid) are part of
   the precache so Markdown editing works offline; `maximumFileSizeToCacheInBytes`
@@ -839,7 +862,9 @@ precache uses one cache with per-URL revisions.
 - Static manifest from `vite-plugin-pwa` (PLM generates it only because of its
   gate token): `id: "/"`, `start_url: "/"`, `display: "standalone"`,
   `launch_handler.client_mode: "focus-existing"`, `theme_color: "#3b59a5"`,
-  icons 192/512/maskable-512/svg, `shortcuts` (New note, New idea, Maps).
+  icons 192/512/maskable-512/svg (generated by `tools/make-icons.py`, stdlib
+  Python, from the logo's geometry; `LogoMark.vue` draws the same), `shortcuts`
+  (Maps, Ideas, Notes – "New note", "New idea" once creating exists, phase 3).
   Later: `share_target` → create a note from shared text/URL (PLM `js/share.js`).
 - Install prompt: PLM `public/js/ui/install.js` (catch `beforeinstallprompt`,
   `state()`, `promptInstall()`, manual steps for iOS/Firefox) → offered in the
@@ -1436,6 +1461,9 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | 16 | Markdown uploads go through the offline file pipeline (PNMTD: direct `POST /api/v1/files` via XHR) | pasting images must work offline |
 | 17 | Markdown conflicts via the sync conflict model + PNMTD's diff view (PNMTD: 409 `edit_conflict` on save) | one conflict model for all data |
 | 18 | Not taken from PNMTD's editor: credentials warning, *sensitive* mark, AI tags | not relevant for PGPM |
+| 19 | `TreatWarningsAsErrors` on, no `NoWarn` list; `.editorconfig` after GGITSV/PLM (PNMTD has none), style rules as suggestions | new code base without legacy warnings |
+| 20 | JSON options via `AddJsonOptions`/`ConfigureHttpJsonOptions` for all controllers (PNMTD restricts its formatters to `/api` because of the frozen sensor API) | PGPM has no legacy API |
+| 21 | Anonymous `GET /api/v1/info` (name, version) instead of PNMTD's `/api/v1/system/info` behind sign-in | the shell shows the version before any sign-in, offline-first |
 
 ## 16. Score evaluation [NEW]
 
