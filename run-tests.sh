@@ -12,10 +12,12 @@
 #             registry's signatures, the API types against openapi.json, vue-tsc, ESLint, Prettier, Vitest, the build
 #   contract  PGPM.Contract.Tests against the image from the working tree (tools/contract.sh)
 #   e2e       the browser tests (Playwright) against the image, incl. the offline shell (tools/e2e.sh)
-#   shell     bash -n and shellcheck (in a container) over every script
+#   shell     bash -n and shellcheck (in a container) over every script, and the configuration packages
+#             (tools/check-packages.py: the schema, references, scores, defaults)
 #
-# dotnet runs with the .NET SDK on this machine; node never does: the web group copies PGPM.WebUI into a node
-# container (the repository stays read-only), with npm's cache in a volume. Podman by default, ENGINE=docker for Docker.
+# dotnet and python3 (standard library only) run on this machine; node never does: the web group copies PGPM.WebUI into
+# a node container (the repository stays read-only), with npm's cache in a volume. Podman by default, ENGINE=docker for
+# Docker.
 # Each step's output goes to a log under .tmpcheck/, shown only when it fails.
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
@@ -94,13 +96,14 @@ annotate() {
 in_node() { "$ENGINE" run --rm -v "$PWD":/w:ro -w /w "$NODE_IMAGE" "$@"; }
 
 # PGPM.WebUI copied into one container that lives for the run: npm ci once, then every check in the same node_modules,
-# without touching the working tree.
+# without touching the working tree. spec/ next to it, as in the repository: the test vectors the UI's tests share with
+# the C# tests (spec/score-vectors.json).
 web_holder() {
   "$ENGINE" container inspect "$WEB_HOLDER" >/dev/null 2>&1 && return 0
   "$ENGINE" run -d --rm --name "$WEB_HOLDER" -v "$PWD":/w:ro -v "${NPM_CACHE}":/root/.npm \
     -e NPM_CONFIG_UPDATE_NOTIFIER=false -e NPM_CONFIG_FUND=false -e NPM_CONFIG_AUDIT=false -e NO_COLOR=1 \
     "$NODE_IMAGE" sleep 3600 >/dev/null || return 1
-  "$ENGINE" exec "$WEB_HOLDER" sh -c 'mkdir -p /tmp/web && cd /w/PGPM.WebUI \
+  "$ENGINE" exec "$WEB_HOLDER" sh -c 'mkdir -p /tmp/web /tmp/spec && cp -R /w/spec/. /tmp/spec/ && cd /w/PGPM.WebUI \
     && tar --exclude=node_modules --exclude=dist --exclude=test-results -cf - . | tar -C /tmp/web -xf -'
 }
 in_web() { web_holder && "$ENGINE" exec -w /tmp/web "$WEB_HOLDER" "$@"; }
@@ -169,6 +172,7 @@ group_shell() {
   step "bash -n" bash -c 'for f in "$@"; do bash -n "$f" || exit 1; done' _ "${scripts[@]}"
   step "shellcheck" "$ENGINE" run --rm -v "$PWD:/w:ro" -w /w docker.io/koalaman/shellcheck:stable \
     --severity=warning --external-sources "${scripts[@]}"
+  step "packages (tools/check-packages.py)" python3 -I tools/check-packages.py
 }
 
 for group in "${selected[@]}"; do

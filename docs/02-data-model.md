@@ -712,7 +712,11 @@ Item color, image and status come from the item – identical on every card.
 
 `z` (elements), `sort_order` of layers, milestones, DoD items and assignments use
 **fractional index strings** (`fractional-indexing`: `a0`, `a0V`, `a1` …).
-Reordering writes one row; ties are broken by `id`.
+Reordering writes one row (front/back/forward/backward: the selected rows that
+pass another one; `PGPM.WebUI/src/domain/fractional.ts`); ties are broken by
+`id`. Keys and ids compare by code unit – never `localeCompare` (`"Zz" < "a0"`);
+PostgreSQL orders them with `COLLATE "C"`. The server accepts the package's
+default format only, at most 255 characters (`PGPM.Lib/Helper/FractionalKey.cs`).
 
 ## 11. Synchronization
 
@@ -869,7 +873,23 @@ Database `pgpm`, additive versioned migrations.
 ```
 
 Consecutive patches of the same row are coalesced (first `old`, last `new`);
-insert + delete of a never-synced row cancel out.
+insert + delete of a never-synced row cancel out. In detail
+(`PGPM.WebUI/src/local/outbox.ts`, `coalesce`, for entries not sent yet – a
+merged entry keeps the first one's `mutationId`, `seq`, `batch` and `baseRev`):
+
+- patch + patch → one patch; a key changed back to its original value (JSON
+  equality) disappears, a patch without keys too. A key and a member of it
+  (`style` and `style.fill`) are not merged.
+- insert + patches → the insert with the patches applied to its row.
+- patch(es) + delete → the delete with the first patch's `baseRev`.
+- insert + delete → both dropped (with the patches between), unless another
+  pending entry refers to the row (e.g. a field value's `item_id`).
+- A later patch is not merged into an earlier entry when an insert between them
+  is a row it refers to (a reference never arrives before its row).
+- `baseRev` is `null` for inserts. Patch keys are columns or dotted members of
+  jsonb columns; `applyPatch` creates missing objects, `undefined` removes a
+  member; `rebase` re-applies pending patches on a fresh server row (a pending
+  delete marks it `deleted`, a tombstone stays a tombstone).
 
 ### 14.2 Conflict entry
 

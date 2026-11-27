@@ -122,6 +122,7 @@ pgpm/
 ├── PGPM.Tests/               MSTest + WebApplicationFactory (TestApp)
 ├── PGPM.Contract.Tests/      HTTP + Npgsql against a running container
 ├── deploy/                   docker-compose.yml, init.sh, backup.sh, … (PNMTD scripts)
+├── spec/                     test vectors shared by the TypeScript and C# tests (score-vectors.json)
 ├── tools/                    test-db.sh, npm.sh (npm in a container)
 ├── docs/
 ├── Directory.Build.props  Directory.Packages.props  global.json  dotnet-tools.json
@@ -859,7 +860,8 @@ PLM `public/sw.js` behaviours, implemented as `PGPM.WebUI/src/sw.ts` with
   rules (`src/pwa/swRules.ts`) apply to every route. Install must fail if the shell can't
   be cached (PLM `CRITICAL` rule – Workbox precache does this by default).
   The lazy editor chunks (Crepe, Monaco incl. its workers, Mermaid) are part of
-  the precache so Markdown editing works offline; `maximumFileSizeToCacheInBytes`
+  the precache so Markdown editing works offline, plus Monaco's icon font
+  (`codicon-*.ttf`, ttf only); `maximumFileSizeToCacheInBytes`
   raised to 10 MB (Monaco's chunk exceeds Workbox's 2 MB default).
 - **Navigation**: network raced against 4 s (`PAGE_ANSWER_MS`); timeout or 5xx →
   cached `index.html` (PLM `navigate()`, L348). Late/5xx bodies are cancelled.
@@ -1352,8 +1354,13 @@ PNMTD renders all maps as **plain Vue SVG** – no Cytoscape/vis-network/Konva
   8 (Shift 40). PGPM extends it to multi-selection, rubber-band select, resize
   handles and snap-to-grid.
 - `components/graph/geometry.ts` (`edgePath`, `boundsOf`) → extended with border
-  intersection for connectors (rect, ellipse, diamond).
+  intersection for connectors (rect, rounded rect, ellipse, diamond),
+  point-in-shape, bounds of a set, rubber-band hit test (drag right: contained,
+  left: touched) and snap-to-grid.
 - `components/graph/focus.ts`: `?focus=item:<id>` deep link.
+- In PGPM these are `src/maps/panZoom.ts`, `moving.ts` (+ optional snap of the
+  dragged selection), `geometry.ts` and `focus.ts` – pure functions with their
+  vitests; `matrixLayout.ts` (§13.5) sits next to them.
 - Overlays: zoom +/−/Fit bottom-right, legend bottom-left (PNMTD); toolbar (left),
   layer panel, filter bar (top), minimap (PGPM).
 - The map view folds the app drawer to the rail (`preferences.holdRail()`) and uses
@@ -1420,8 +1427,18 @@ a real editor and offline-first:
 - Axes, split lines and quadrant labels are rendered as a fixed background layer;
   free elements and layers work as on canvases.
 - Cards are not draggable; the side panel edits values and the card moves live.
-- Quadrant of an item for a given matrix map: `quadrantOf(item, map)` – used for
-  card badges, list column/filter and MCP `search_items`.
+- Quadrant of an item for a given matrix map: `quadrantOf(x, y, matrix)` → `tl` |
+  `tr` | `bl` | `br` with its label (the map's or the default) – used for card
+  badges, list column/filter and MCP `search_items`. Right/top is an axis' high
+  side (towards `max`; `max < min` reverses an axis); a value on the split line
+  counts as high; `split` defaults to the middle of `min` and `max`.
+- Layout details (`layoutMatrix`): world 2000 × 1400, padding 100 (values beyond
+  `min`/`max` sit on the plot's edge); standard card 180 × 56; bubble size scales
+  the card's area with the value (×0.8 for none/≤ 0 … ×1.6 for the largest);
+  when cards would cover more than 35 % of the plot, all shrink alike; cards are
+  placed in id order, each at the free spot nearest its values (a sunflower
+  spiral stretched to the card's shape, then a grid over the world), at least
+  6 units apart and inside the world box; the tray keeps the caller's order.
 
 ### 13.6 Map templates [NEW]
 
@@ -1500,36 +1517,59 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 ## 16. Score evaluation [NEW]
 
 One specification, implemented in `PGPM.WebUI/src/domain/score.ts` and
-`PGPM/Config/ScoreEvaluator.cs`, both tested against the same vectors
-(`spec/score-vectors.json`).
+`PGPM/Config/ScoreEvaluator.cs` (+ `ScoreConfigValidator.cs`, field definitions
+as plain `FieldSpec` records), both tested against the same vectors
+(`spec/score-vectors.json`: field sets, values, expected results and
+validation errors).
 
 **Input values** (per input key):
 
 | Input field type | Value | Max (for rescale/normalise) |
 |---|---|---|
-| number | value | `config.max` (required when used in a rescaled/normalised score) |
-| rating | value, or **NA** for `"na"` | `config.max` |
-| select | `points` of the chosen option (no points → input invalid) | max points of all options |
-| multiselect | `count` of options or `sum` of points (`config.multiPoints`), then `cap` | cap or option count / points sum |
-| score | its computed value (nesting allowed, no cycles) | its `max` |
-| any, no value | **missing** | |
+| number | value | `config.max` (required when used in a rescaled score, unless a `cap` gives it) |
+| rating | value, or **NA** for `"na"` | `config.max`, default 5 |
+| select | `points` of the chosen option (no points or unknown option → input invalid) | max points of all options (archived ones too) |
+| multiselect | `count` (default) of the chosen options or `sum` of their points (`config.multiPoints`); an option chosen twice counts once; `[]` is an answer (0), not missing; an unknown option → invalid | option count / points sum of all options |
+| score | its computed value, **rounded** (nesting allowed, no cycles) | 100 if it is normalised, else its `max` |
+| any, no value (or JSON `null`) | **missing** | |
+
+An invalid input (a value that doesn't fit its field type, e.g. `"12"` for a
+number or `"na"` for anything but a rating; an input without definition or
+without numeric meaning; a cycle) makes the result `null` like a missing one.
 
 **Evaluation**:
 
 1. Any input **missing** → result `null` (incomplete; e.g. matrix tray *Not yet
    assessed*).
-2. Apply per-input `cap`.
-3. NA handling: `ignore` → drop NA inputs; `zero` → NA = 0; `rescale` → drop NA
-   inputs and multiply the result by `max / (sum of the maxima of answered
-   inputs)` (sum only; for other ops same as `ignore`).
+2. Apply per-input `cap` to the value (NA stays NA) and to the input's max:
+   max = min(cap, max), or the cap where the field has no max.
+3. NA handling (`na`, default `ignore`): `ignore` → drop NA inputs; `zero` →
+   NA = 0; `rescale` → drop NA inputs and multiply the result by `max / (sum of
+   the maxima of answered inputs)` (sum only, and always – a `max` other than
+   the inputs' total scales even without NA; for other ops same as `ignore`).
+   Sum of maxima ≤ 0 → `null`.
 4. `op`: `sum`, `avg` (over remaining inputs), `product`, `count` (non-zero
    inputs), `min`, `max`. No remaining inputs → `null`.
-5. Multiply by `scale`; if `normalize`, result = result / `max` × 100.
-6. Round half away from zero to `decimals`. C# uses `decimal`, TypeScript uses
-   `number` and rounds only at this step; vectors include rounding edge cases.
+5. Multiply by `scale` (default 1); if `normalize`, result = result / `max` ×
+   100 (`max` ≤ 0 → `null`). A normalised score's max (display "72 / 100", as an
+   input) is 100.
+6. Round half away from zero to `decimals` (integer 0–10, default 0). C# uses
+   `decimal` (an overflow → `null`), TypeScript uses `number` and rounds only at
+   this step: it first cuts the value to 15 significant digits (so 1.001 +
+   0.004 rounds as 1.005) and shifts by powers of ten through the decimal text
+   (2.675 → 2.68, never −0); vectors include rounding edge cases.
 
 **Validation on save** (configuration, online): inputs exist, are not archived,
-have numeric meaning, no cycles; `rescale`/`normalize` need maxima.
+have numeric meaning, no cycles; `rescale`/`normalize` need maxima. Error codes
+(the same in both implementations): `not_a_score`, `invalid_op`, `invalid_na`,
+`invalid_decimals`, `no_inputs`, `duplicate_input`, `unknown_input`,
+`archived_input`, `not_numeric` (only number, rating, select, multiselect and
+score are numeric), `options_without_points` (a select, or a multiselect with
+`multiPoints: sum`, with a non-archived option without points), `invalid_cap`
+(cap on a key that isn't an input), `cycle` (through that input, also a cycle
+further down), `max_required` (`max` > 0 for a rescaled sum or `normalize`) and
+`input_max_required` (each input of a rescaled sum). The definition being saved
+replaces the stored one with its key.
 
 Example – feasibility index (doc 04 §4.2): `op: sum`, 12 ratings (max 5) +
 `time_to_proof_of_value` (select, max 5 points), `na: rescale`, `max: 65` →
@@ -1542,9 +1582,23 @@ Seed content (statuses, sections, fields, templates, groups, saved views, map
 templates) is delivered as **configuration packages** instead of migrations, so
 it can be inspected, re-applied and changed.
 
-- **Format**: JSON, `PGPM/Packages/BuiltIn/<name>.pgpm.json`; every entity has a
-  stable `key` (`status:idea.assessed`, `field:feasibility_index`,
-  `template:ai_use_case`, `group:review_board`); references use keys, not ids.
+- **Format**: JSON, `PGPM/Packages/BuiltIn/<name>.pgpm.json`, specified by
+  [`spec/config-package.schema.json`](../spec/config-package.schema.json)
+  (draft 2020-12): `format: "pgpm-config-package"`, `formatVersion: 1`, `name`,
+  `title`, `description`, `version`, `requires` and the collections `groups`,
+  `statuses`, `sections`, `fields`, `templates`, `roles`, `savedViews`,
+  `mapTemplates`, `matrixPresets` – objects keyed by a stable **key**
+  `<entity>:<slug>` (`status:idea.assessed`, `field:feasibility_index`,
+  `template:ai_use_case`, `group:review_board`, `view:review_board_agenda`,
+  `maptemplate:impact_field`, `matrixpreset:prioritization`), unique across all
+  packages.
+- **References** use keys, never ids, and resolve within the package or a package
+  it `requires` (transitively). Field and map configurations are copied as they
+  are and therefore name fields by their bare key, as stored (score `inputs` and
+  `cap`, matrix axes, `cardBadges`); view columns and sort use `field:<key>` as the
+  list state does. Where stored JSON holds ids, the package holds keys:
+  `statuses`/`templates`/`groups` → `statusIds`/`templateIds`/`groupIds` (matrix
+  filter; views likewise, `sharedWith` → `groupIds`).
 - **Key map**: server-only table `config_keys (entity text, key text, id uuid,
   package text)`, unique (`entity`, `key`) → re-import updates instead of
   duplicating; entities edited in the UI keep their key.
@@ -1555,10 +1609,42 @@ it can be inspected, re-applied and changed.
   win unless "overwrite" is chosen per entity.
 - **Export**: current configuration (or a selection) as a package.
 - **Built-in**: `core` (idea/lead/general project statuses, groups Members and
-  Viewers, roles) and `innovation-ai` (doc 04 §4.2: sections, fields, scores,
-  statuses, templates *AI use case* / *AI ambition*, gates with checklists,
-  groups, saved views, map templates). `ConfigPackageSeeder` imports both on the
-  first start (`Packages:SeedOnFirstStart`).
+  Viewers, template *General project*, roles *Responsible*, *Contact*,
+  *Contributor*, view *Learnings*) and `innovation-ai` (requires `core`; doc 04
+  §4.2: sections, fields, scores, statuses, templates *AI use case* / *AI
+  ambition*, gates with checklists, groups, roles, saved views, map templates,
+  matrix preset *Prioritization matrix*). `ConfigPackageSeeder` imports both on
+  the first start (`Packages:SeedOnFirstStart`).
+- **Validation**: `tools/check-packages.py` (step *packages* of `./run-tests.sh
+  --only shell`) evaluates the schema and the semantic rules – unique keys,
+  resolvable references, field keys `^[a-z][a-z0-9_]{1,62}$`, score inputs numeric
+  and without cycles, derivable rescale/normalise maxima, exactly one default
+  status per item type across the built-in packages, template default status ∈
+  allowed statuses, section `defaultFor` ⊆ `appliesTo`, gate suggestions are
+  project statuses the template allows, map elements on existing layers, views,
+  matrix presets and field defaults fitting their fields, icons in PrimeIcons –
+  and rejects a set of broken variants (self-test). The importer applies the same
+  rules before its dry run.
+
+Format decisions (2026-11-27):
+
+| Topic | Decision |
+|---|---|
+| Field key | the entry key without `field:` (`field:impact_score` → `impact_score`) |
+| Status key | `status:<itemType>.<slug>`, matching `itemType` |
+| Child entities | template milestones, map layers and elements have a local `key`; their config key is `<parent key>/<local key>` (`template:ai_use_case/g1`). Template statuses, sections and field defaults, section access and select options are identified by their pair or option id |
+| Order | integers in the package (`sortOrder`, element `z`); the importer turns them into fractional index strings where the column is one (layers, milestones, elements) |
+| Adoption | without a `config_keys` row the importer adopts an existing entity with the same natural key instead of creating a second one: group by normalized name (Members/Viewers of the migration), status by item type + name, field by key |
+| Shared statuses | status names are unique per item type, so *AI ambition* uses *Draft* and *Active* of `core` plus *Closed* of `innovation-ai` |
+| Compliance approval | a section of its own (rights are per section) on ideas and projects, part of the template *AI use case* |
+| Sub-headings | optional `config.subheading` on every field type (the four feasibility areas) |
+| Assignment roles | `roles` are suggestions for `assignments.role`; the data model has no table for them yet – phase 4 adds `assignment_roles` [S, ro] (`name`, `description`, `sort_order`, `is_archived`) |
+| Matrix presets | imported as a matrix map template (`maps.kind = matrix`, `is_template = true`, one layer) that prefills *New matrix map* |
+| Map templates | drawing elements only (`rect`, `ellipse`, `line`, `text`); at least one layer |
+| Saved views | `definition` is the list state with keys; filters per `$defs/viewFilters` (`statuses`, `categories`, `templates`, `sharedWith`, `assignedToMe`, `overdue`, `decisions` for gate views, `hasLink {relation, direction, targetTypes}`, `fields [{field, op: eq\|in\|contains\|range\|set\|unset, value\|values\|min\|max}]`); built-in column ids in `COLUMNS` of `tools/check-packages.py`; imported as shared views owned by the importing user |
+| Scores | a normalised score as input counts with max 100; `op: sum` with `na: rescale` needs `max` = the sum of the inputs' maxima |
+| Rights | `{Area: Level}` of §6.2; a package can't make a group admin |
+| Icons, colours | PrimeIcons 7 names without the `pi ` class (`pi-bolt`); lower-case `#rrggbb` from the Tailwind/Aura palette |
 
 ## 18. Markdown editing [PNMTD]
 
@@ -1584,7 +1670,26 @@ whole, renamed `pnmt` → `pgpm`, adapted as listed.
 | Tests: `MarkdownEditor.test.ts`, `MarkdownEditor.fallback.test.ts`, `VisualEditor.test.ts`, `crepeSetup.test.ts`, `renderMarkdown.test.ts`, `mermaid.test.ts`, `useUpload.test.ts`, `lineDiff.test.ts`, `EditingPage.test.ts`, `roundTrip.fixture.ts` (Markdown that must survive Crepe unchanged) | | copied with the components |
 
 Also from PNMTD: `stores/preferences.ts` `editorModes` (`{page, field}`, per
-browser), `composables/useMedia.ts`, `composables/useNotify.ts`.
+browser), `composables/useMedia.ts`, `composables/useNotify.ts`,
+`composables/useCopy.ts`, `components/DiffView.vue`.
+
+What the components take from the app around them is in
+`components/markdown/services.ts`, given with Vue's provide/inject
+(`provideMarkdownServices({ fileSink, resolveFileUrl, drafts })`), so the
+editor knows nothing of the sync or IndexedDB:
+
+| Service | Contract | Default (nothing provided) | Provided by |
+|---|---|---|---|
+| `FileSink` (`fileSinkKey`) | `store(file, kind: 'image' \| 'attachment', onProgress?) → Promise<{id, url, name, contentType, size, width?, height?} \| null>`; gets the file after `useUpload` steps 1–3; null = declined (it told the user), throw = the editor shows the error | files refused with a notice | phase 3: the offline file pipeline (§18.4) |
+| `FileUrlResolver` (`fileUrlResolverKey`) | `(url, { localOnly? }) → Promise<string \| null>`: `/api/v1/files/…` → blob: URL / the URL / null (*Not available offline*); `localOnly` for compact texts; also Crepe's image block (`proxyDomURL`) | the URL itself | phase 3: local blob store |
+| `DraftStore` (`draftStoreKey`) | `read(key)` (sync or async), `write(key, {revision, base, text, savedAt})`, `remove(key)`; keys `<table>:<id>:<field>` | `localStorage` `pgpm.draft.<key>` (PNMTD) | phase 2: IndexedDB `drafts` + mirror |
+
+The editor's `save` event carries `{ markdown, base, revision, overwrite }`
+(`base` = the patch's `old`); further events `take-theirs` (conflict) and
+`restored` (a draft was restored, for §11.11's "changed by X since you
+started"). *Link to an item…* is offered in the Markdown modes' bar too. A dev
+route `/dev/markdown` (development builds only) shows editor and renderer side
+by side.
 
 ### 18.2 Where it is used
 
@@ -1667,3 +1772,11 @@ offline. Unreferenced `embedded` files are deleted after 30 days (data model §6
   (§11.1), so editing, previews and diagrams work offline (spike S4, doc 05).
 - Phones: Monaco is not used (textarea fallback, as in PNMTD).
 - The CSP stays `'self'`: workers are bundled, Mermaid fetches no fonts or icons.
+  PGPM's `img-src` has no `data:` (PNMTD's has), so the placeholder of a pasted
+  `data:` image while it uploads is a blob: URL; the built CSS has no `data:`
+  URLs (`assetsInlineLimit: 0`).
+- Sizes (minified, as PNMTD's): Monaco 3,230 kB + its worker 304 kB + codicon
+  font 153 kB, Crepe 679 kB, Mermaid core 85 kB plus lazily loaded diagram types
+  (ELK layout 1,499 kB, KaTeX 259 kB, cytoscape 442 kB …). With every chunk,
+  the precache grows to about 268 entries / 12 MB.
+  `build.chunkSizeWarningLimit` is 3,300 kB so that Monaco's chunk doesn't warn.

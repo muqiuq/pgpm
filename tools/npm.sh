@@ -7,9 +7,10 @@
 #   tools/npm.sh test               vitest
 #   tools/npm.sh exec -- vite --version
 #
-# PGPM.WebUI is bind-mounted; node_modules live in the volume pgpm-web-node-modules (Linux
-# binaries, never the Mac's), npm's cache in pgpm-npm-cache. Whenever package-lock.json changed
-# since the last install, npm ci runs first. ENGINE=docker uses Docker.
+# PGPM.WebUI is bind-mounted, spec/ read-only next to it (the test vectors shared with the C#
+# tests); node_modules live in the volume pgpm-web-node-modules (Linux binaries, never the
+# Mac's), npm's cache in pgpm-npm-cache. Whenever package-lock.json changed since the last
+# install, npm ci runs first. ENGINE=docker uses Docker.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -25,7 +26,7 @@ tty=()
 # The script runs in the container's sh; "$@" are npm's arguments.
 # shellcheck disable=SC2016
 exec "$ENGINE" run --rm ${tty[@]+"${tty[@]}"} \
-  -v "$PWD/PGPM.WebUI:/web" -v "${WEB_MODULES_VOLUME}:/web/node_modules" -v "${NPM_CACHE}:/root/.npm" \
+  -v "$PWD/PGPM.WebUI:/web" -v "$PWD/spec:/spec:ro" -v "${WEB_MODULES_VOLUME}:/web/node_modules" -v "${NPM_CACHE}:/root/.npm" \
   -e NPM_CONFIG_UPDATE_NOTIFIER=false -e NPM_CONFIG_FUND=false -e NPM_CONFIG_AUDIT=false -e NPM_CONFIG_IGNORE_SCRIPTS=true -w /web \
   "$NODE_IMAGE" sh -c '
     installed=node_modules/.installed-lock

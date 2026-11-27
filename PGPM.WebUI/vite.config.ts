@@ -57,8 +57,10 @@ export default defineConfig({
               rollupFormat: 'iife',
               // Everything the shell needs offline: code, styles and woff2 fonts (the plugin adds the manifest, its icons and
               // includeAssets itself; PrimeIcons' svg/ttf/eot fonts are for browsers without woff2). Images imported into
-              // assets/ join with phase 3. 10 MB: the editor's chunks (Monaco) from phase 3.
-              globPatterns: ['**/*.{js,css,html,woff2}'],
+              // assets/ join with phase 3. The Markdown editor's lazy chunks are code like any other (Crepe, Monaco and its
+              // worker, Mermaid's diagram types, docs/03 §18.7), plus Monaco's icon font, which only comes as ttf. 10 MB:
+              // Monaco's chunk exceeds Workbox's 2 MB default.
+              globPatterns: ['**/*.{js,css,html,woff2}', '**/codicon-*.ttf'],
               maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
             },
             devOptions: { enabled: false },
@@ -82,8 +84,13 @@ export default defineConfig({
     sourcemap: false,
     // No data: URIs: the CSP allows fonts, images and scripts from 'self' (and blob: images) only (PGPM/Hosting/HostingSetup.cs).
     assetsInlineLimit: 0,
-    chunkSizeWarningLimit: 1200,
+    // kB. The largest chunks are the Markdown editor's, lazy and precached (docs/03 §18.7): Monaco (about 3,230 kB,
+    // as in PNMTD) and Mermaid's ELK layout (about 1,500 kB). A chunk above this is something new.
+    chunkSizeWarningLimit: 3300,
   },
+  // Monaco's editor worker (components/markdown/monacoSetup.ts, PNMTD's), bundled from PGPM itself and loaded from its
+  // own origin: the CSP's worker-src 'self' covers it, no blob: worker is needed. ES modules, since the worker's code
+  // is split like the app's.
   worker: { format: 'es' },
   test: {
     environment: 'jsdom',

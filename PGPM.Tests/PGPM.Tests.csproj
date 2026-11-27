@@ -13,6 +13,10 @@
     <PackageReference Include="MSTest.Analyzers" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
+  <!-- The test vectors score.ts runs too (docs/03 §16): next to the tests, as spec/score-vectors.json. -->
+  <ItemGroup>
+    <None Include="..\spec\score-vectors.json" Link="spec\score-vectors.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PGPM.Lib\PGPM.Lib.csproj" />
     <ProjectReference Include="..\PGPM\PGPM.csproj" />

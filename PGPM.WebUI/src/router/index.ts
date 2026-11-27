@@ -112,6 +112,18 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/account/SecurityView.vue'),
     meta: { title: 'Security', icon: 'pi pi-shield' },
   },
+  // The Markdown editor and renderer side by side, for checking them by hand (docs/03 §18): development only, the
+  // build leaves it out.
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/dev/markdown',
+          name: 'dev-markdown',
+          component: () => import('@/views/dev/MarkdownPlayground.vue'),
+          meta: { title: 'Markdown playground', public: true },
+        },
+      ]
+    : []),
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',

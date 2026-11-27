@@ -28,6 +28,7 @@ const allowedLicenses = new Set([
   'BSD-3-Clause',
   'CC0-1.0',
   'CC-BY-4.0',
+  'EPL-2.0', // elkjs, Mermaid's ELK layout (docs/03 §18, as in PNMTD): weak copyleft per file, used unmodified
   'ISC',
   'MIT',
   'MIT-0',
