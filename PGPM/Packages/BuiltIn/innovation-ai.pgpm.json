@@ -1,0 +1,2342 @@
+{
+  "$schema": "../../../spec/config-package.schema.json",
+  "format": "pgpm-config-package",
+  "formatVersion": 1,
+  "name": "innovation-ai",
+  "title": "Innovation – AI use cases",
+  "description": "The use-case method of the digitalswitzerland AI playbook (docs/04): assessment sections and fields with the impact score and the feasibility index, the project statuses and templates AI use case (gates G0–G3 with the playbook checklists) and AI ambition, the groups Innovation team, Review board and Compliance, assignment roles, saved views, workshop map templates and the prioritization matrix.",
+  "version": "1.0.0",
+  "requires": ["core"],
+  "groups": {
+    "group:innovation_team": {
+      "name": "Innovation team",
+      "description": "Moderates ideation workshops, matures ideas and manages the use-case projects (playbook p. 46).",
+      "rights": { "Notes": "Create", "Ideas": "Create", "Projects": "Create", "Maps": "Create" }
+    },
+    "group:review_board": {
+      "name": "Review board",
+      "description": "Senior stakeholders who decide on mature ideas and at the gates; they edit the section Review board decision (p. 46).",
+      "rights": {}
+    },
+    "group:compliance": {
+      "name": "Compliance",
+      "description": "Approves ideas and use cases from the compliance side; edits the section Compliance approval (p. 46).",
+      "rights": {}
+    }
+  },
+  "statuses": {
+    "status:project.preparing_test": {
+      "itemType": "project",
+      "name": "Preparing test",
+      "color": "#0ea5e9",
+      "icon": "pi-wrench",
+      "category": "open",
+      "sortOrder": 110
+    },
+    "status:project.prototype": {
+      "itemType": "project",
+      "name": "Prototype / PoC",
+      "color": "#8b5cf6",
+      "icon": "pi-bolt",
+      "category": "active",
+      "sortOrder": 120,
+      "maxDays": 84
+    },
+    "status:project.mvp_pilot": {
+      "itemType": "project",
+      "name": "MVP / pilot",
+      "color": "#6366f1",
+      "icon": "pi-users",
+      "category": "active",
+      "sortOrder": 130
+    },
+    "status:project.rollout": {
+      "itemType": "project",
+      "name": "Rollout & scaling",
+      "color": "#0891b2",
+      "icon": "pi-send",
+      "category": "active",
+      "sortOrder": 140
+    },
+    "status:project.in_operation": {
+      "itemType": "project",
+      "name": "In operation",
+      "color": "#059669",
+      "icon": "pi-server",
+      "category": "active",
+      "sortOrder": 150
+    },
+    "status:project.stopped": {
+      "itemType": "project",
+      "name": "Stopped",
+      "color": "#dc2626",
+      "icon": "pi-stop-circle",
+      "category": "closed",
+      "sortOrder": 160
+    },
+    "status:project.retired": {
+      "itemType": "project",
+      "name": "Retired",
+      "color": "#78716c",
+      "icon": "pi-history",
+      "category": "closed",
+      "sortOrder": 170
+    },
+    "status:project.closed": {
+      "itemType": "project",
+      "name": "Closed",
+      "color": "#475569",
+      "icon": "pi-lock",
+      "category": "closed",
+      "sortOrder": 180
+    }
+  },
+  "sections": {
+    "section:use_case_profile": {
+      "name": "Use case profile",
+      "description": "The structured description of the idea (playbook pp. 29–35).",
+      "appliesTo": ["idea", "project"],
+      "defaultFor": ["idea"],
+      "sortOrder": 10,
+      "collapsedByDefault": false
+    },
+    "section:value": {
+      "name": "Value",
+      "description": "What the use case is worth, and the impact score (p. 34).",
+      "appliesTo": ["idea", "project"],
+      "defaultFor": ["idea"],
+      "sortOrder": 20,
+      "collapsedByDefault": false
+    },
+    "section:feasibility": {
+      "name": "Feasibility",
+      "description": "Twelve statements rated 0–5 and the time to a proof of value – the feasibility index, max. 65 (p. 34).",
+      "appliesTo": ["idea", "project"],
+      "defaultFor": ["idea"],
+      "sortOrder": 30,
+      "collapsedByDefault": false
+    },
+    "section:risk_responsibility": {
+      "name": "Risk & responsibility",
+      "description": "Exceptional risks, EU AI Act class, data and human oversight (pp. 34, 64–69).",
+      "appliesTo": ["idea", "project"],
+      "defaultFor": ["idea"],
+      "sortOrder": 40,
+      "collapsedByDefault": false
+    },
+    "section:compliance_approval": {
+      "name": "Compliance approval",
+      "description": "Editable by the group Compliance only.",
+      "appliesTo": ["idea", "project"],
+      "defaultFor": ["idea"],
+      "sortOrder": 50,
+      "collapsedByDefault": false,
+      "access": [{ "group": "group:compliance", "level": "edit" }]
+    },
+    "section:review_board_decision": {
+      "name": "Review board decision",
+      "description": "Editable by the group Review board only (p. 46).",
+      "appliesTo": ["idea"],
+      "defaultFor": ["idea"],
+      "sortOrder": 60,
+      "collapsedByDefault": false,
+      "access": [{ "group": "group:review_board", "level": "edit" }]
+    },
+    "section:data_platform": {
+      "name": "Data & platform",
+      "description": "Data sources, AI readiness, platform and integration (pp. 58–63).",
+      "appliesTo": ["project"],
+      "defaultFor": [],
+      "sortOrder": 70,
+      "collapsedByDefault": false
+    },
+    "section:make_or_buy": {
+      "name": "Make or buy",
+      "description": "Decided between prototype and MVP (p. 38).",
+      "appliesTo": ["project"],
+      "defaultFor": [],
+      "sortOrder": 80,
+      "collapsedByDefault": true
+    },
+    "section:charter": {
+      "name": "Charter",
+      "description": "Business contribution, scope, timeline and success criteria written down (p. 85).",
+      "appliesTo": ["project"],
+      "defaultFor": [],
+      "sortOrder": 90,
+      "collapsedByDefault": false
+    },
+    "section:adoption_impact": {
+      "name": "Adoption & impact",
+      "description": "Effective impact = productivity gain × adoption (pp. 75, 79).",
+      "appliesTo": ["project"],
+      "defaultFor": [],
+      "sortOrder": 100,
+      "collapsedByDefault": true
+    },
+    "section:ambition": {
+      "name": "Ambition",
+      "description": "Goals and guiding principles for using AI (pp. 29–31).",
+      "appliesTo": ["project"],
+      "defaultFor": [],
+      "sortOrder": 110,
+      "collapsedByDefault": false
+    }
+  },
+  "fields": {
+    "field:problem": {
+      "section": "section:use_case_profile",
+      "label": "Addressed problem",
+      "helpText": "Which problem does the use case solve, for whom? (playbook p. 35)",
+      "type": "textarea",
+      "sortOrder": 10
+    },
+    "field:data_basis": {
+      "section": "section:use_case_profile",
+      "label": "Required data basis",
+      "helpText": "Which data does the solution need, and where does it come from? (p. 35)",
+      "type": "textarea",
+      "sortOrder": 20
+    },
+    "field:expected_output": {
+      "section": "section:use_case_profile",
+      "label": "Expected output",
+      "helpText": "What does the AI deliver – an answer, a draft, a decision, an action? (p. 35)",
+      "type": "textarea",
+      "sortOrder": 30
+    },
+    "field:impact_field": {
+      "section": "section:use_case_profile",
+      "label": "Impact field",
+      "helpText": "Where the use case creates its impact (impact field, p. 29).",
+      "type": "select",
+      "config": {
+        "options": [
+          { "id": "service_efficiency", "label": "Service efficiency & quality", "color": "#3b82f6" },
+          { "id": "new_business", "label": "Innovation & new business", "color": "#8b5cf6" },
+          { "id": "personal_productivity", "label": "Personal productivity & skills", "color": "#059669" },
+          { "id": "process_innovation", "label": "Process innovation & operating models", "color": "#f59e0b" }
+        ]
+      },
+      "sortOrder": 40
+    },
+    "field:transformation_level": {
+      "section": "section:use_case_profile",
+      "label": "Transformation level",
+      "helpText": "How far the use case changes the business (p. 87).",
+      "type": "select",
+      "config": {
+        "options": [
+          { "id": "optimise", "label": "Optimise current processes", "color": "#0ea5e9" },
+          { "id": "redesign", "label": "Redesign important processes", "color": "#6366f1" },
+          { "id": "new_model", "label": "New business or operating model", "color": "#7c3aed" }
+        ]
+      },
+      "sortOrder": 50
+    },
+    "field:idea_source": {
+      "section": "section:use_case_profile",
+      "label": "Source of the idea",
+      "helpText": "How the idea was found (p. 32).",
+      "type": "select",
+      "config": {
+        "options": [
+          { "id": "genai_research", "label": "GenAI research" },
+          { "id": "workshop", "label": "Workshop" },
+          { "id": "crazy_8s", "label": "Crazy 8s" },
+          { "id": "best_practice", "label": "Best-practice scan" },
+          { "id": "process_analysis", "label": "Process analysis" },
+          { "id": "customer_journey", "label": "Customer journey" },
+          { "id": "other", "label": "Other" }
+        ]
+      },
+      "sortOrder": 60
+    },
+    "field:business_unit": {
+      "section": "section:use_case_profile",
+      "label": "Business unit",
+      "type": "text",
+      "config": { "maxLength": 100, "placeholder": "e.g. Finance" },
+      "sortOrder": 70
+    },
+    "field:ambition_contribution": {
+      "section": "section:value",
+      "label": "Contribution to the AI ambition",
+      "helpText": "How does the use case contribute to the AI ambition and the strategy? (p. 34)",
+      "type": "textarea",
+      "sortOrder": 10
+    },
+    "field:strategic_advantages": {
+      "section": "section:value",
+      "label": "Strategic advantages",
+      "helpText": "Counts in the impact score (up to 5).",
+      "type": "multiselect",
+      "config": {
+        "options": [
+          { "id": "customer_experience", "label": "Better customer experience" },
+          { "id": "revenue_growth", "label": "Revenue growth" },
+          { "id": "higher_sales", "label": "Higher sales" },
+          { "id": "less_complexity", "label": "Reduced complexity or risk" },
+          { "id": "efficiency", "label": "Better responsiveness or efficiency" },
+          { "id": "quality", "label": "Better quality of service or product" },
+          { "id": "new_market", "label": "New market" },
+          { "id": "better_decisions", "label": "Better decisions through insights" }
+        ],
+        "multiPoints": "count"
+      },
+      "sortOrder": 20
+    },
+    "field:business_value_chf": {
+      "section": "section:value",
+      "label": "Estimated business value",
+      "helpText": "Per year, with the assumptions below (p. 34).",
+      "type": "number",
+      "config": { "decimals": 0, "min": 0, "unit": "CHF / year" },
+      "sortOrder": 30
+    },
+    "field:value_assumptions": {
+      "section": "section:value",
+      "label": "Assumptions behind the value",
+      "helpText": "What the number rests on (p. 35).",
+      "type": "textarea",
+      "sortOrder": 40
+    },
+    "field:impact_reach": {
+      "section": "section:value",
+      "label": "Reach",
+      "helpText": "How many people or processes are affected?",
+      "type": "rating",
+      "config": { "min": 0, "max": 5, "allowNa": false, "labels": { "0": "nobody", "5": "the whole organisation" } },
+      "sortOrder": 50
+    },
+    "field:impact_strategic": {
+      "section": "section:value",
+      "label": "Strategic fit",
+      "helpText": "How well does the use case fit the AI ambition?",
+      "type": "rating",
+      "config": { "min": 0, "max": 5, "allowNa": false, "labels": { "0": "no fit", "5": "core of the ambition" } },
+      "sortOrder": 60
+    },
+    "field:impact_value_band": {
+      "section": "section:value",
+      "label": "Value band",
+      "helpText": "Business value per year, as points for the impact score.",
+      "type": "select",
+      "config": {
+        "options": [
+          { "id": "lt10k", "label": "< CHF 10k", "color": "#bae6fd", "points": 1 },
+          { "id": "k10_50", "label": "CHF 10–50k", "color": "#7dd3fc", "points": 2 },
+          { "id": "k50_200", "label": "CHF 50–200k", "color": "#0ea5e9", "points": 3 },
+          { "id": "k200_1m", "label": "CHF 200k–1M", "color": "#3b82f6", "points": 4 },
+          { "id": "gt1m", "label": "> CHF 1M", "color": "#6366f1", "points": 5 }
+        ]
+      },
+      "sortOrder": 70
+    },
+    "field:impact_score": {
+      "section": "section:value",
+      "label": "Impact score",
+      "helpText": "Reach + strategic fit + value band + strategic advantages (up to 5), as 0–100. Y-axis of the prioritization matrix.",
+      "type": "score",
+      "config": {
+        "op": "sum",
+        "inputs": ["impact_reach", "impact_strategic", "impact_value_band", "strategic_advantages"],
+        "na": "rescale",
+        "max": 20,
+        "cap": { "strategic_advantages": 5 },
+        "scale": 1,
+        "normalize": true,
+        "decimals": 0
+      },
+      "sortOrder": 80
+    },
+    "field:feas_data_access": {
+      "section": "section:feasibility",
+      "label": "We have access to the data",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": {
+        "subheading": "Data & infrastructure",
+        "min": 0,
+        "max": 5,
+        "allowNa": true,
+        "labels": { "0": "does not apply", "5": "fully applies" }
+      },
+      "sortOrder": 10
+    },
+    "field:feas_infra": {
+      "section": "section:feasibility",
+      "label": "We have the infrastructure",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": {
+        "subheading": "Data & infrastructure",
+        "min": 0,
+        "max": 5,
+        "allowNa": true,
+        "labels": { "0": "does not apply", "5": "fully applies" }
+      },
+      "sortOrder": 20
+    },
+    "field:feas_data_quality": {
+      "section": "section:feasibility",
+      "label": "We have the data quality",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": {
+        "subheading": "Data & infrastructure",
+        "min": 0,
+        "max": 5,
+        "allowNa": true,
+        "labels": { "0": "does not apply", "5": "fully applies" }
+      },
+      "sortOrder": 30
+    },
+    "field:feas_solution_known": {
+      "section": "section:feasibility",
+      "label": "We know how to solve the problem",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": {
+        "subheading": "Algorithms & solution",
+        "min": 0,
+        "max": 5,
+        "allowNa": true,
+        "labels": { "0": "does not apply", "5": "fully applies" }
+      },
+      "sortOrder": 40
+    },
+    "field:feas_similar_built": {
+      "section": "section:feasibility",
+      "label": "A similar solution has been built before",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": {
+        "subheading": "Algorithms & solution",
+        "min": 0,
+        "max": 5,
+        "allowNa": true,
+        "labels": { "0": "does not apply", "5": "fully applies" }
+      },
+      "sortOrder": 50
+    },
+    "field:feas_technologies": {
+      "section": "section:feasibility",
+      "label": "We know suitable technologies",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": {
+        "subheading": "Algorithms & solution",
+        "min": 0,
+        "max": 5,
+        "allowNa": true,
+        "labels": { "0": "does not apply", "5": "fully applies" }
+      },
+      "sortOrder": 60
+    },
+    "field:feas_no_new_processes": {
+      "section": "section:feasibility",
+      "label": "No new processes are needed",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": {
+        "subheading": "Processes & systems",
+        "min": 0,
+        "max": 5,
+        "allowNa": true,
+        "labels": { "0": "does not apply", "5": "fully applies" }
+      },
+      "sortOrder": 70
+    },
+    "field:feas_processes_adaptable": {
+      "section": "section:feasibility",
+      "label": "Existing processes are easy to adapt",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": {
+        "subheading": "Processes & systems",
+        "min": 0,
+        "max": 5,
+        "allowNa": true,
+        "labels": { "0": "does not apply", "5": "fully applies" }
+      },
+      "sortOrder": 80
+    },
+    "field:feas_no_major_changes": {
+      "section": "section:feasibility",
+      "label": "No substantial changes are needed",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": {
+        "subheading": "Processes & systems",
+        "min": 0,
+        "max": 5,
+        "allowNa": true,
+        "labels": { "0": "does not apply", "5": "fully applies" }
+      },
+      "sortOrder": 90
+    },
+    "field:feas_tech_knowhow": {
+      "section": "section:feasibility",
+      "label": "Technical know-how is available",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": { "subheading": "Know-how", "min": 0, "max": 5, "allowNa": true, "labels": { "0": "does not apply", "5": "fully applies" } },
+      "sortOrder": 100
+    },
+    "field:feas_domain_knowhow": {
+      "section": "section:feasibility",
+      "label": "Domain know-how is available",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": { "subheading": "Know-how", "min": 0, "max": 5, "allowNa": true, "labels": { "0": "does not apply", "5": "fully applies" } },
+      "sortOrder": 110
+    },
+    "field:feas_ai_understanding": {
+      "section": "section:feasibility",
+      "label": "General AI understanding is available",
+      "helpText": "0 = does not apply, 5 = fully applies; n/a if it can't be rated (p. 34).",
+      "type": "rating",
+      "config": { "subheading": "Know-how", "min": 0, "max": 5, "allowNa": true, "labels": { "0": "does not apply", "5": "fully applies" } },
+      "sortOrder": 120
+    },
+    "field:time_to_proof_of_value": {
+      "section": "section:feasibility",
+      "label": "Time to a verified proof of value",
+      "helpText": "Points for the feasibility index (p. 34).",
+      "type": "select",
+      "config": {
+        "options": [
+          { "id": "lt3", "label": "< 3 months", "color": "#16a34a", "points": 5 },
+          { "id": "m4_6", "label": "4–6 months", "color": "#65a30d", "points": 4 },
+          { "id": "m7_9", "label": "7–9 months", "color": "#f59e0b", "points": 3 },
+          { "id": "m10_12", "label": "10–12 months", "color": "#ea580c", "points": 2 },
+          { "id": "gt12", "label": "> 12 months", "color": "#dc2626", "points": 1 }
+        ]
+      },
+      "sortOrder": 130
+    },
+    "field:feasibility_index": {
+      "section": "section:feasibility",
+      "label": "Feasibility index",
+      "helpText": "Sum of the 12 ratings and the time to proof of value (max. 65); n/a answers are left out and the result is scaled to 65. X-axis of the prioritization matrix.",
+      "type": "score",
+      "config": {
+        "op": "sum",
+        "inputs": [
+          "feas_data_access",
+          "feas_infra",
+          "feas_data_quality",
+          "feas_solution_known",
+          "feas_similar_built",
+          "feas_technologies",
+          "feas_no_new_processes",
+          "feas_processes_adaptable",
+          "feas_no_major_changes",
+          "feas_tech_knowhow",
+          "feas_domain_knowhow",
+          "feas_ai_understanding",
+          "time_to_proof_of_value"
+        ],
+        "na": "rescale",
+        "max": 65,
+        "scale": 1,
+        "normalize": false,
+        "decimals": 0
+      },
+      "sortOrder": 140
+    },
+    "field:risk_flags": {
+      "section": "section:risk_responsibility",
+      "label": "Exceptional risks",
+      "helpText": "Risks that need a deeper analysis (p. 34).",
+      "type": "multiselect",
+      "config": {
+        "options": [
+          { "id": "ethical", "label": "Ethical (e.g. gender, diversity)", "color": "#d97706" },
+          { "id": "cyber_security", "label": "Cyber security (e.g. fully automated processes)", "color": "#ea580c" },
+          { "id": "legal", "label": "Legal (e.g. pending regulation)", "color": "#dc2626" },
+          { "id": "human_in_the_loop", "label": "Human in the loop (e.g. black-swan events)", "color": "#8b5cf6" }
+        ],
+        "multiPoints": "count"
+      },
+      "sortOrder": 10
+    },
+    "field:risk_analysis": {
+      "section": "section:risk_responsibility",
+      "label": "Risk analysis",
+      "helpText": "Required when a risk is flagged above.",
+      "type": "textarea",
+      "sortOrder": 20
+    },
+    "field:eu_ai_act_class": {
+      "section": "section:risk_responsibility",
+      "label": "EU AI Act risk class",
+      "helpText": "Risk class of the AI system (pp. 66–67).",
+      "type": "select",
+      "config": {
+        "options": [
+          { "id": "minimal", "label": "Minimal", "color": "#16a34a" },
+          { "id": "limited", "label": "Limited", "color": "#f59e0b" },
+          { "id": "high", "label": "High", "color": "#ea580c" },
+          { "id": "unacceptable", "label": "Unacceptable", "color": "#b91c1c" },
+          { "id": "not_assessed", "label": "Not assessed", "color": "#94a3b8" }
+        ]
+      },
+      "defaultValue": "not_assessed",
+      "sortOrder": 30
+    },
+    "field:is_ai_system": {
+      "section": "section:risk_responsibility",
+      "label": "AI system",
+      "helpText": "An AI system in the sense of the EU AI Act – listed in the AI system inventory (p. 67).",
+      "type": "bool",
+      "sortOrder": 40
+    },
+    "field:data_classification": {
+      "section": "section:risk_responsibility",
+      "label": "Data classification",
+      "helpText": "Highest classification of the data used (p. 58).",
+      "type": "select",
+      "config": {
+        "options": [
+          { "id": "public", "label": "Public", "color": "#16a34a" },
+          { "id": "internal", "label": "Internal", "color": "#3b82f6" },
+          { "id": "confidential", "label": "Confidential", "color": "#dc2626" }
+        ]
+      },
+      "sortOrder": 50
+    },
+    "field:personal_data": {
+      "section": "section:risk_responsibility",
+      "label": "Personal data",
+      "helpText": "The solution processes personal data.",
+      "type": "bool",
+      "sortOrder": 60
+    },
+    "field:external_models_allowed": {
+      "section": "section:risk_responsibility",
+      "label": "External models allowed",
+      "helpText": "The data may go into external models (p. 58).",
+      "type": "bool",
+      "sortOrder": 70
+    },
+    "field:human_oversight": {
+      "section": "section:risk_responsibility",
+      "label": "Human oversight",
+      "helpText": "Where does a human decide? (p. 65)",
+      "type": "textarea",
+      "sortOrder": 80
+    },
+    "field:compliance_approved": {
+      "section": "section:compliance_approval",
+      "label": "Compliance approved",
+      "helpText": "Set by the group Compliance; required before the review board (p. 46).",
+      "type": "bool",
+      "sortOrder": 10
+    },
+    "field:rb_decision": {
+      "section": "section:review_board_decision",
+      "label": "Decision",
+      "type": "select",
+      "config": {
+        "options": [
+          { "id": "go", "label": "Go", "color": "#16a34a" },
+          { "id": "no_go", "label": "No-go", "color": "#dc2626" },
+          { "id": "park", "label": "Park", "color": "#64748b" },
+          { "id": "rework", "label": "Rework", "color": "#d97706" }
+        ]
+      },
+      "sortOrder": 10
+    },
+    "field:rb_date": { "section": "section:review_board_decision", "label": "Decided on", "type": "date", "sortOrder": 20 },
+    "field:rb_feedback": {
+      "section": "section:review_board_decision",
+      "label": "Feedback to the submitter",
+      "helpText": "Rejected ideas get short feedback (p. 46).",
+      "type": "textarea",
+      "sortOrder": 30
+    },
+    "field:rb_funding_chf": {
+      "section": "section:review_board_decision",
+      "label": "Approved funding",
+      "type": "number",
+      "config": { "decimals": 0, "min": 0, "unit": "CHF" },
+      "sortOrder": 40
+    },
+    "field:rb_conditions": { "section": "section:review_board_decision", "label": "Conditions", "type": "textarea", "sortOrder": 50 },
+    "field:data_sources": {
+      "section": "section:data_platform",
+      "label": "Data sources",
+      "helpText": "Internal and external sources, format, access, quality, gaps (p. 58).",
+      "type": "textarea",
+      "sortOrder": 10
+    },
+    "field:data_owner": {
+      "section": "section:data_platform",
+      "label": "Data owner",
+      "type": "person",
+      "config": { "multiple": false },
+      "sortOrder": 20
+    },
+    "field:data_ready": {
+      "section": "section:data_platform",
+      "label": "Dataset is AI-ready",
+      "helpText": "\"Is this dataset AI-ready?\" answered (p. 58).",
+      "type": "bool",
+      "sortOrder": 30
+    },
+    "field:platform": { "section": "section:data_platform", "label": "Platform", "type": "text", "config": { "maxLength": 200 }, "sortOrder": 40 },
+    "field:integration_level": {
+      "section": "section:data_platform",
+      "label": "Integration level",
+      "helpText": "p. 63",
+      "type": "select",
+      "config": {
+        "options": [
+          { "id": "good", "label": "Good – standard API", "color": "#0ea5e9" },
+          { "id": "better", "label": "Better – workflow tools", "color": "#3b82f6" },
+          { "id": "best", "label": "Best – own service layer", "color": "#6366f1" }
+        ]
+      },
+      "sortOrder": 50
+    },
+    "field:llm_provider": {
+      "section": "section:data_platform",
+      "label": "LLM provider",
+      "type": "text",
+      "config": { "maxLength": 200 },
+      "sortOrder": 60
+    },
+    "field:data_location": {
+      "section": "section:data_platform",
+      "label": "Data location",
+      "type": "select",
+      "config": {
+        "options": [{ "id": "ch", "label": "CH" }, { "id": "eu", "label": "EU" }, { "id": "us", "label": "US" }, { "id": "other", "label": "Other" }]
+      },
+      "sortOrder": 70
+    },
+    "field:strategic_relevance": {
+      "section": "section:make_or_buy",
+      "label": "Strategic relevance",
+      "helpText": "A strategic differentiator speaks for make, a commodity for buy (p. 38).",
+      "type": "select",
+      "config": {
+        "options": [
+          { "id": "core", "label": "Core competence", "color": "#6366f1" },
+          { "id": "support", "label": "Support function", "color": "#64748b" }
+        ]
+      },
+      "sortOrder": 10
+    },
+    "field:unique_data": { "section": "section:make_or_buy", "label": "Own data creates the value", "type": "bool", "sortOrder": 20 },
+    "field:speed_needed": {
+      "section": "section:make_or_buy",
+      "label": "Need for speed",
+      "helpText": "How critical is the time to market?",
+      "type": "rating",
+      "config": { "min": 0, "max": 5, "allowNa": false, "labels": { "0": "no time pressure", "5": "critical" } },
+      "sortOrder": 30
+    },
+    "field:can_operate": {
+      "section": "section:make_or_buy",
+      "label": "We can operate it ourselves",
+      "helpText": "Know-how and resources for long-term operation are available.",
+      "type": "bool",
+      "sortOrder": 40
+    },
+    "field:tco_notes": { "section": "section:make_or_buy", "label": "Total cost of ownership", "type": "textarea", "sortOrder": 50 },
+    "field:make_or_buy": {
+      "section": "section:make_or_buy",
+      "label": "Make or buy",
+      "type": "select",
+      "config": {
+        "options": [
+          { "id": "make", "label": "Make", "color": "#6366f1" },
+          { "id": "buy", "label": "Buy", "color": "#0ea5e9" },
+          { "id": "partner", "label": "Partner", "color": "#0d9488" },
+          { "id": "undecided", "label": "Undecided", "color": "#94a3b8" }
+        ]
+      },
+      "sortOrder": 60
+    },
+    "field:make_or_buy_rationale": { "section": "section:make_or_buy", "label": "Rationale", "type": "textarea", "sortOrder": 70 },
+    "field:business_contribution": {
+      "section": "section:charter",
+      "label": "Business contribution",
+      "helpText": "What the initiative contributes to the business (p. 85).",
+      "type": "textarea",
+      "sortOrder": 10
+    },
+    "field:scope": { "section": "section:charter", "label": "Scope", "type": "textarea", "sortOrder": 20 },
+    "field:out_of_scope": { "section": "section:charter", "label": "Out of scope", "type": "textarea", "sortOrder": 30 },
+    "field:timebox_end": {
+      "section": "section:charter",
+      "label": "End of timebox",
+      "helpText": "Experiments last 8–12 weeks at most (p. 40); overdue when passed.",
+      "type": "date",
+      "config": { "timebox": true },
+      "sortOrder": 40
+    },
+    "field:success_criteria": { "section": "section:charter", "label": "Success criteria", "type": "textarea", "sortOrder": 50 },
+    "field:target_groups": { "section": "section:adoption_impact", "label": "Target groups", "type": "textarea", "sortOrder": 10 },
+    "field:expected_gain_pct": {
+      "section": "section:adoption_impact",
+      "label": "Expected productivity gain",
+      "helpText": "Calculated gain, e.g. 30 % (p. 75).",
+      "type": "number",
+      "config": { "decimals": 0, "min": 0, "max": 100, "unit": "%" },
+      "sortOrder": 20
+    },
+    "field:adoption_pct": {
+      "section": "section:adoption_impact",
+      "label": "Adoption",
+      "helpText": "Share of the target group using the solution, e.g. 50 % (p. 75).",
+      "type": "number",
+      "config": { "decimals": 0, "min": 0, "max": 100, "unit": "%" },
+      "sortOrder": 30
+    },
+    "field:effective_gain_pct": {
+      "section": "section:adoption_impact",
+      "label": "Effective gain (%)",
+      "helpText": "Expected gain × adoption: 30 % × 50 % = 15 % (p. 75).",
+      "type": "score",
+      "config": {
+        "op": "product",
+        "inputs": ["expected_gain_pct", "adoption_pct"],
+        "na": "ignore",
+        "scale": 0.01,
+        "normalize": false,
+        "decimals": 1
+      },
+      "sortOrder": 40
+    },
+    "field:kpi_notes": {
+      "section": "section:adoption_impact",
+      "label": "KPIs",
+      "helpText": "Active users, usage frequency, time saved, cycle time, error rate, satisfaction (p. 79).",
+      "type": "textarea",
+      "sortOrder": 50
+    },
+    "field:period_from": { "section": "section:ambition", "label": "Period from", "type": "date", "sortOrder": 10 },
+    "field:period_to": { "section": "section:ambition", "label": "Period to", "type": "date", "sortOrder": 20 },
+    "field:qualitative_goals": {
+      "section": "section:ambition",
+      "label": "Qualitative goals",
+      "helpText": "Structures to build, business impact, mobilising the organisation, a clear target picture (p. 30).",
+      "type": "textarea",
+      "sortOrder": 30
+    },
+    "field:guiding_principles": {
+      "section": "section:ambition",
+      "label": "Guiding principles",
+      "helpText": "p. 30",
+      "type": "textarea",
+      "sortOrder": 40
+    },
+    "field:strategy_constraints": {
+      "section": "section:ambition",
+      "label": "Constraints from the strategy",
+      "helpText": "What is non-negotiable? (p. 31)",
+      "type": "textarea",
+      "sortOrder": 50
+    },
+    "field:quantitative_targets": {
+      "section": "section:ambition",
+      "label": "Quantitative targets",
+      "helpText": "Goals with dates, e.g. \"5 use cases tested\" – one milestone per target.",
+      "type": "textarea",
+      "sortOrder": 60
+    }
+  },
+  "templates": {
+    "template:ai_use_case": {
+      "name": "AI use case",
+      "description": "A use case selected by the review board, from the test to operation: prototype / PoC → MVP / pilot → rollout & scaling, with a gate after every stage and the playbook checklists as Definition of Done (playbook pp. 38–41).",
+      "color": "#8b5cf6",
+      "icon": "pi-microchip-ai",
+      "sortOrder": 20,
+      "defaultStatus": "status:project.preparing_test",
+      "allowedStatuses": [
+        "status:project.preparing_test",
+        "status:project.prototype",
+        "status:project.mvp_pilot",
+        "status:project.rollout",
+        "status:project.in_operation",
+        "status:project.stopped",
+        "status:project.retired"
+      ],
+      "sections": [
+        "section:use_case_profile",
+        "section:value",
+        "section:feasibility",
+        "section:risk_responsibility",
+        "section:compliance_approval",
+        "section:data_platform",
+        "section:make_or_buy",
+        "section:charter",
+        "section:adoption_impact"
+      ],
+      "fieldDefaults": { "field:is_ai_system": true, "field:make_or_buy": "undecided" },
+      "defaultShares": [
+        { "group": "group:innovation_team", "access": "edit" },
+        { "group": "group:review_board", "access": "edit" },
+        { "group": "group:compliance", "access": "edit" }
+      ],
+      "milestones": [
+        {
+          "key": "g0",
+          "kind": "gate",
+          "title": "Ready for test",
+          "description": "The review board said go; key persons are named and the test phase is prepared (playbook step 5, p. 37).",
+          "offsetDays": 0,
+          "dod": [
+            "Key persons for the use case defined (sponsor, domain expert, delivery team)",
+            "Test phase prepared: scope, timebox and resources agreed",
+            "Charter written: business contribution, scope, responsibilities and timeline (section Charter)"
+          ],
+          "onGoStatus": "status:project.prototype",
+          "onNoGoStatus": "status:project.stopped",
+          "sortOrder": 10
+        },
+        {
+          "key": "m1",
+          "kind": "milestone",
+          "title": "Prototype built",
+          "description": "Is the AI solution feasible and effective for the problem? (p. 38)",
+          "offsetDays": 28,
+          "dod": ["Test concept written", "Test data available", "Evaluation criteria defined", "Prototype built"],
+          "sortOrder": 20
+        },
+        {
+          "key": "g1",
+          "kind": "gate",
+          "title": "PoC decision",
+          "description": "Cancel, iterate or continue after the prototype; make or buy is decided before the MVP (pp. 38–41, 63).",
+          "offsetDays": 56,
+          "dod": [
+            "PoC goals, test cases, data and success criteria defined",
+            "PoC result documented and assessed",
+            "Go / no-go decided (or iterate)",
+            "Make or buy decided (section Make or buy)",
+            "Own data needed? A data platform considered",
+            "Data silos: a central repository considered",
+            "Modalities covered (structured, unstructured, text, image, audio, video)",
+            "Make or buy assessed against the available skills and resources",
+            "Data location and security considered",
+            "Models and token costs compared; total cost of ownership and scaling considered"
+          ],
+          "onGoStatus": "status:project.mvp_pilot",
+          "onNoGoStatus": "status:project.stopped",
+          "sortOrder": 30
+        },
+        {
+          "key": "m2",
+          "kind": "milestone",
+          "title": "MVP live with pilot group",
+          "description": "Does the solution create real value in daily use, and can it be improved iteratively? (p. 38)",
+          "offsetDays": 112,
+          "dod": ["Core features built", "User interface built", "Pilot group active", "Feedback loops running; MVP improved from the feedback"],
+          "sortOrder": 40
+        },
+        {
+          "key": "g2",
+          "kind": "gate",
+          "title": "Scale decision",
+          "description": "Acceptance in the pilot is measured; data, responsible AI and security are checked before the rollout (pp. 41, 59, 65, 69).",
+          "offsetDays": 140,
+          "dod": [
+            "Acceptance in the pilot group measured",
+            "EU AI Act risk class set (section Risk & responsibility)",
+            "Data: the data used for the use case is treated as a strategic asset",
+            "Data: data strategy aligned with the business strategy and the core processes",
+            "Data: data management principles applied (ownership, quality process, master data)",
+            "Data: context data / ontologies for the use case defined",
+            "Data: \"Is this dataset AI-ready?\" answered – may it go into external models; PII, contracts and customer data handled; anonymisation / masking decided; legal / compliance sign-off before production",
+            "Responsible AI: data quality checked (current, high quality, representative)",
+            "Responsible AI: bias checks done",
+            "Responsible AI: ethical guidelines applied",
+            "Responsible AI: legal compliance ensured (data protection, EU AI Act, GDPR)",
+            "Responsible AI: AI decisions transparent and explainable for users",
+            "Responsible AI: personal data processed only with protection measures",
+            "Responsible AI: human control for critical decisions",
+            "Responsible AI: security and robustness tested (attacks, unexpected input)",
+            "Security: AI governance – rules, roles and responsibilities defined; business, IT, legal and security work together",
+            "Security: platform and model choice – providers, model quality, security, cost, data location and sovereignty assessed",
+            "Security: technical controls – guardrails, shadow-AI detection, approval process for new AI applications",
+            "Security: people – regular training on AI risks, open exchange, AI do's and don'ts communicated"
+          ],
+          "onGoStatus": "status:project.rollout",
+          "onNoGoStatus": "status:project.stopped",
+          "sortOrder": 50
+        },
+        {
+          "key": "m3",
+          "kind": "milestone",
+          "title": "Rolled out",
+          "description": "How is the solution optimised, integrated and maintained long-term? (p. 38)",
+          "offsetDays": 196,
+          "dod": [
+            "Solution integrated into the target systems",
+            "Logging and monitoring set up",
+            "Incident and change process defined",
+            "Data and model governance in place",
+            "Target groups trained",
+            "Quick reference and user guides available",
+            "Support in place"
+          ],
+          "sortOrder": 60
+        },
+        {
+          "key": "g3",
+          "kind": "gate",
+          "title": "Impact review",
+          "description": "Impact and ROI are measured and reported; decide to continue, scale or retire (pp. 41, 79, 85).",
+          "offsetDays": 280,
+          "dod": [
+            "KPIs defined",
+            "Baseline vs after measured",
+            "Reporting and review rhythm fixed",
+            "Decision taken: continue, scale or retire",
+            "Enablement: AI skills built (trainings, peer learning, micro-learning)",
+            "Enablement: a culture of experimentation and of learning from errors supported",
+            "Enablement: core story on benefits and goals communicated, success stories shared",
+            "Enablement: end users involved early, feedback loops, quick wins",
+            "Enablement: roles and structures clear (champions, centre of enablement / excellence, support)",
+            "Enablement: adoption, usage and impact tracked with KPIs and pulse checks",
+            "Enablement: guardrails for privacy, fairness and responsible use set"
+          ],
+          "onGoStatus": "status:project.in_operation",
+          "onNoGoStatus": "status:project.retired",
+          "sortOrder": 70
+        }
+      ]
+    },
+    "template:ai_ambition": {
+      "name": "AI ambition",
+      "description": "Goals and guiding principles for using AI, the basis for every decision on use cases. Ideas and projects are linked to it with \"contributes to\" (playbook pp. 29–31).",
+      "color": "#0ea5e9",
+      "icon": "pi-compass",
+      "sortOrder": 30,
+      "defaultStatus": "status:project.draft",
+      "allowedStatuses": ["status:project.draft", "status:project.active", "status:project.closed"],
+      "sections": ["section:ambition"],
+      "fieldDefaults": {
+        "field:guiding_principles": "- Start small, grow big\n- End users are always in the driver's seat\n- Share learnings systematically\n- Anchor AI on all hierarchy levels\n- Measure impact and acceptance continuously"
+      },
+      "defaultShares": [
+        { "group": "group:innovation_team", "access": "edit" },
+        { "group": "group:review_board", "access": "edit" },
+        { "group": "group:members", "access": "read" }
+      ],
+      "milestones": [
+        {
+          "key": "ambition_defined",
+          "kind": "milestone",
+          "title": "Ambition defined",
+          "description": "Written by a core team of management, senior leadership and IT (p. 31).",
+          "offsetDays": 14,
+          "dod": [
+            "Constraints from the strategy answered: what is non-negotiable?",
+            "Contribution of AI to the strategy described",
+            "Qualitative and quantitative ambition set: how is success defined?",
+            "Guiding principles agreed"
+          ],
+          "sortOrder": 10
+        },
+        {
+          "key": "ideation_round",
+          "kind": "milestone",
+          "title": "Ideation round",
+          "description": "Identify: define the focus of the search, collect and describe use-case ideas (pp. 32–33).",
+          "offsetDays": 42,
+          "dod": [
+            "AI ambition consulted and search focus defined",
+            "Contributors and core team defined",
+            "GenAI research and workshop carried out",
+            "At least 30 ideas generated",
+            "Ideas roughly documented"
+          ],
+          "sortOrder": 20
+        },
+        {
+          "key": "portfolio_review",
+          "kind": "milestone",
+          "title": "Portfolio review",
+          "description": "Assess & prioritize: build the use-case portfolio and select the core ideas (pp. 34–37).",
+          "offsetDays": 70,
+          "dod": [
+            "Assessment template filled for every idea",
+            "Assessed ideas placed in the prioritization matrix",
+            "Quick wins and star initiatives examined; 2–3 core ideas selected",
+            "Key persons per core idea defined; test phase prepared"
+          ],
+          "sortOrder": 30
+        },
+        {
+          "key": "target_use_cases_tested",
+          "kind": "milestone",
+          "title": "5 use cases tested",
+          "description": "Example target from the playbook (p. 30) – adapt the number and the date, or delete it.",
+          "offsetDays": 365,
+          "dod": ["Five use cases tested as PoC, MVP or pilot"],
+          "sortOrder": 40
+        },
+        {
+          "key": "target_employees_trained",
+          "kind": "milestone",
+          "title": "50+ employees trained",
+          "description": "Example target from the playbook (p. 30) – adapt or delete.",
+          "offsetDays": 365,
+          "dod": ["At least 50 employees trained in using AI"],
+          "sortOrder": 50
+        },
+        {
+          "key": "target_applications_productive",
+          "kind": "milestone",
+          "title": "3 applications productive",
+          "description": "Example target from the playbook (p. 30) – adapt or delete.",
+          "offsetDays": 365,
+          "dod": ["Three applications in operation with at least 15 % efficiency gain"],
+          "sortOrder": 60
+        },
+        {
+          "key": "target_ai_community",
+          "kind": "milestone",
+          "title": "AI community established",
+          "description": "Example target from the playbook (p. 30) – adapt or delete.",
+          "offsetDays": 365,
+          "dod": ["An AI community established and meeting regularly"],
+          "sortOrder": 70
+        }
+      ]
+    }
+  },
+  "roles": {
+    "role:innovation_team": {
+      "name": "Innovation team",
+      "description": "Moderates the workshops, matures the idea, manages the project.",
+      "sortOrder": 110
+    },
+    "role:review_board": { "name": "Review board", "description": "Decides at the review board and at the gates.", "sortOrder": 120 },
+    "role:domain_expert": {
+      "name": "Domain expert",
+      "description": "Business person with domain expertise: makes sure the solution meets the business needs and judges the quality of the AI output.",
+      "sortOrder": 130
+    },
+    "role:delivery_team": {
+      "name": "Delivery team",
+      "description": "Builds the solution: software, prompt engineering and GenAI skills.",
+      "sortOrder": 140
+    },
+    "role:sponsor": { "name": "Sponsor", "description": "Business owner who backs and funds the use case.", "sortOrder": 150 },
+    "role:data_owner": {
+      "name": "Data owner",
+      "description": "Responsible for the data used: quality, sensitivity, approval for use in AI systems.",
+      "sortOrder": 160
+    },
+    "role:ai_champion": {
+      "name": "AI champion",
+      "description": "Promotes adoption in the target group and is the first contact for its users.",
+      "sortOrder": 170
+    }
+  },
+  "savedViews": {
+    "view:review_board_agenda": {
+      "itemType": "idea",
+      "name": "Review board agenda",
+      "description": "Ideas ready for the review board, highest impact first.",
+      "isShared": true,
+      "sortOrder": 110,
+      "definition": {
+        "search": "",
+        "filters": { "statuses": ["status:idea.ready_for_review"] },
+        "sort": ["-field:impact_score", "-field:feasibility_index"],
+        "columns": [
+          "key",
+          "title",
+          "field:impact_field",
+          "field:impact_score",
+          "field:feasibility_index",
+          "field:business_value_chf",
+          "field:compliance_approved",
+          "field:rb_decision",
+          "owner"
+        ]
+      }
+    },
+    "view:ai_system_inventory": {
+      "itemType": "project",
+      "name": "AI system inventory",
+      "description": "All AI systems with their EU AI Act class – step 1 of the EU AI Act (p. 67).",
+      "isShared": true,
+      "sortOrder": 120,
+      "definition": {
+        "search": "",
+        "filters": { "fields": [{ "field": "field:is_ai_system", "op": "eq", "value": true }] },
+        "sort": ["field:eu_ai_act_class", "title"],
+        "columns": ["key", "title", "field:eu_ai_act_class", "field:data_classification", "field:personal_data", "status", "owner"]
+      }
+    },
+    "view:running_experiments": {
+      "itemType": "project",
+      "name": "Running experiments",
+      "description": "Use cases in Prototype / PoC – experiments last 12 weeks at most (p. 40).",
+      "isShared": true,
+      "sortOrder": 130,
+      "definition": {
+        "search": "",
+        "filters": { "statuses": ["status:project.prototype"] },
+        "sort": ["-days_in_status"],
+        "columns": ["key", "title", "field:timebox_end", "days_in_status", "persons", "owner"]
+      }
+    },
+    "view:gate_decisions": {
+      "itemType": "gate",
+      "name": "Gate decisions",
+      "description": "The stop / go / scale record: decided gates of all projects, newest first (p. 85).",
+      "isShared": true,
+      "sortOrder": 140,
+      "definition": {
+        "search": "",
+        "filters": { "decisions": ["go", "no_go", "iterate", "pivot", "park"] },
+        "sort": ["-decided_at"],
+        "columns": ["project", "title", "decision", "decided_at", "decided_by", "due_date", "dod_progress"]
+      }
+    }
+  },
+  "mapTemplates": {
+    "maptemplate:impact_field": {
+      "name": "Impact field canvas",
+      "description": "The 2×2 impact field of the playbook (p. 29): external ↔ internal × individual ↔ organisation. Sets the focus of the use-case search; ideas are created directly in their quadrant during the workshop.",
+      "settings": { "background": "#f8fafc", "grid": true, "snap": false, "gridSize": 20 },
+      "layers": [
+        { "key": "quadrants", "name": "Quadrants", "sortOrder": 0, "isVisible": true, "isLocked": true },
+        { "key": "ideas", "name": "Ideas", "sortOrder": 1, "isVisible": true, "isLocked": false }
+      ],
+      "elements": [
+        {
+          "key": "q_service_efficiency",
+          "kind": "rect",
+          "layer": "quadrants",
+          "x": 0,
+          "y": 0,
+          "width": 800,
+          "height": 520,
+          "z": 0,
+          "style": { "fill": "#eff6ff", "stroke": "#93c5fd", "strokeWidth": 2, "strokeStyle": "solid", "radius": 16 }
+        },
+        {
+          "key": "q_new_business",
+          "kind": "rect",
+          "layer": "quadrants",
+          "x": 824,
+          "y": 0,
+          "width": 800,
+          "height": 520,
+          "z": 1,
+          "style": { "fill": "#f5f3ff", "stroke": "#c4b5fd", "strokeWidth": 2, "strokeStyle": "solid", "radius": 16 }
+        },
+        {
+          "key": "q_personal_productivity",
+          "kind": "rect",
+          "layer": "quadrants",
+          "x": 0,
+          "y": 544,
+          "width": 800,
+          "height": 520,
+          "z": 2,
+          "style": { "fill": "#ecfdf5", "stroke": "#6ee7b7", "strokeWidth": 2, "strokeStyle": "solid", "radius": 16 }
+        },
+        {
+          "key": "q_process_innovation",
+          "kind": "rect",
+          "layer": "quadrants",
+          "x": 824,
+          "y": 544,
+          "width": 800,
+          "height": 520,
+          "z": 3,
+          "style": { "fill": "#fffbeb", "stroke": "#fcd34d", "strokeWidth": 2, "strokeStyle": "solid", "radius": 16 }
+        },
+        {
+          "key": "title",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 0,
+          "y": -180,
+          "width": 1624,
+          "height": 48,
+          "z": 4,
+          "text": "AI use-case impact field",
+          "style": { "fontSize": 32, "bold": true, "textColor": "#0f172a", "align": "left" }
+        },
+        {
+          "key": "subtitle",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 0,
+          "y": -128,
+          "width": 1624,
+          "height": 28,
+          "z": 5,
+          "text": "Where does the idea create its impact? Create every idea in its field (playbook p. 29).",
+          "style": { "fontSize": 16, "textColor": "#475569", "align": "left" }
+        },
+        {
+          "key": "col_individual",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 0,
+          "y": -60,
+          "width": 800,
+          "height": 36,
+          "z": 6,
+          "text": "Individual",
+          "style": { "fontSize": 20, "bold": true, "textColor": "#334155", "align": "center" }
+        },
+        {
+          "key": "col_organisation",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 824,
+          "y": -60,
+          "width": 800,
+          "height": 36,
+          "z": 7,
+          "text": "Organisation",
+          "style": { "fontSize": 20, "bold": true, "textColor": "#334155", "align": "center" }
+        },
+        {
+          "key": "row_external",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": -224,
+          "y": 242,
+          "width": 200,
+          "height": 36,
+          "z": 8,
+          "text": "External",
+          "style": { "fontSize": 20, "bold": true, "textColor": "#334155", "align": "right" }
+        },
+        {
+          "key": "row_internal",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": -224,
+          "y": 786,
+          "width": 200,
+          "height": 36,
+          "z": 9,
+          "text": "Internal",
+          "style": { "fontSize": 20, "bold": true, "textColor": "#334155", "align": "right" }
+        },
+        {
+          "key": "q_service_efficiency_title",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 32,
+          "y": 28,
+          "width": 736,
+          "height": 36,
+          "z": 10,
+          "text": "Service efficiency & quality",
+          "style": { "fontSize": 24, "bold": true, "textColor": "#0f172a", "align": "left" }
+        },
+        {
+          "key": "q_service_efficiency_question",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 32,
+          "y": 72,
+          "width": 736,
+          "height": 28,
+          "z": 11,
+          "text": "How can GenAI strengthen customer loyalty?",
+          "style": { "fontSize": 18, "italic": true, "textColor": "#475569", "align": "left" }
+        },
+        {
+          "key": "q_new_business_title",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 856,
+          "y": 28,
+          "width": 736,
+          "height": 36,
+          "z": 12,
+          "text": "Innovation & new business",
+          "style": { "fontSize": 24, "bold": true, "textColor": "#0f172a", "align": "left" }
+        },
+        {
+          "key": "q_new_business_question",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 856,
+          "y": 72,
+          "width": 736,
+          "height": 28,
+          "z": 13,
+          "text": "What will our business model look like?",
+          "style": { "fontSize": 18, "italic": true, "textColor": "#475569", "align": "left" }
+        },
+        {
+          "key": "q_personal_productivity_title",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 32,
+          "y": 572,
+          "width": 736,
+          "height": 36,
+          "z": 14,
+          "text": "Personal productivity & skills",
+          "style": { "fontSize": 24, "bold": true, "textColor": "#0f172a", "align": "left" }
+        },
+        {
+          "key": "q_personal_productivity_question",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 32,
+          "y": 616,
+          "width": 736,
+          "height": 28,
+          "z": 15,
+          "text": "How can GenAI raise personal productivity?",
+          "style": { "fontSize": 18, "italic": true, "textColor": "#475569", "align": "left" }
+        },
+        {
+          "key": "q_process_innovation_title",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 856,
+          "y": 572,
+          "width": 736,
+          "height": 36,
+          "z": 16,
+          "text": "Process innovation & operating models",
+          "style": { "fontSize": 24, "bold": true, "textColor": "#0f172a", "align": "left" }
+        },
+        {
+          "key": "q_process_innovation_question",
+          "kind": "text",
+          "layer": "quadrants",
+          "x": 856,
+          "y": 616,
+          "width": 736,
+          "height": 28,
+          "z": 17,
+          "text": "How will GenAI redefine how we work?",
+          "style": { "fontSize": 18, "italic": true, "textColor": "#475569", "align": "left" }
+        }
+      ]
+    },
+    "maptemplate:crazy_8s": {
+      "name": "Crazy 8s",
+      "description": "Eight frames for the Crazy 8s creativity method – one copy per participant (p. 32).",
+      "settings": { "background": "#f8fafc", "grid": false, "snap": false, "gridSize": 20 },
+      "layers": [
+        { "key": "frames", "name": "Frames", "sortOrder": 0, "isVisible": true, "isLocked": true },
+        { "key": "sketches", "name": "Sketches", "sortOrder": 1, "isVisible": true, "isLocked": false }
+      ],
+      "elements": [
+        {
+          "key": "title",
+          "kind": "text",
+          "layer": "frames",
+          "x": 0,
+          "y": -170,
+          "width": 1752,
+          "height": 48,
+          "z": 0,
+          "text": "Crazy 8s",
+          "style": { "fontSize": 32, "bold": true, "textColor": "#0f172a", "align": "left" }
+        },
+        {
+          "key": "subtitle",
+          "kind": "text",
+          "layer": "frames",
+          "x": 0,
+          "y": -118,
+          "width": 1752,
+          "height": 28,
+          "z": 1,
+          "text": "Eight ideas in eight minutes: sketch one idea per frame, one minute each – quantity over quality. Then present, cluster and vote (p. 32).",
+          "style": { "fontSize": 16, "textColor": "#475569", "align": "left" }
+        },
+        {
+          "key": "participant",
+          "kind": "text",
+          "layer": "frames",
+          "x": 0,
+          "y": -72,
+          "width": 600,
+          "height": 28,
+          "z": 2,
+          "text": "Participant:",
+          "style": { "fontSize": 16, "bold": true, "textColor": "#334155", "align": "left" }
+        },
+        {
+          "key": "frame_1",
+          "kind": "rect",
+          "layer": "frames",
+          "x": 0,
+          "y": 0,
+          "width": 420,
+          "height": 300,
+          "z": 3,
+          "style": { "fill": "#ffffff", "stroke": "#94a3b8", "strokeWidth": 2, "strokeStyle": "solid", "radius": 8 }
+        },
+        {
+          "key": "frame_2",
+          "kind": "rect",
+          "layer": "frames",
+          "x": 444,
+          "y": 0,
+          "width": 420,
+          "height": 300,
+          "z": 4,
+          "style": { "fill": "#ffffff", "stroke": "#94a3b8", "strokeWidth": 2, "strokeStyle": "solid", "radius": 8 }
+        },
+        {
+          "key": "frame_3",
+          "kind": "rect",
+          "layer": "frames",
+          "x": 888,
+          "y": 0,
+          "width": 420,
+          "height": 300,
+          "z": 5,
+          "style": { "fill": "#ffffff", "stroke": "#94a3b8", "strokeWidth": 2, "strokeStyle": "solid", "radius": 8 }
+        },
+        {
+          "key": "frame_4",
+          "kind": "rect",
+          "layer": "frames",
+          "x": 1332,
+          "y": 0,
+          "width": 420,
+          "height": 300,
+          "z": 6,
+          "style": { "fill": "#ffffff", "stroke": "#94a3b8", "strokeWidth": 2, "strokeStyle": "solid", "radius": 8 }
+        },
+        {
+          "key": "frame_5",
+          "kind": "rect",
+          "layer": "frames",
+          "x": 0,
+          "y": 324,
+          "width": 420,
+          "height": 300,
+          "z": 7,
+          "style": { "fill": "#ffffff", "stroke": "#94a3b8", "strokeWidth": 2, "strokeStyle": "solid", "radius": 8 }
+        },
+        {
+          "key": "frame_6",
+          "kind": "rect",
+          "layer": "frames",
+          "x": 444,
+          "y": 324,
+          "width": 420,
+          "height": 300,
+          "z": 8,
+          "style": { "fill": "#ffffff", "stroke": "#94a3b8", "strokeWidth": 2, "strokeStyle": "solid", "radius": 8 }
+        },
+        {
+          "key": "frame_7",
+          "kind": "rect",
+          "layer": "frames",
+          "x": 888,
+          "y": 324,
+          "width": 420,
+          "height": 300,
+          "z": 9,
+          "style": { "fill": "#ffffff", "stroke": "#94a3b8", "strokeWidth": 2, "strokeStyle": "solid", "radius": 8 }
+        },
+        {
+          "key": "frame_8",
+          "kind": "rect",
+          "layer": "frames",
+          "x": 1332,
+          "y": 324,
+          "width": 420,
+          "height": 300,
+          "z": 10,
+          "style": { "fill": "#ffffff", "stroke": "#94a3b8", "strokeWidth": 2, "strokeStyle": "solid", "radius": 8 }
+        },
+        {
+          "key": "frame_1_number",
+          "kind": "text",
+          "layer": "frames",
+          "x": 16,
+          "y": 12,
+          "width": 48,
+          "height": 40,
+          "z": 11,
+          "text": "1",
+          "style": { "fontSize": 28, "bold": true, "textColor": "#cbd5e1", "align": "left" }
+        },
+        {
+          "key": "frame_2_number",
+          "kind": "text",
+          "layer": "frames",
+          "x": 460,
+          "y": 12,
+          "width": 48,
+          "height": 40,
+          "z": 12,
+          "text": "2",
+          "style": { "fontSize": 28, "bold": true, "textColor": "#cbd5e1", "align": "left" }
+        },
+        {
+          "key": "frame_3_number",
+          "kind": "text",
+          "layer": "frames",
+          "x": 904,
+          "y": 12,
+          "width": 48,
+          "height": 40,
+          "z": 13,
+          "text": "3",
+          "style": { "fontSize": 28, "bold": true, "textColor": "#cbd5e1", "align": "left" }
+        },
+        {
+          "key": "frame_4_number",
+          "kind": "text",
+          "layer": "frames",
+          "x": 1348,
+          "y": 12,
+          "width": 48,
+          "height": 40,
+          "z": 14,
+          "text": "4",
+          "style": { "fontSize": 28, "bold": true, "textColor": "#cbd5e1", "align": "left" }
+        },
+        {
+          "key": "frame_5_number",
+          "kind": "text",
+          "layer": "frames",
+          "x": 16,
+          "y": 336,
+          "width": 48,
+          "height": 40,
+          "z": 15,
+          "text": "5",
+          "style": { "fontSize": 28, "bold": true, "textColor": "#cbd5e1", "align": "left" }
+        },
+        {
+          "key": "frame_6_number",
+          "kind": "text",
+          "layer": "frames",
+          "x": 460,
+          "y": 336,
+          "width": 48,
+          "height": 40,
+          "z": 16,
+          "text": "6",
+          "style": { "fontSize": 28, "bold": true, "textColor": "#cbd5e1", "align": "left" }
+        },
+        {
+          "key": "frame_7_number",
+          "kind": "text",
+          "layer": "frames",
+          "x": 904,
+          "y": 336,
+          "width": 48,
+          "height": 40,
+          "z": 17,
+          "text": "7",
+          "style": { "fontSize": 28, "bold": true, "textColor": "#cbd5e1", "align": "left" }
+        },
+        {
+          "key": "frame_8_number",
+          "kind": "text",
+          "layer": "frames",
+          "x": 1348,
+          "y": 336,
+          "width": 48,
+          "height": 40,
+          "z": 18,
+          "text": "8",
+          "style": { "fontSize": 28, "bold": true, "textColor": "#cbd5e1", "align": "left" }
+        }
+      ]
+    },
+    "maptemplate:customer_journey": {
+      "name": "Customer journey",
+      "description": "Swimlanes for customer journey mapping: stages × touchpoints, pain points and AI opportunities (p. 32).",
+      "settings": { "background": "#f8fafc", "grid": true, "snap": false, "gridSize": 20 },
+      "layers": [
+        { "key": "grid", "name": "Grid", "sortOrder": 0, "isVisible": true, "isLocked": true },
+        { "key": "notes", "name": "Notes", "sortOrder": 1, "isVisible": true, "isLocked": false }
+      ],
+      "elements": [
+        {
+          "key": "title",
+          "kind": "text",
+          "layer": "grid",
+          "x": 0,
+          "y": -170,
+          "width": 2040,
+          "height": 48,
+          "z": 0,
+          "text": "Customer journey",
+          "style": { "fontSize": 32, "bold": true, "textColor": "#0f172a", "align": "left" }
+        },
+        {
+          "key": "subtitle",
+          "kind": "text",
+          "layer": "grid",
+          "x": 0,
+          "y": -118,
+          "width": 2040,
+          "height": 28,
+          "z": 1,
+          "text": "Follow the customer through every stage: where are the touchpoints and pain points, and where could AI help? Rename the stages as needed (p. 32).",
+          "style": { "fontSize": 16, "textColor": "#475569", "align": "left" }
+        },
+        {
+          "key": "persona",
+          "kind": "text",
+          "layer": "grid",
+          "x": 0,
+          "y": -72,
+          "width": 600,
+          "height": 28,
+          "z": 2,
+          "text": "Customer / persona:",
+          "style": { "fontSize": 16, "bold": true, "textColor": "#334155", "align": "left" }
+        },
+        {
+          "key": "stage_1",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 244,
+          "y": 0,
+          "width": 340,
+          "height": 64,
+          "z": 3,
+          "text": "Discover",
+          "style": {
+            "fill": "#f1f5f9",
+            "stroke": "#cbd5e1",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#0f172a",
+            "align": "center"
+          }
+        },
+        {
+          "key": "stage_2",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 608,
+          "y": 0,
+          "width": 340,
+          "height": 64,
+          "z": 4,
+          "text": "Consider",
+          "style": {
+            "fill": "#f1f5f9",
+            "stroke": "#cbd5e1",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#0f172a",
+            "align": "center"
+          }
+        },
+        {
+          "key": "stage_3",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 972,
+          "y": 0,
+          "width": 340,
+          "height": 64,
+          "z": 5,
+          "text": "Buy",
+          "style": {
+            "fill": "#f1f5f9",
+            "stroke": "#cbd5e1",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#0f172a",
+            "align": "center"
+          }
+        },
+        {
+          "key": "stage_4",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 1336,
+          "y": 0,
+          "width": 340,
+          "height": 64,
+          "z": 6,
+          "text": "Use",
+          "style": {
+            "fill": "#f1f5f9",
+            "stroke": "#cbd5e1",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#0f172a",
+            "align": "center"
+          }
+        },
+        {
+          "key": "stage_5",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 1700,
+          "y": 0,
+          "width": 340,
+          "height": 64,
+          "z": 7,
+          "text": "Get support",
+          "style": {
+            "fill": "#f1f5f9",
+            "stroke": "#cbd5e1",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#0f172a",
+            "align": "center"
+          }
+        },
+        {
+          "key": "lane_touchpoints",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 0,
+          "y": 88,
+          "width": 220,
+          "height": 240,
+          "z": 8,
+          "text": "Touchpoints",
+          "style": {
+            "fill": "#e0f2fe",
+            "stroke": "#7dd3fc",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#0f172a",
+            "align": "center"
+          }
+        },
+        {
+          "key": "cell_touchpoints_1",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 244,
+          "y": 88,
+          "width": 340,
+          "height": 240,
+          "z": 9,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_touchpoints_2",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 608,
+          "y": 88,
+          "width": 340,
+          "height": 240,
+          "z": 10,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_touchpoints_3",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 972,
+          "y": 88,
+          "width": 340,
+          "height": 240,
+          "z": 11,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_touchpoints_4",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 1336,
+          "y": 88,
+          "width": 340,
+          "height": 240,
+          "z": 12,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_touchpoints_5",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 1700,
+          "y": 88,
+          "width": 340,
+          "height": 240,
+          "z": 13,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "lane_pain_points",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 0,
+          "y": 352,
+          "width": 220,
+          "height": 240,
+          "z": 14,
+          "text": "Pain points",
+          "style": {
+            "fill": "#ffe4e6",
+            "stroke": "#fda4af",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#0f172a",
+            "align": "center"
+          }
+        },
+        {
+          "key": "cell_pain_points_1",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 244,
+          "y": 352,
+          "width": 340,
+          "height": 240,
+          "z": 15,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_pain_points_2",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 608,
+          "y": 352,
+          "width": 340,
+          "height": 240,
+          "z": 16,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_pain_points_3",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 972,
+          "y": 352,
+          "width": 340,
+          "height": 240,
+          "z": 17,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_pain_points_4",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 1336,
+          "y": 352,
+          "width": 340,
+          "height": 240,
+          "z": 18,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_pain_points_5",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 1700,
+          "y": 352,
+          "width": 340,
+          "height": 240,
+          "z": 19,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "lane_ai_opportunities",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 0,
+          "y": 616,
+          "width": 220,
+          "height": 240,
+          "z": 20,
+          "text": "AI opportunities",
+          "style": {
+            "fill": "#ede9fe",
+            "stroke": "#c4b5fd",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#0f172a",
+            "align": "center"
+          }
+        },
+        {
+          "key": "cell_ai_opportunities_1",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 244,
+          "y": 616,
+          "width": 340,
+          "height": 240,
+          "z": 21,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_ai_opportunities_2",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 608,
+          "y": 616,
+          "width": 340,
+          "height": 240,
+          "z": 22,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_ai_opportunities_3",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 972,
+          "y": 616,
+          "width": 340,
+          "height": 240,
+          "z": 23,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_ai_opportunities_4",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 1336,
+          "y": 616,
+          "width": 340,
+          "height": 240,
+          "z": 24,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "cell_ai_opportunities_5",
+          "kind": "rect",
+          "layer": "grid",
+          "x": 1700,
+          "y": 616,
+          "width": 340,
+          "height": 240,
+          "z": 25,
+          "style": { "fill": "#ffffff", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        }
+      ]
+    },
+    "maptemplate:use_case_funnel": {
+      "name": "Use-case funnel",
+      "description": "One column per idea status – a manual board of the funnel for workshops and the review board.",
+      "settings": { "background": "#ffffff", "grid": false, "snap": false, "gridSize": 20, "cardBadges": ["impact_score", "feasibility_index"] },
+      "layers": [
+        { "key": "columns", "name": "Columns", "sortOrder": 0, "isVisible": true, "isLocked": true },
+        { "key": "ideas", "name": "Ideas", "sortOrder": 1, "isVisible": true, "isLocked": false }
+      ],
+      "elements": [
+        {
+          "key": "title",
+          "kind": "text",
+          "layer": "columns",
+          "x": 0,
+          "y": -170,
+          "width": 2292,
+          "height": 48,
+          "z": 0,
+          "text": "Use-case funnel",
+          "style": { "fontSize": 32, "bold": true, "textColor": "#0f172a", "align": "left" }
+        },
+        {
+          "key": "subtitle",
+          "kind": "text",
+          "layer": "columns",
+          "x": 0,
+          "y": -118,
+          "width": 2292,
+          "height": 28,
+          "z": 1,
+          "text": "Move every idea card into the column of its status – from the long list (at least 30 ideas) to the 2–3 core ideas (pp. 31–37).",
+          "style": { "fontSize": 16, "textColor": "#475569", "align": "left" }
+        },
+        {
+          "key": "group_open",
+          "kind": "text",
+          "layer": "columns",
+          "x": 0,
+          "y": -56,
+          "width": 1272,
+          "height": 32,
+          "z": 2,
+          "text": "In the funnel",
+          "style": { "fontSize": 16, "bold": true, "textColor": "#64748b", "align": "left" }
+        },
+        {
+          "key": "group_decided",
+          "kind": "text",
+          "layer": "columns",
+          "x": 1344,
+          "y": -56,
+          "width": 948,
+          "height": 32,
+          "z": 3,
+          "text": "Decided",
+          "style": { "fontSize": 16, "bold": true, "textColor": "#64748b", "align": "left" }
+        },
+        {
+          "key": "col_new",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 0,
+          "y": 0,
+          "width": 300,
+          "height": 56,
+          "z": 4,
+          "text": "New",
+          "style": {
+            "fill": "#64748b",
+            "stroke": "#64748b",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#ffffff",
+            "align": "center"
+          }
+        },
+        {
+          "key": "col_elaborating",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 324,
+          "y": 0,
+          "width": 300,
+          "height": 56,
+          "z": 5,
+          "text": "Elaborating",
+          "style": {
+            "fill": "#0ea5e9",
+            "stroke": "#0ea5e9",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#ffffff",
+            "align": "center"
+          }
+        },
+        {
+          "key": "col_assessed",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 648,
+          "y": 0,
+          "width": 300,
+          "height": 56,
+          "z": 6,
+          "text": "Assessed",
+          "style": {
+            "fill": "#6366f1",
+            "stroke": "#6366f1",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#ffffff",
+            "align": "center"
+          }
+        },
+        {
+          "key": "col_ready_for_review",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 972,
+          "y": 0,
+          "width": 300,
+          "height": 56,
+          "z": 7,
+          "text": "Ready for review",
+          "style": {
+            "fill": "#8b5cf6",
+            "stroke": "#8b5cf6",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#ffffff",
+            "align": "center"
+          }
+        },
+        {
+          "key": "col_selected",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 1344,
+          "y": 0,
+          "width": 300,
+          "height": 56,
+          "z": 8,
+          "text": "Selected",
+          "style": {
+            "fill": "#16a34a",
+            "stroke": "#16a34a",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#ffffff",
+            "align": "center"
+          }
+        },
+        {
+          "key": "col_watch",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 1668,
+          "y": 0,
+          "width": 300,
+          "height": 56,
+          "z": 9,
+          "text": "Watch",
+          "style": {
+            "fill": "#d97706",
+            "stroke": "#d97706",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#ffffff",
+            "align": "center"
+          }
+        },
+        {
+          "key": "col_rejected",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 1992,
+          "y": 0,
+          "width": 300,
+          "height": 56,
+          "z": 10,
+          "text": "Rejected",
+          "style": {
+            "fill": "#dc2626",
+            "stroke": "#dc2626",
+            "strokeWidth": 1,
+            "radius": 8,
+            "fontSize": 18,
+            "bold": true,
+            "textColor": "#ffffff",
+            "align": "center"
+          }
+        },
+        {
+          "key": "col_new_body",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 0,
+          "y": 72,
+          "width": 300,
+          "height": 1000,
+          "z": 11,
+          "style": { "fill": "#f8fafc", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "col_elaborating_body",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 324,
+          "y": 72,
+          "width": 300,
+          "height": 1000,
+          "z": 12,
+          "style": { "fill": "#f8fafc", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "col_assessed_body",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 648,
+          "y": 72,
+          "width": 300,
+          "height": 1000,
+          "z": 13,
+          "style": { "fill": "#f8fafc", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "col_ready_for_review_body",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 972,
+          "y": 72,
+          "width": 300,
+          "height": 1000,
+          "z": 14,
+          "style": { "fill": "#f8fafc", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "col_selected_body",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 1344,
+          "y": 72,
+          "width": 300,
+          "height": 1000,
+          "z": 15,
+          "style": { "fill": "#f8fafc", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "col_watch_body",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 1668,
+          "y": 72,
+          "width": 300,
+          "height": 1000,
+          "z": 16,
+          "style": { "fill": "#f8fafc", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        },
+        {
+          "key": "col_rejected_body",
+          "kind": "rect",
+          "layer": "columns",
+          "x": 1992,
+          "y": 72,
+          "width": 300,
+          "height": 1000,
+          "z": 17,
+          "style": { "fill": "#f8fafc", "stroke": "#e2e8f0", "strokeWidth": 1, "radius": 8 }
+        }
+      ]
+    }
+  },
+  "matrixPresets": {
+    "matrixpreset:prioritization": {
+      "name": "Prioritization matrix",
+      "description": "Business impact × ease of implementation (playbook pp. 36–37). Start with the quick wins, build the star initiatives, keep the difficult but impactful ones in the pipeline and only observe the rest.",
+      "settings": { "background": "#ffffff", "grid": false, "snap": false, "gridSize": 20, "cardBadges": ["feasibility_index", "impact_score"] },
+      "matrix": {
+        "x": { "field": "feasibility_index", "label": "Ease of implementation", "min": 0, "max": 65, "split": 32.5 },
+        "y": { "field": "impact_score", "label": "Business impact", "min": 0, "max": 100, "split": 50 },
+        "size": { "field": "business_value_chf" },
+        "quadrants": { "tr": "Star initiatives", "br": "Quick wins", "tl": "Difficult but impactful", "bl": "Limited interest" },
+        "filter": { "types": ["idea", "project"], "statuses": [], "templates": [], "groups": [] }
+      }
+    }
+  }
+}

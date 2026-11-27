@@ -1,0 +1,635 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pgpm:config-package:1",
+  "title": "PGPM configuration package",
+  "description": "Seed and exchange format for PGPM's configuration (docs/03 §17): statuses, sections, fields, templates, groups, assignment roles, saved views, map templates and matrix presets. Every entity sits in its collection under a stable key '<entity>:<slug>'; references between entities use these keys, never database ids. Checked by tools/check-packages.py, which evaluates this schema and adds the semantic rules (references, scores, defaults) listed in docs/03 §17.",
+  "type": "object",
+  "required": ["format", "formatVersion", "name", "title", "version"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string", "description": "Editor support only; ignored by the importer." },
+    "format": { "const": "pgpm-config-package" },
+    "formatVersion": { "const": 1 },
+    "name": { "$ref": "#/$defs/packageName", "description": "Unique package name; also the file name <name>.pgpm.json and the config_keys.package value." },
+    "title": { "$ref": "#/$defs/name" },
+    "description": { "$ref": "#/$defs/text" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$", "description": "Semantic version of the package content." },
+    "requires": {
+      "type": "array",
+      "description": "Packages whose keys this package references; imported first.",
+      "items": { "$ref": "#/$defs/packageName" },
+      "uniqueItems": true
+    },
+    "groups": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/groupKey" },
+      "additionalProperties": { "$ref": "#/$defs/group" }
+    },
+    "statuses": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/statusKey" },
+      "additionalProperties": { "$ref": "#/$defs/status" }
+    },
+    "sections": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/sectionKey" },
+      "additionalProperties": { "$ref": "#/$defs/section" }
+    },
+    "fields": {
+      "type": "object",
+      "description": "The field key (field_definitions.key) is the entry's key without the prefix 'field:'.",
+      "propertyNames": { "$ref": "#/$defs/fieldRef" },
+      "additionalProperties": { "$ref": "#/$defs/field" }
+    },
+    "templates": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/templateKey" },
+      "additionalProperties": { "$ref": "#/$defs/template" }
+    },
+    "roles": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/roleKey" },
+      "additionalProperties": { "$ref": "#/$defs/role" }
+    },
+    "savedViews": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/viewKey" },
+      "additionalProperties": { "$ref": "#/$defs/savedView" }
+    },
+    "mapTemplates": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/mapTemplateKey" },
+      "additionalProperties": { "$ref": "#/$defs/mapTemplate" }
+    },
+    "matrixPresets": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/matrixPresetKey" },
+      "additionalProperties": { "$ref": "#/$defs/matrixPreset" }
+    }
+  },
+  "$defs": {
+    "packageName": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "text": { "type": "string", "maxLength": 4000 },
+    "color": { "type": "string", "pattern": "^#[0-9a-f]{6}$", "description": "Lower-case #rrggbb." },
+    "icon": { "type": "string", "pattern": "^pi-[a-z0-9-]+$", "description": "PrimeIcons name (the class without the leading 'pi ', e.g. 'pi-lightbulb')." },
+    "sortOrder": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+    "localKey": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_]{0,62}$", "description": "Key unique within its parent (milestone, layer, element)." },
+    "fieldKey": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,62}$", "description": "A bare field key, as stored inside field and map configurations." },
+    "fieldRef": { "type": "string", "pattern": "^field:[a-z][a-z0-9_]{1,62}$" },
+    "groupKey": { "type": "string", "pattern": "^group:[a-z0-9][a-z0-9_.-]*$" },
+    "statusKey": { "type": "string", "pattern": "^status:(idea|lead|project)\\.[a-z0-9][a-z0-9_.-]*$", "description": "status:<itemType>.<slug>; the item type must match the entry's itemType." },
+    "optionalStatusKey": { "type": ["string", "null"], "pattern": "^status:(idea|lead|project)\\.[a-z0-9][a-z0-9_.-]*$" },
+    "sectionKey": { "type": "string", "pattern": "^section:[a-z0-9][a-z0-9_.-]*$" },
+    "templateKey": { "type": "string", "pattern": "^template:[a-z0-9][a-z0-9_.-]*$" },
+    "roleKey": { "type": "string", "pattern": "^role:[a-z0-9][a-z0-9_.-]*$" },
+    "viewKey": { "type": "string", "pattern": "^view:[a-z0-9][a-z0-9_.-]*$" },
+    "mapTemplateKey": { "type": "string", "pattern": "^maptemplate:[a-z0-9][a-z0-9_.-]*$" },
+    "matrixPresetKey": { "type": "string", "pattern": "^matrixpreset:[a-z0-9][a-z0-9_.-]*$" },
+    "itemType": { "enum": ["note", "idea", "lead", "project"] },
+    "sectionItemType": { "enum": ["idea", "project"] },
+    "statusItemType": { "enum": ["idea", "lead", "project"] },
+    "access": { "enum": ["read", "edit", "manage"] },
+
+    "group": {
+      "type": "object",
+      "description": "groups + group_rights. Matched to an existing group by normalized name when the key is not yet known (seed groups of the migration). Packages cannot make a group admin.",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 500 },
+        "rights": { "$ref": "#/$defs/rights" }
+      }
+    },
+    "rights": {
+      "type": "object",
+      "description": "One level per area, docs/03 §6.2; a higher level includes the lower ones.",
+      "additionalProperties": false,
+      "properties": {
+        "Notes": { "enum": ["Create"] },
+        "Ideas": { "enum": ["Create"] },
+        "Leads": { "enum": ["Create"] },
+        "Projects": { "enum": ["Create"] },
+        "Maps": { "enum": ["Create"] },
+        "Persons": { "enum": ["Edit"] },
+        "Configuration": { "enum": ["Manage"] },
+        "Directory": { "enum": ["Manage"] },
+        "Mcp": { "enum": ["Use", "View", "Manage"] },
+        "AuditLog": { "enum": ["View"] },
+        "System": { "enum": ["View"] }
+      }
+    },
+
+    "status": {
+      "type": "object",
+      "description": "statuses (data model §7.1).",
+      "required": ["itemType", "name", "color", "category", "sortOrder"],
+      "additionalProperties": false,
+      "properties": {
+        "itemType": { "$ref": "#/$defs/statusItemType" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "color": { "$ref": "#/$defs/color" },
+        "icon": { "$ref": "#/$defs/icon" },
+        "category": { "enum": ["open", "active", "closed"] },
+        "sortOrder": { "$ref": "#/$defs/sortOrder" },
+        "isDefault": { "type": "boolean", "default": false },
+        "maxDays": { "type": ["integer", "null"], "minimum": 1, "description": "Aging: overdue after this many days in the status." }
+      }
+    },
+
+    "section": {
+      "type": "object",
+      "description": "sections + section_groups (data model §7.2–7.3).",
+      "required": ["name", "appliesTo", "sortOrder"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "$ref": "#/$defs/text" },
+        "appliesTo": { "type": "array", "items": { "$ref": "#/$defs/sectionItemType" }, "minItems": 1, "uniqueItems": true },
+        "defaultFor": { "type": "array", "items": { "$ref": "#/$defs/sectionItemType" }, "uniqueItems": true, "description": "⊆ appliesTo." },
+        "sortOrder": { "$ref": "#/$defs/sortOrder" },
+        "collapsedByDefault": { "type": "boolean", "default": false },
+        "access": {
+          "type": "array",
+          "description": "section_groups. No view rows: visible to everyone with access to the item; no edit rows: editable by everyone with edit on the item; edit implies view.",
+          "items": {
+            "type": "object",
+            "required": ["group", "level"],
+            "additionalProperties": false,
+            "properties": {
+              "group": { "$ref": "#/$defs/groupKey" },
+              "level": { "enum": ["view", "edit"] }
+            }
+          }
+        }
+      }
+    },
+
+    "field": {
+      "type": "object",
+      "description": "field_definitions (data model §7.4). config is copied as it is and therefore names other fields by their bare key.",
+      "required": ["section", "label", "type", "sortOrder"],
+      "additionalProperties": false,
+      "properties": {
+        "section": { "$ref": "#/$defs/sectionKey" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "helpText": { "type": "string", "maxLength": 1000 },
+        "type": { "enum": ["text", "textarea", "markdown", "number", "date", "datetime", "bool", "select", "multiselect", "person", "url", "email", "rating", "score"] },
+        "config": { "type": "object" },
+        "required": { "type": "boolean", "default": false },
+        "defaultValue": {},
+        "sortOrder": { "$ref": "#/$defs/sortOrder" }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["type"], "properties": { "type": { "const": "text" } } },
+          "then": { "properties": { "config": { "$ref": "#/$defs/textConfig" }, "defaultValue": { "type": ["string", "null"] } } }
+        },
+        {
+          "if": { "required": ["type"], "properties": { "type": { "enum": ["textarea", "markdown", "url", "email"] } } },
+          "then": { "properties": { "config": { "$ref": "#/$defs/plainConfig" }, "defaultValue": { "type": ["string", "null"] } } }
+        },
+        {
+          "if": { "required": ["type"], "properties": { "type": { "const": "bool" } } },
+          "then": { "properties": { "config": { "$ref": "#/$defs/plainConfig" }, "defaultValue": { "type": ["boolean", "null"] } } }
+        },
+        {
+          "if": { "required": ["type"], "properties": { "type": { "const": "number" } } },
+          "then": { "properties": { "config": { "$ref": "#/$defs/numberConfig" }, "defaultValue": { "type": ["number", "null"] } } }
+        },
+        {
+          "if": { "required": ["type"], "properties": { "type": { "const": "date" } } },
+          "then": { "properties": { "config": { "$ref": "#/$defs/dateConfig" }, "defaultValue": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" } } }
+        },
+        {
+          "if": { "required": ["type"], "properties": { "type": { "const": "datetime" } } },
+          "then": { "properties": { "config": { "$ref": "#/$defs/dateConfig" }, "defaultValue": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?Z$" } } }
+        },
+        {
+          "if": { "required": ["type"], "properties": { "type": { "const": "select" } } },
+          "then": { "required": ["config"], "properties": { "config": { "$ref": "#/$defs/selectConfig" }, "defaultValue": { "type": ["string", "null"] } } }
+        },
+        {
+          "if": { "required": ["type"], "properties": { "type": { "const": "multiselect" } } },
+          "then": { "required": ["config"], "properties": { "config": { "$ref": "#/$defs/multiselectConfig" }, "defaultValue": { "type": ["array", "null"], "items": { "type": "string" }, "uniqueItems": true } } }
+        },
+        {
+          "if": { "required": ["type"], "properties": { "type": { "const": "person" } } },
+          "then": { "properties": { "config": { "$ref": "#/$defs/personConfig" }, "defaultValue": { "type": "null" } } }
+        },
+        {
+          "if": { "required": ["type"], "properties": { "type": { "const": "rating" } } },
+          "then": { "properties": { "config": { "$ref": "#/$defs/ratingConfig" }, "defaultValue": { "type": ["integer", "string", "null"] } } }
+        },
+        {
+          "if": { "required": ["type"], "properties": { "type": { "const": "score" } } },
+          "then": { "required": ["config"], "properties": { "config": { "$ref": "#/$defs/scoreConfig" }, "defaultValue": { "type": "null" }, "required": { "const": false } } }
+        }
+      ]
+    },
+    "subheading": { "type": "string", "minLength": 1, "maxLength": 100, "description": "Optional sub-heading: consecutive fields of a section with the same subheading are shown under it (e.g. the four feasibility areas)." },
+    "plainConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "subheading": { "$ref": "#/$defs/subheading" } }
+    },
+    "textConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subheading": { "$ref": "#/$defs/subheading" },
+        "maxLength": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "placeholder": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "numberConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subheading": { "$ref": "#/$defs/subheading" },
+        "decimals": { "type": "integer", "minimum": 0, "maximum": 6 },
+        "min": { "type": ["number", "null"] },
+        "max": { "type": ["number", "null"], "description": "Required when the field is an input of a rescaled or normalised score." },
+        "unit": { "type": "string", "maxLength": 20 }
+      }
+    },
+    "dateConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subheading": { "$ref": "#/$defs/subheading" },
+        "timebox": { "type": "boolean", "description": "Overdue marker when the date has passed and the item is not in a closed status." }
+      }
+    },
+    "personConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subheading": { "$ref": "#/$defs/subheading" },
+        "multiple": { "type": "boolean" }
+      }
+    },
+    "option": {
+      "type": "object",
+      "required": ["id", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_]{0,62}$", "description": "Stable; stored in field_values." },
+        "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "color": { "$ref": "#/$defs/color" },
+        "points": { "type": "number", "description": "Value of the option in scores." },
+        "archived": { "type": "boolean" }
+      }
+    },
+    "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1 },
+    "selectConfig": {
+      "type": "object",
+      "required": ["options"],
+      "additionalProperties": false,
+      "properties": {
+        "subheading": { "$ref": "#/$defs/subheading" },
+        "options": { "$ref": "#/$defs/options" }
+      }
+    },
+    "multiselectConfig": {
+      "type": "object",
+      "required": ["options"],
+      "additionalProperties": false,
+      "properties": {
+        "subheading": { "$ref": "#/$defs/subheading" },
+        "options": { "$ref": "#/$defs/options" },
+        "multiPoints": { "enum": ["count", "sum"], "default": "count", "description": "Value in scores: number of chosen options or sum of their points." }
+      }
+    },
+    "ratingConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subheading": { "$ref": "#/$defs/subheading" },
+        "min": { "type": "integer", "default": 0 },
+        "max": { "type": "integer", "default": 5 },
+        "allowNa": { "type": "boolean", "default": false },
+        "labels": {
+          "type": "object",
+          "description": "Labels of single values, keyed by the value as a string.",
+          "propertyNames": { "pattern": "^-?[0-9]+$" },
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 100 }
+        }
+      }
+    },
+    "scoreConfig": {
+      "type": "object",
+      "description": "docs/03 §16.",
+      "required": ["op", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "subheading": { "$ref": "#/$defs/subheading" },
+        "op": { "enum": ["sum", "avg", "product", "count", "min", "max"] },
+        "inputs": { "type": "array", "items": { "$ref": "#/$defs/fieldKey" }, "minItems": 1, "uniqueItems": true },
+        "na": { "enum": ["rescale", "ignore", "zero"], "default": "ignore" },
+        "max": { "type": "number", "exclusiveMinimum": 0, "description": "Display '58 / 65'; rescale target; normalisation base." },
+        "cap": {
+          "type": "object",
+          "description": "Per-input upper bound, keyed by bare field key.",
+          "propertyNames": { "$ref": "#/$defs/fieldKey" },
+          "additionalProperties": { "type": "number", "minimum": 0 }
+        },
+        "scale": { "type": "number", "default": 1 },
+        "normalize": { "type": "boolean", "default": false },
+        "decimals": { "type": "integer", "minimum": 0, "maximum": 6, "default": 0 }
+      }
+    },
+
+    "template": {
+      "type": "object",
+      "description": "project_templates + template_statuses, template_sections, template_field_defaults, template_milestones (data model §7.7).",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "$ref": "#/$defs/text" },
+        "color": { "$ref": "#/$defs/color" },
+        "icon": { "$ref": "#/$defs/icon" },
+        "sortOrder": { "$ref": "#/$defs/sortOrder" },
+        "defaultStatus": { "$ref": "#/$defs/statusKey" },
+        "allowedStatuses": { "type": "array", "items": { "$ref": "#/$defs/statusKey" }, "uniqueItems": true, "description": "Empty or absent: all project statuses." },
+        "sections": { "type": "array", "items": { "$ref": "#/$defs/sectionKey" }, "uniqueItems": true, "description": "In display order." },
+        "fieldDefaults": {
+          "type": "object",
+          "description": "Default values of fields of the template's sections, keyed by field:<key>; same value shapes as field_values.",
+          "propertyNames": { "$ref": "#/$defs/fieldRef" }
+        },
+        "defaultShares": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["group", "access"],
+            "additionalProperties": false,
+            "properties": {
+              "group": { "$ref": "#/$defs/groupKey" },
+              "access": { "$ref": "#/$defs/access" }
+            }
+          }
+        },
+        "milestones": { "type": "array", "items": { "$ref": "#/$defs/milestone" } }
+      }
+    },
+    "milestone": {
+      "type": "object",
+      "description": "template_milestones; config key '<template key>/<milestone key>'.",
+      "required": ["key", "kind", "title", "sortOrder"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/localKey" },
+        "kind": { "enum": ["milestone", "gate"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "$ref": "#/$defs/text" },
+        "offsetDays": { "type": ["integer", "null"], "minimum": 0, "maximum": 3650, "description": "Due date = project start + offset." },
+        "dod": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 500 }, "description": "Definition of Done items, in order." },
+        "onGoStatus": { "$ref": "#/$defs/optionalStatusKey", "description": "Gates: status suggested on go (a status allowed by the template)." },
+        "onNoGoStatus": { "$ref": "#/$defs/optionalStatusKey", "description": "Gates: status suggested on no-go." },
+        "sortOrder": { "$ref": "#/$defs/sortOrder" }
+      },
+      "if": { "required": ["kind"], "properties": { "kind": { "const": "milestone" } } },
+      "then": { "properties": { "onGoStatus": { "type": "null" }, "onNoGoStatus": { "type": "null" } } }
+    },
+
+    "role": {
+      "type": "object",
+      "description": "Suggestion for assignments.role (free text with suggestions).",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 500 },
+        "sortOrder": { "$ref": "#/$defs/sortOrder" }
+      }
+    },
+
+    "savedView": {
+      "type": "object",
+      "description": "saved_views (data model §7.8); owner on import: the importing user.",
+      "required": ["itemType", "name", "definition"],
+      "additionalProperties": false,
+      "properties": {
+        "itemType": { "enum": ["note", "idea", "lead", "project", "gate"] },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 500 },
+        "definition": { "$ref": "#/$defs/viewDefinition" },
+        "isShared": { "type": "boolean", "default": true },
+        "sortOrder": { "$ref": "#/$defs/sortOrder" }
+      }
+    },
+    "columnId": {
+      "type": "string",
+      "pattern": "^(field:[a-z][a-z0-9_]{1,62}|[a-z][a-z0-9_]*)$",
+      "description": "A built-in column (docs/03 §17) or field:<key>."
+    },
+    "viewDefinition": {
+      "type": "object",
+      "description": "Same shape as the list state in user_settings (data model §13), with keys instead of ids: statuses → statusIds, templates → templateIds, sharedWith → groupIds.",
+      "additionalProperties": false,
+      "properties": {
+        "search": { "type": "string", "maxLength": 200 },
+        "filters": { "$ref": "#/$defs/viewFilters" },
+        "sort": { "type": "array", "items": { "type": "string", "pattern": "^-?(field:[a-z][a-z0-9_]{1,62}|[a-z][a-z0-9_]*)$" }, "uniqueItems": true, "description": "Column ids, '-' = descending; multi-column." },
+        "columns": { "type": "array", "items": { "$ref": "#/$defs/columnId" }, "minItems": 1, "uniqueItems": true }
+      }
+    },
+    "viewFilters": {
+      "type": "object",
+      "description": "All given filters must match (AND); values inside one filter are alternatives (OR).",
+      "additionalProperties": false,
+      "properties": {
+        "statuses": { "type": "array", "items": { "$ref": "#/$defs/statusKey" }, "minItems": 1, "uniqueItems": true, "description": "Item status (idea, lead, project views)." },
+        "categories": { "type": "array", "items": { "enum": ["open", "active", "closed"] }, "minItems": 1, "uniqueItems": true, "description": "Status category." },
+        "templates": { "type": "array", "items": { "$ref": "#/$defs/templateKey" }, "minItems": 1, "uniqueItems": true, "description": "Project template (project and gate views)." },
+        "sharedWith": { "type": "array", "items": { "$ref": "#/$defs/groupKey" }, "minItems": 1, "uniqueItems": true },
+        "assignedToMe": { "type": "boolean" },
+        "overdue": { "type": "boolean", "description": "Status aging, timebox date fields, milestone due dates." },
+        "decisions": { "type": "array", "items": { "enum": ["pending", "go", "no_go", "iterate", "pivot", "park"] }, "minItems": 1, "uniqueItems": true, "description": "Gate views only." },
+        "hasLink": {
+          "type": "object",
+          "description": "Items with at least one link of this relation (outgoing: the item is the link's source).",
+          "required": ["relation"],
+          "additionalProperties": false,
+          "properties": {
+            "relation": { "enum": ["contributes_to", "learning_of", "depends_on", "related"] },
+            "direction": { "enum": ["outgoing", "incoming", "any"], "default": "outgoing" },
+            "targetTypes": { "type": "array", "items": { "$ref": "#/$defs/itemType" }, "minItems": 1, "uniqueItems": true }
+          }
+        },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/fieldFilter" }, "minItems": 1, "description": "Idea and project views only." }
+      }
+    },
+    "fieldFilter": {
+      "type": "object",
+      "required": ["field", "op"],
+      "additionalProperties": false,
+      "properties": {
+        "field": { "$ref": "#/$defs/fieldRef" },
+        "op": { "enum": ["eq", "in", "contains", "range", "set", "unset"], "description": "eq: bool/number/rating; in: select/multiselect option ids; contains: text; range: number/rating/score/date; set/unset: has a value or not." },
+        "value": { "type": ["string", "number", "boolean"] },
+        "values": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+        "min": { "type": ["number", "string"] },
+        "max": { "type": ["number", "string"] }
+      },
+      "allOf": [
+        { "if": { "properties": { "op": { "const": "eq" } } }, "then": { "required": ["value"] } },
+        { "if": { "properties": { "op": { "const": "contains" } } }, "then": { "required": ["value"], "properties": { "value": { "type": "string" } } } },
+        { "if": { "properties": { "op": { "const": "in" } } }, "then": { "required": ["values"] } },
+        { "if": { "properties": { "op": { "const": "range" } } }, "then": { "anyOf": [{ "required": ["min"] }, { "required": ["max"] }] } }
+      ]
+    },
+
+    "mapSettings": {
+      "type": "object",
+      "description": "maps.settings (data model §9).",
+      "additionalProperties": false,
+      "properties": {
+        "background": { "$ref": "#/$defs/color" },
+        "grid": { "type": "boolean" },
+        "snap": { "type": "boolean" },
+        "gridSize": { "type": "integer", "minimum": 4, "maximum": 200 },
+        "cardBadges": { "type": "array", "items": { "$ref": "#/$defs/fieldKey" }, "uniqueItems": true }
+      }
+    },
+    "mapTemplate": {
+      "type": "object",
+      "description": "A canvas with maps.is_template = true: layers and drawing elements; config keys '<map template key>/<layer or element key>'.",
+      "required": ["name", "layers", "elements"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "$ref": "#/$defs/text" },
+        "settings": { "$ref": "#/$defs/mapSettings" },
+        "layers": { "type": "array", "items": { "$ref": "#/$defs/layer" }, "minItems": 1 },
+        "elements": { "type": "array", "items": { "$ref": "#/$defs/element" } }
+      }
+    },
+    "layer": {
+      "type": "object",
+      "required": ["key", "name", "sortOrder"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/localKey" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "sortOrder": { "$ref": "#/$defs/sortOrder", "description": "Higher = on top; the importer turns the order into fractional index strings." },
+        "isVisible": { "type": "boolean", "default": true },
+        "isLocked": { "type": "boolean", "default": false }
+      }
+    },
+    "coordinate": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+    "element": {
+      "type": "object",
+      "description": "map_elements; only drawing kinds (item cards, milestones, timelines and images need ids of data).",
+      "required": ["key", "kind", "layer", "x", "y", "width", "height", "z"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/localKey" },
+        "kind": { "enum": ["rect", "ellipse", "line", "text"] },
+        "layer": { "$ref": "#/$defs/localKey" },
+        "x": { "$ref": "#/$defs/coordinate" },
+        "y": { "$ref": "#/$defs/coordinate" },
+        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+        "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+        "z": { "type": "integer", "minimum": 0, "description": "Order within the layer, higher = on top; the importer turns it into fractional index strings." },
+        "text": { "type": ["string", "null"], "maxLength": 2000 },
+        "points": {
+          "type": "array",
+          "description": "Lines only: [[x1, y1], [x2, y2], …] relative to x, y.",
+          "items": { "type": "array", "prefixItems": [{ "$ref": "#/$defs/coordinate" }, { "$ref": "#/$defs/coordinate" }], "minItems": 2, "maxItems": 2 },
+          "minItems": 2
+        },
+        "style": { "$ref": "#/$defs/style" },
+        "config": { "type": ["object", "null"] }
+      },
+      "if": { "required": ["kind"], "properties": { "kind": { "const": "line" } } },
+      "then": { "required": ["points"] },
+      "else": { "not": { "required": ["points"] } }
+    },
+    "style": {
+      "type": "object",
+      "description": "map_elements.style (data model §9); all keys optional.",
+      "additionalProperties": false,
+      "properties": {
+        "fill": { "$ref": "#/$defs/color" },
+        "stroke": { "$ref": "#/$defs/color" },
+        "strokeWidth": { "type": "number", "minimum": 0, "maximum": 50 },
+        "strokeStyle": { "enum": ["solid", "dashed", "dotted"] },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "radius": { "type": "number", "minimum": 0, "maximum": 1000 },
+        "fontSize": { "type": "number", "minimum": 6, "maximum": 400 },
+        "bold": { "type": "boolean" },
+        "italic": { "type": "boolean" },
+        "textColor": { "$ref": "#/$defs/color" },
+        "align": { "enum": ["left", "center", "right"] },
+        "arrowStart": { "enum": ["none", "arrow"] },
+        "arrowEnd": { "enum": ["none", "arrow"] },
+        "lineType": { "enum": ["straight", "elbow"] }
+      }
+    },
+
+    "matrixPreset": {
+      "type": "object",
+      "description": "A matrix map template (maps.kind = matrix, is_template = true) that prefills 'New matrix map'.",
+      "required": ["name", "matrix"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "$ref": "#/$defs/text" },
+        "settings": { "$ref": "#/$defs/mapSettings" },
+        "matrix": { "$ref": "#/$defs/matrix" }
+      }
+    },
+    "axis": {
+      "type": "object",
+      "required": ["field", "min", "max"],
+      "additionalProperties": false,
+      "properties": {
+        "field": { "$ref": "#/$defs/fieldKey" },
+        "label": { "type": "string", "maxLength": 100 },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "split": { "type": "number" }
+      }
+    },
+    "matrix": {
+      "type": "object",
+      "description": "maps.matrix (data model §9) with bare field keys as stored; the filter uses keys instead of ids (statuses → statusIds, templates → templateIds, groups → groupIds).",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "$ref": "#/$defs/axis" },
+        "y": { "$ref": "#/$defs/axis" },
+        "size": {
+          "type": "object",
+          "required": ["field"],
+          "additionalProperties": false,
+          "properties": { "field": { "$ref": "#/$defs/fieldKey" } }
+        },
+        "quadrants": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tr": { "type": "string", "maxLength": 100 },
+            "br": { "type": "string", "maxLength": 100 },
+            "tl": { "type": "string", "maxLength": 100 },
+            "bl": { "type": "string", "maxLength": 100 }
+          }
+        },
+        "filter": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "types": { "type": "array", "items": { "$ref": "#/$defs/sectionItemType" }, "minItems": 1, "uniqueItems": true },
+            "statuses": { "type": "array", "items": { "$ref": "#/$defs/statusKey" }, "uniqueItems": true },
+            "templates": { "type": "array", "items": { "$ref": "#/$defs/templateKey" }, "uniqueItems": true },
+            "groups": { "type": "array", "items": { "$ref": "#/$defs/groupKey" }, "uniqueItems": true }
+          }
+        }
+      }
+    }
+  }
+}

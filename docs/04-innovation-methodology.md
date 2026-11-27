@@ -311,9 +311,12 @@ assessment fields move along: same field keys → values are copied.
 
 ### 4.2 R2 – "AI use case" package (seed content)
 
-Delivered as an importable configuration package (sections, fields, statuses,
-template, roles, groups, map templates). It can be changed afterwards like any
-other configuration. Sections apply to ideas **and** projects (F1) unless noted.
+Delivered as the importable configuration package `innovation-ai`
+(`PGPM/Packages/BuiltIn/innovation-ai.pgpm.json`, doc 03 §17: sections, fields,
+statuses, templates, roles, groups, saved views, map templates, matrix preset;
+it requires `core`). It can be changed afterwards like any other configuration.
+Sections apply to ideas **and** projects (F1) unless noted; the idea sections
+(*Use case profile* to *Review board decision*) are *default for ideas*.
 
 **Section "Use case profile"** (Steckbrief)
 
@@ -325,7 +328,7 @@ other configuration. Sections apply to ideas **and** projects (F1) unless noted.
 | `impact_field` | select: service efficiency & quality / innovation & new business / personal productivity & skills / process innovation & operating models | p. 29 |
 | `transformation_level` | select: optimise process / redesign process / new business or operating model | p. 87 |
 | `idea_source` | select: GenAI research / workshop / Crazy 8s / best-practice scan / process analysis / customer journey / other | p. 32 |
-| `business_unit` | text or select | – |
+| `business_unit` | text | – |
 
 **Section "Value"** (Wert)
 
@@ -338,7 +341,7 @@ other configuration. Sections apply to ideas **and** projects (F1) unless noted.
 | `impact_reach` | rating 0–5 | *addition*: people/processes affected (p. 36 axis label) |
 | `impact_strategic` | rating 0–5 | *addition*: fit with the ambition |
 | `impact_value_band` | select with points: < 10k (1) · 10–50k (2) · 50–200k (3) · 200k–1M (4) · > 1M (5) | *addition* |
-| `impact_score` | score = sum(`impact_reach`, `impact_strategic`, `impact_value_band`, min(count(`strategic_advantages`), 5)) → normalised 0–100 | **y-axis of the matrix** |
+| `impact_score` | score = sum(`impact_reach`, `impact_strategic`, `impact_value_band`, min(count(`strategic_advantages`), 5)), max. 20 → normalised 0–100 | **y-axis of the matrix** |
 
 The playbook gives no numeric impact score. The four inputs above are my
 proposal so the matrix has a y-axis; they can be changed in the configuration.
@@ -347,7 +350,7 @@ proposal so the matrix has a y-axis; they can be changed in the configuration.
 
 | Field | Type |
 |---|---|
-| 12 statements (`feas_data_access` … `feas_ai_understanding`), grouped in 4 sub-headings | rating 0–5, *n/a* allowed |
+| 12 statements in 4 sub-headings – *Data & infrastructure*: `feas_data_access`, `feas_infra`, `feas_data_quality` · *Algorithms & solution*: `feas_solution_known`, `feas_similar_built`, `feas_technologies` · *Processes & systems*: `feas_no_new_processes`, `feas_processes_adaptable`, `feas_no_major_changes` · *Know-how*: `feas_tech_knowhow`, `feas_domain_knowhow`, `feas_ai_understanding` | rating 0–5, *n/a* allowed |
 | `time_to_proof_of_value` | select with points: < 3 months (5) · 4–6 (4) · 7–9 (3) · 10–12 (2) · > 12 (1) |
 | `feasibility_index` | score = sum of the 13 fields (max. 65), *n/a* answers excluded and the result scaled to 65 → **x-axis of the matrix** |
 
@@ -363,7 +366,11 @@ proposal so the matrix has a y-axis; they can be changed in the configuration.
 | `personal_data` | bool |
 | `external_models_allowed` | bool |
 | `human_oversight` | textarea – where a human decides |
-| `compliance_approved` | bool – **editable only by group *Compliance*** (p. 46: compliance approval per idea) |
+
+**Section "Compliance approval"** – **editable only by group *Compliance***
+(rights are per section, so the field has a section of its own)
+
+`compliance_approved` (bool – p. 46: compliance approval per idea).
 
 **Section "Data & platform"** (pp. 58–63) – projects only
 
@@ -393,44 +400,57 @@ undecided), `make_or_buy_rationale` (textarea).
 **Section "Adoption & impact"** (pp. 75, 79) – projects only, until F9 exists
 
 `target_groups` (textarea), `expected_gain_pct` (number), `adoption_pct`
-(number), `effective_gain_pct` (score = product / 100 → "30 % × 50 % = 15 %"),
+(number), `effective_gain_pct` (score = product × 0.01 → "30 % × 50 % = 15 %"),
 `kpi_notes` (textarea).
 
-**Template "AI use case"** – status set as in §4.1, sections *Use case profile,
-Value, Feasibility, Risk & responsibility, Data & platform, Make or buy,
-Charter, Adoption & impact*. Milestones and gates (F4), DoD from the playbook
-checklists (Appendix A):
+**Template "AI use case"** – status set as in §4.1 (default *Preparing test*),
+sections *Use case profile, Value, Feasibility, Risk & responsibility,
+Compliance approval, Data & platform, Make or buy, Charter, Adoption & impact*,
+field defaults `is_ai_system` = yes and `make_or_buy` = undecided, default
+shares *Innovation team*, *Review board* and *Compliance* with *edit* (section
+rights only narrow item access). Milestones and gates (F4), DoD from the
+playbook checklists (Appendix A):
 
-| # | Kind | Title | Offset | DoD (summary) |
-|---|---|---|---|---|
-| G0 | gate | Ready for test | 0 | key persons per core idea defined; test phase prepared; charter written |
-| M1 | milestone | Prototype built | +4 weeks | test concept; test data; evaluation criteria; prototype built |
-| G1 | gate | PoC decision | +8 weeks | goals, test cases, data and success criteria defined; result documented; go/no-go decided; make-or-buy decided |
-| M2 | milestone | MVP live with pilot group | +16 weeks | core features; UI; pilot group active; feedback loops running |
-| G2 | gate | Scale decision | +20 weeks | acceptance measured; responsible-AI checklist; EU AI Act class set; security checklist; data checklist |
-| M3 | milestone | Rolled out | +28 weeks | integrated; logging/monitoring; incident and change process; data/model governance; target groups trained; guides and support |
-| G3 | gate | Impact review | +40 weeks | KPIs defined; baseline vs after measured; reporting rhythm set; decide continue / scale / retire |
+| # | Kind | Title | Offset | DoD (summary) | Suggested status on go / no-go |
+|---|---|---|---|---|---|
+| G0 | gate | Ready for test | 0 | key persons per core idea defined; test phase prepared; charter written | *Prototype / PoC* / *Stopped* |
+| M1 | milestone | Prototype built | +4 weeks | test concept; test data; evaluation criteria; prototype built | |
+| G1 | gate | PoC decision | +8 weeks | goals, test cases, data and success criteria defined; result documented; go/no-go decided; make-or-buy decided; platforms checklist | *MVP / pilot* / *Stopped* |
+| M2 | milestone | MVP live with pilot group | +16 weeks | core features; UI; pilot group active; feedback loops running | |
+| G2 | gate | Scale decision | +20 weeks | acceptance measured; responsible-AI checklist; EU AI Act class set; security checklist; data checklist | *Rollout & scaling* / *Stopped* |
+| M3 | milestone | Rolled out | +28 weeks | integrated; logging/monitoring; incident and change process; data/model governance; target groups trained; guides and support | |
+| G3 | gate | Impact review | +40 weeks | KPIs defined; baseline vs after measured; reporting rhythm set; decide continue / scale / retire; enablement checklist | *In operation* / *Retired* |
 
-**Template "AI ambition"** (project) – section *Ambition*: `period_from`,
-`period_to`, `qualitative_goals` (textarea), `guiding_principles` (textarea,
-default text from p. 30), `strategy_constraints` (textarea – "what is
-non-negotiable", p. 31), `quantitative_targets` (textarea until F9). One
-milestone per quantitative target (e.g. "5 use cases tested", due date =
-target date).
+**Template "AI ambition"** (project) – statuses *Draft* and *Active* (shared with
+the general projects of `core`, status names are unique per item type) and
+*Closed*; section *Ambition*: `period_from`, `period_to`, `qualitative_goals`
+(textarea), `guiding_principles` (textarea, default text from p. 30),
+`strategy_constraints` (textarea – "what is non-negotiable", p. 31),
+`quantitative_targets` (textarea until F9). Milestones: *Ambition defined* (the
+four guiding questions of p. 31), *Ideation round* and *Portfolio review* (DoD:
+the *Identify* and *Assess & prioritize* checklists of Appendix A), and one
+milestone per quantitative target (due date = target date) – seeded with the
+four example targets of p. 30 (e.g. "5 use cases tested"), to be adapted.
 
 **Roles** (assignment role suggestions): *Innovation team*, *Review board*,
 *Domain expert* (Fachexperte), *Delivery team*, *Sponsor*, *Data owner*,
 *AI champion*.
 
-**Groups**: *Innovation team* (edits all sections), *Review board* (edits
-*Review board decision*), *Compliance* (edits `compliance_approved` – needs the
-field in its own section *Compliance approval*, because rights are per section).
+**Groups**: *Innovation team* (`Notes/Ideas/Projects:Create`, `Maps:Create`;
+edits all sections without group restriction), *Review board* (edits *Review
+board decision*), *Compliance* (edits *Compliance approval*).
 
-**Saved list views** (part of version 1, doc 01 §4.3):
+**Saved list views** (part of version 1, doc 01 §4.3; *Learnings* comes with `core`):
 - *Review board agenda*: ideas in status *Ready for review*, sorted by impact score.
 - *AI system inventory*: projects with `is_ai_system = true`, columns EU AI Act
   class, data classification, status.
 - *Running experiments*: projects in *Prototype / PoC*, columns timebox end, days in status.
+- *Gate decisions*: decided gates of all projects, newest first.
+
+**Map templates** (F8): *Impact field canvas*, *Crazy 8s*, *Customer journey*,
+*Use-case funnel*. **Matrix preset** (F3): *Prioritization matrix* – x
+`feasibility_index` 0–65 split at 32.5, y `impact_score` 0–100 split at 50,
+bubble size `business_value_chf`, the quadrants of §2.6.
 
 ### 4.3 R3–R9 – new generic features
 
@@ -637,15 +657,16 @@ The playbook recommends GenAI as a creativity assistant for idea generation
 Translated and condensed. These are the DoD items seeded into the gates and
 milestones (§4.2).
 
-**Identify** (p. 33) – DoD of an *ideation round* (a project or milestone of the
-ambition)
+**Identify** (p. 33) – DoD of an *ideation round* (milestone of the template
+*AI ambition*)
 - AI ambition consulted and search focus defined
 - Contributors and core team defined
 - GenAI research and workshop carried out
 - At least 30 ideas generated
 - Ideas roughly documented
 
-**Assess & prioritize** (p. 37) – DoD of a *portfolio review*
+**Assess & prioritize** (p. 37) – DoD of a *portfolio review* (milestone of the
+template *AI ambition*)
 - Assessment template filled for every idea
 - Assessed ideas placed in the prioritization matrix
 - Quick wins and star initiatives examined; 2–3 core ideas selected
@@ -689,7 +710,7 @@ ambition)
 - Technical controls: guardrails, shadow-AI detection, approval process for new AI applications
 - People: regular training on AI risks, open exchange, AI do's and don'ts communicated
 
-**People / enablement** (p. 79) – G3 or a separate enablement project
+**People / enablement** (p. 79) – G3 (seeded there) or a separate enablement project
 - AI skills built (trainings, peer learning, micro-learning)
 - Culture of experimentation and learning from errors supported
 - Core story on benefits and goals communicated, success stories shared
@@ -704,7 +725,7 @@ ambition)
 ┌ Idea I-0042 · Automated invoice recognition ─────────── Status: Assessed ┐
 │ USE CASE PROFILE                                                         │
 │  Problem · Data basis · Expected output · Impact field · Transf. level  │
-│ VALUE                                                    Impact  72/100 │
+│ VALUE                                                    Impact  60/100 │
 │  Contribution to ambition  [text]                                        │
 │  Strategic advantages      [x] Less complexity [x] Efficiency [x] Quality│
 │  Business value            CHF 15,000 / year   Assumptions [text]        │
@@ -718,12 +739,15 @@ ambition)
 │ RISK & RESPONSIBILITY                                                    │
 │  Flags [ ] ethical [ ] cyber [ ] legal [ ] human-in-the-loop             │
 │  EU AI Act: minimal · Data: internal · Personal data: no                 │
+│ COMPLIANCE APPROVAL (editable by Compliance)                             │
+│  Compliance approved: –                                                  │
 │ REVIEW BOARD DECISION (editable by Review board)                         │
 │  Decision: – · Date: – · Feedback: –                                     │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
 (Example values from the playbook's illustrative assessment, p. 34; the
-impact values are invented for the illustration. The playbook prints a total
+impact values are invented for the illustration: 4 + 3 + 2 + 3 advantages = 12
+of 20 → 60/100. The playbook prints a total
 of 61, but its twelve ratings add up to 53 + 5 = 58 – one more reason to let
 PGPM compute the index instead of summing by hand.)

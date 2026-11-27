@@ -1,0 +1,179 @@
+{
+  "$schema": "../../../spec/config-package.schema.json",
+  "format": "pgpm-config-package",
+  "formatVersion": 1,
+  "name": "core",
+  "title": "Core",
+  "description": "Base configuration of every PGPM installation: the status lists of ideas, leads and general projects, the groups Members and Viewers, the template General project, the base assignment roles and the shared view Learnings (docs/01 §4.7, §5, §10.2; docs/03 §6.2).",
+  "version": "1.0.0",
+  "requires": [],
+  "groups": {
+    "group:members": {
+      "name": "Members",
+      "description": "Everybody who works with PGPM: creates notes, ideas, leads, projects and maps and may use MCP. What a member sees is decided by sharing.",
+      "rights": { "Notes": "Create", "Ideas": "Create", "Leads": "Create", "Projects": "Create", "Maps": "Create", "Mcp": "Use" }
+    },
+    "group:viewers": { "name": "Viewers", "description": "No rights: viewers see what is shared with them.", "rights": {} }
+  },
+  "statuses": {
+    "status:idea.new": {
+      "itemType": "idea",
+      "name": "New",
+      "color": "#64748b",
+      "icon": "pi-lightbulb",
+      "category": "open",
+      "sortOrder": 10,
+      "isDefault": true
+    },
+    "status:idea.elaborating": {
+      "itemType": "idea",
+      "name": "Elaborating",
+      "color": "#0ea5e9",
+      "icon": "pi-pencil",
+      "category": "open",
+      "sortOrder": 20
+    },
+    "status:idea.assessed": {
+      "itemType": "idea",
+      "name": "Assessed",
+      "color": "#6366f1",
+      "icon": "pi-chart-bar",
+      "category": "open",
+      "sortOrder": 30
+    },
+    "status:idea.ready_for_review": {
+      "itemType": "idea",
+      "name": "Ready for review",
+      "color": "#8b5cf6",
+      "icon": "pi-calendar-clock",
+      "category": "open",
+      "sortOrder": 40
+    },
+    "status:idea.selected": {
+      "itemType": "idea",
+      "name": "Selected",
+      "color": "#16a34a",
+      "icon": "pi-check-circle",
+      "category": "closed",
+      "sortOrder": 50
+    },
+    "status:idea.watch": { "itemType": "idea", "name": "Watch", "color": "#d97706", "icon": "pi-eye", "category": "closed", "sortOrder": 60 },
+    "status:idea.rejected": {
+      "itemType": "idea",
+      "name": "Rejected",
+      "color": "#dc2626",
+      "icon": "pi-times-circle",
+      "category": "closed",
+      "sortOrder": 70
+    },
+    "status:lead.new": {
+      "itemType": "lead",
+      "name": "New",
+      "color": "#64748b",
+      "icon": "pi-inbox",
+      "category": "open",
+      "sortOrder": 10,
+      "isDefault": true
+    },
+    "status:lead.qualified": {
+      "itemType": "lead",
+      "name": "Qualified",
+      "color": "#0ea5e9",
+      "icon": "pi-filter",
+      "category": "active",
+      "sortOrder": 20
+    },
+    "status:lead.proposal": {
+      "itemType": "lead",
+      "name": "Proposal",
+      "color": "#6366f1",
+      "icon": "pi-file-edit",
+      "category": "active",
+      "sortOrder": 30
+    },
+    "status:lead.won": { "itemType": "lead", "name": "Won", "color": "#16a34a", "icon": "pi-trophy", "category": "closed", "sortOrder": 40 },
+    "status:lead.lost": { "itemType": "lead", "name": "Lost", "color": "#dc2626", "icon": "pi-times-circle", "category": "closed", "sortOrder": 50 },
+    "status:project.draft": {
+      "itemType": "project",
+      "name": "Draft",
+      "color": "#64748b",
+      "icon": "pi-pencil",
+      "category": "open",
+      "sortOrder": 10,
+      "isDefault": true
+    },
+    "status:project.active": {
+      "itemType": "project",
+      "name": "Active",
+      "color": "#3b82f6",
+      "icon": "pi-play-circle",
+      "category": "active",
+      "sortOrder": 20
+    },
+    "status:project.on_hold": {
+      "itemType": "project",
+      "name": "On hold",
+      "color": "#d97706",
+      "icon": "pi-pause-circle",
+      "category": "active",
+      "sortOrder": 30
+    },
+    "status:project.done": {
+      "itemType": "project",
+      "name": "Done",
+      "color": "#16a34a",
+      "icon": "pi-check-circle",
+      "category": "closed",
+      "sortOrder": 40
+    },
+    "status:project.cancelled": {
+      "itemType": "project",
+      "name": "Cancelled",
+      "color": "#dc2626",
+      "icon": "pi-ban",
+      "category": "closed",
+      "sortOrder": 50
+    }
+  },
+  "templates": {
+    "template:general_project": {
+      "name": "General project",
+      "description": "An ordinary project with the general statuses, without sections or milestones.",
+      "color": "#3b59a5",
+      "icon": "pi-briefcase",
+      "sortOrder": 10,
+      "defaultStatus": "status:project.draft",
+      "allowedStatuses": [
+        "status:project.draft",
+        "status:project.active",
+        "status:project.on_hold",
+        "status:project.done",
+        "status:project.cancelled"
+      ],
+      "sections": [],
+      "fieldDefaults": {},
+      "defaultShares": [{ "group": "group:members", "access": "edit" }],
+      "milestones": []
+    }
+  },
+  "roles": {
+    "role:responsible": { "name": "Responsible", "description": "Accountable for the item.", "sortOrder": 10 },
+    "role:contact": { "name": "Contact", "description": "Contact person, e.g. at the organisation of a lead.", "sortOrder": 20 },
+    "role:contributor": { "name": "Contributor", "description": "Works on the item.", "sortOrder": 30 }
+  },
+  "savedViews": {
+    "view:learnings": {
+      "itemType": "note",
+      "name": "Learnings",
+      "description": "Notes linked as a learning of a project or idea – share learnings systematically (playbook p. 30).",
+      "isShared": true,
+      "sortOrder": 10,
+      "definition": {
+        "search": "",
+        "filters": { "hasLink": { "relation": "learning_of", "direction": "outgoing", "targetTypes": ["project", "idea"] } },
+        "sort": ["-updated_at"],
+        "columns": ["key", "title", "links", "owner", "updated_at"]
+      }
+    }
+  }
+}

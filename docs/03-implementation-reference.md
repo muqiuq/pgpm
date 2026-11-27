@@ -1510,9 +1510,23 @@ Seed content (statuses, sections, fields, templates, groups, saved views, map
 templates) is delivered as **configuration packages** instead of migrations, so
 it can be inspected, re-applied and changed.
 
-- **Format**: JSON, `PGPM/Packages/BuiltIn/<name>.pgpm.json`; every entity has a
-  stable `key` (`status:idea.assessed`, `field:feasibility_index`,
-  `template:ai_use_case`, `group:review_board`); references use keys, not ids.
+- **Format**: JSON, `PGPM/Packages/BuiltIn/<name>.pgpm.json`, specified by
+  [`spec/config-package.schema.json`](../spec/config-package.schema.json)
+  (draft 2020-12): `format: "pgpm-config-package"`, `formatVersion: 1`, `name`,
+  `title`, `description`, `version`, `requires` and the collections `groups`,
+  `statuses`, `sections`, `fields`, `templates`, `roles`, `savedViews`,
+  `mapTemplates`, `matrixPresets` – objects keyed by a stable **key**
+  `<entity>:<slug>` (`status:idea.assessed`, `field:feasibility_index`,
+  `template:ai_use_case`, `group:review_board`, `view:review_board_agenda`,
+  `maptemplate:impact_field`, `matrixpreset:prioritization`), unique across all
+  packages.
+- **References** use keys, never ids, and resolve within the package or a package
+  it `requires` (transitively). Field and map configurations are copied as they
+  are and therefore name fields by their bare key, as stored (score `inputs` and
+  `cap`, matrix axes, `cardBadges`); view columns and sort use `field:<key>` as the
+  list state does. Where stored JSON holds ids, the package holds keys:
+  `statuses`/`templates`/`groups` → `statusIds`/`templateIds`/`groupIds` (matrix
+  filter; views likewise, `sharedWith` → `groupIds`).
 - **Key map**: server-only table `config_keys (entity text, key text, id uuid,
   package text)`, unique (`entity`, `key`) → re-import updates instead of
   duplicating; entities edited in the UI keep their key.
@@ -1523,10 +1537,42 @@ it can be inspected, re-applied and changed.
   win unless "overwrite" is chosen per entity.
 - **Export**: current configuration (or a selection) as a package.
 - **Built-in**: `core` (idea/lead/general project statuses, groups Members and
-  Viewers, roles) and `innovation-ai` (doc 04 §4.2: sections, fields, scores,
-  statuses, templates *AI use case* / *AI ambition*, gates with checklists,
-  groups, saved views, map templates). `ConfigPackageSeeder` imports both on the
-  first start (`Packages:SeedOnFirstStart`).
+  Viewers, template *General project*, roles *Responsible*, *Contact*,
+  *Contributor*, view *Learnings*) and `innovation-ai` (requires `core`; doc 04
+  §4.2: sections, fields, scores, statuses, templates *AI use case* / *AI
+  ambition*, gates with checklists, groups, roles, saved views, map templates,
+  matrix preset *Prioritization matrix*). `ConfigPackageSeeder` imports both on
+  the first start (`Packages:SeedOnFirstStart`).
+- **Validation**: `tools/check-packages.py` (step *packages* of `./run-tests.sh
+  --only shell`) evaluates the schema and the semantic rules – unique keys,
+  resolvable references, field keys `^[a-z][a-z0-9_]{1,62}$`, score inputs numeric
+  and without cycles, derivable rescale/normalise maxima, exactly one default
+  status per item type across the built-in packages, template default status ∈
+  allowed statuses, section `defaultFor` ⊆ `appliesTo`, gate suggestions are
+  project statuses the template allows, map elements on existing layers, views,
+  matrix presets and field defaults fitting their fields, icons in PrimeIcons –
+  and rejects a set of broken variants (self-test). The importer applies the same
+  rules before its dry run.
+
+Format decisions (2026-11-27):
+
+| Topic | Decision |
+|---|---|
+| Field key | the entry key without `field:` (`field:impact_score` → `impact_score`) |
+| Status key | `status:<itemType>.<slug>`, matching `itemType` |
+| Child entities | template milestones, map layers and elements have a local `key`; their config key is `<parent key>/<local key>` (`template:ai_use_case/g1`). Template statuses, sections and field defaults, section access and select options are identified by their pair or option id |
+| Order | integers in the package (`sortOrder`, element `z`); the importer turns them into fractional index strings where the column is one (layers, milestones, elements) |
+| Adoption | without a `config_keys` row the importer adopts an existing entity with the same natural key instead of creating a second one: group by normalized name (Members/Viewers of the migration), status by item type + name, field by key |
+| Shared statuses | status names are unique per item type, so *AI ambition* uses *Draft* and *Active* of `core` plus *Closed* of `innovation-ai` |
+| Compliance approval | a section of its own (rights are per section) on ideas and projects, part of the template *AI use case* |
+| Sub-headings | optional `config.subheading` on every field type (the four feasibility areas) |
+| Assignment roles | `roles` are suggestions for `assignments.role`; the data model has no table for them yet – phase 4 adds `assignment_roles` [S, ro] (`name`, `description`, `sort_order`, `is_archived`) |
+| Matrix presets | imported as a matrix map template (`maps.kind = matrix`, `is_template = true`, one layer) that prefills *New matrix map* |
+| Map templates | drawing elements only (`rect`, `ellipse`, `line`, `text`); at least one layer |
+| Saved views | `definition` is the list state with keys; filters per `$defs/viewFilters` (`statuses`, `categories`, `templates`, `sharedWith`, `assignedToMe`, `overdue`, `decisions` for gate views, `hasLink {relation, direction, targetTypes}`, `fields [{field, op: eq\|in\|contains\|range\|set\|unset, value\|values\|min\|max}]`); built-in column ids in `COLUMNS` of `tools/check-packages.py`; imported as shared views owned by the importing user |
+| Scores | a normalised score as input counts with max 100; `op: sum` with `na: rescale` needs `max` = the sum of the inputs' maxima |
+| Rights | `{Area: Level}` of §6.2; a package can't make a group admin |
+| Icons, colours | PrimeIcons 7 names without the `pi ` class (`pi-bolt`); lower-case `#rrggbb` from the Tailwind/Aura palette |
 
 ## 18. Markdown editing [PNMTD]
 
