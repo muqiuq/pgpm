@@ -4,13 +4,14 @@ import DataTable from 'primevue/datatable'
 import ProgressSpinner from 'primevue/progressspinner'
 import { computed } from 'vue'
 import { useMedia } from '@/composables/useMedia'
-import type { useServerTable } from '@/composables/useServerTable'
+import type { TableSource } from '@/composables/tableSource'
 import EmptyState from './EmptyState.vue'
 import ErrorState from './ErrorState.vue'
 
 /**
- * A server-paged list (PNMTD, docs/03 §12.1): a compact DataTable on a desktop; below 600 px a list of two-line
- * rows (the #mobile slot) with a pager, so nothing scrolls sideways. With an #expansion slot, the
+ * A paged list (PNMTD, docs/03 §12.1, §12.3), from the server (useServerTable) or the local data (useLocalTable): a
+ * compact DataTable on a desktop; below 600 px a list of two-line rows (the #mobile slot) with a pager, so nothing
+ * scrolls sideways. With an #expansion slot, the
  * rows whose ids are in v-model:expanded open their details below them (on a phone too). With
  * v-model:selection and a column with selection-mode="multiple", rows can be picked on a desktop.
  * With `fixed`, the table's layout is fixed: the columns with a width keep it, and those without
@@ -18,7 +19,7 @@ import ErrorState from './ErrorState.vue'
  */
 const props = withDefaults(
   defineProps<{
-    table: ReturnType<typeof useServerTable<T>>
+    table: TableSource<T>
     what: string
     emptyText?: string
     rowClass?: (item: T) => string | object | undefined

@@ -29,6 +29,8 @@ const views: Record<string, () => Promise<RouteComponent>> = {
   users: () => import('@/views/admin/UsersView.vue'),
   groups: () => import('@/views/admin/GroupsView.vue'),
   'audit-log': () => import('@/views/admin/AuditLogView.vue'),
+  notes: () => import('@/views/notes/NotesView.vue'),
+  trash: () => import('@/views/trash/TrashView.vue'),
 }
 
 /** Each menu entry's placeholder until its phase replaces the component (docs/05 §3). */
@@ -37,8 +39,6 @@ const pages: Record<string, { phase: number; summary: string }> = {
   projects: { phase: 3, summary: 'Projects with templates, statuses, sections, milestones and gates.' },
   leads: { phase: 3, summary: 'External opportunities from New to Won or Lost, converted into projects.' },
   ideas: { phase: 3, summary: 'Candidate use cases with assessments, scores and review-board decisions.' },
-  notes: { phase: 2, summary: 'Quick capture and learnings – the first data to sync offline and live.' },
-  trash: { phase: 2, summary: 'Deleted items and maps, restorable until an admin purges them.' },
   persons: { phase: 3, summary: 'The people directory: Microsoft Entra users and manual externals.' },
   'admin-mcp': { phase: 6, summary: 'MCP tokens of all users and the MCP log.' },
   statuses: { phase: 3, summary: 'Statuses per item type: open, active or closed, and how long an item may stay.' },
@@ -68,6 +68,21 @@ const menuRoutes: RouteRecordRaw[] = navigation.flatMap((group) =>
 export const routes: RouteRecordRaw[] = [
   { path: '/', redirect: { name: 'maps' } },
   ...menuRoutes,
+  // A note's editing page (docs/03 §18.2) before its page with the tabs.
+  {
+    path: '/notes/:id/edit',
+    name: 'note-edit',
+    component: () => import('@/views/notes/NoteEditView.vue'),
+    props: true,
+    meta: { title: 'Edit note', icon: 'pi pi-file-edit' },
+  },
+  {
+    path: '/notes/:id/:tab(overview|history)?',
+    name: 'note',
+    component: () => import('@/views/notes/NoteView.vue'),
+    props: true,
+    meta: { title: 'Note', icon: 'pi pi-file-edit', crumbs: [{ label: 'Notes', to: '/notes' }] },
+  },
   {
     path: '/admin/groups/:id',
     name: 'group',
@@ -121,6 +136,13 @@ export const routes: RouteRecordRaw[] = [
           name: 'dev-markdown',
           component: () => import('@/views/dev/MarkdownPlayground.vue'),
           meta: { title: 'Markdown playground', public: true },
+        },
+        // The map canvas and matrix over the in-memory data source, with the frame-time benchmark (docs/03 §13).
+        {
+          path: '/dev/map',
+          name: 'dev-map',
+          component: () => import('@/maps/playground/MapPlayground.vue'),
+          meta: { title: 'Map playground', public: true },
         },
       ]
     : []),

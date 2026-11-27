@@ -54,7 +54,7 @@ test('the shell shows the PGPM menu, folded administration and the placeholders'
 
   // The app bar: search placeholder, sync indicator, theme toggle, the drawer's footer with the server's version.
   await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible()
-  await expect(page.getByTestId('sync-indicator')).toHaveText('Online')
+  await expect(page.getByTestId('sync-indicator')).toContainText('Live')
   await page.getByRole('button', { name: 'Dark theme' }).click()
   await expect(page.locator('html')).toHaveClass(/pgpm-dark/)
   await expect(page.locator('.drawer-footer')).toHaveText(/PGPM \d+\.\d+\.\d+/)
@@ -122,12 +122,12 @@ test('the shell opens offline after the first load', async ({ page, context }) =
     const reloaded = await page.reload()
     expect(reloaded?.fromServiceWorker()).toBe(true)
     await expect(page.getByRole('heading', { level: 1, name: 'Ideas' })).toBeVisible()
-    await expect(page.getByTestId('sync-indicator')).toHaveText('Offline')
+    await expect(page.getByTestId('sync-indicator')).toContainText('Offline')
     await page.goto('/admin/audit-log')
     await expect(page.getByRole('heading', { level: 1, name: 'Audit log' })).toBeVisible()
     await expect(page.getByTestId('user-menu')).toBeVisible()
     await page.getByRole('link', { name: 'Notes', exact: true }).click()
-    await expect(page.getByText('Coming in phase 2')).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: 'Notes' })).toBeVisible()
   } finally {
     await context.setOffline(false)
   }

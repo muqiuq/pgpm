@@ -58,7 +58,7 @@ describe('the menu (docs/01 §3)', () => {
   })
 
   it('has a route for every entry, with its name, path and right – a page, or the placeholder of its phase', () => {
-    const built = ['users', 'groups', 'audit-log']
+    const built = ['users', 'groups', 'audit-log', 'notes', 'trash']
     for (const item of navigation.flatMap((g) => g.items)) {
       const route = routes.find((r) => r.name === item.name)
       expect(route?.path, item.name).toBe(item.to)
