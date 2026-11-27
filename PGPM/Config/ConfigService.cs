@@ -155,7 +155,7 @@ public sealed partial class ConfigService(PgpmDbContext db, SyncWriter writer, S
         var normalized = name.Trim().ToLower();
         if (await db.Statuses.AnyAsync(s => s.ItemType == type && !s.Deleted && !s.IsArchived && s.Id != except && s.Name.ToLower() == normalized, ct))
         {
-            throw ApiException.Conflict("duplicate_name", $"A {EnumText.Of(type)} status with this name exists already.");
+            throw ApiException.Conflict("duplicate_name", $"Another {EnumText.Of(type)} status has this name.");
         }
     }
 

@@ -24,6 +24,30 @@ function fakeUrls(): ObjectUrls & { revoked: string[] } {
 }
 
 const bytes = (n: number, seed = 1) => Uint8Array.from({ length: n }, (_, i) => (i * 7 + seed) % 251)
+
+/**
+ * A PNG as the server checks it by its bytes (signature, IHDR with the size, IDAT, IEND – nothing is decoded), with a
+ * tEXt chunk when `text` is given: metadata the server strips at the commit.
+ */
+function png(seed = 1, text?: string): Uint8Array<ArrayBuffer> {
+  const chunk = (type: string, data: number[]) => {
+    const length = [24, 16, 8, 0].map((shift) => (data.length >>> shift) & 0xff)
+    return [...length, ...[...type].map((c) => c.charCodeAt(0)), ...data, 0, 0, 0, 0]
+  }
+  return Uint8Array.from([
+    ...[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+    ...chunk('IHDR', [0, 0, 0, 4, 0, 0, 0, 3, 8, 2, 0, 0, 0]),
+    ...(text
+      ? chunk(
+          'tEXt',
+          [...text].map((c) => c.charCodeAt(0)),
+        )
+      : []),
+    ...chunk('IDAT', [0x78, 0x9c, seed & 0xff, 0x60, 0, 0, 0, 2, 0, 1]),
+    ...chunk('IEND', []),
+  ])
+}
+const pngFile = (name: string, seed = 1, text?: string) => new File([png(seed, text)], name, { type: 'image/png' })
 const fileOf = (n: number, name = 'report.pdf', type = 'application/pdf', seed = 1) =>
   new File([bytes(n, seed)], name, { type })
 
@@ -204,13 +228,11 @@ describe('the file pipeline (docs/03 §10.2) against the server’s contract', (
     const sha = serverRow.sha256
     serverRow.sha256 = 'damaged'
     expect(await anaFiles.flushPendingUploads()).toMatchObject({ uploaded: 0, failed: 1 })
-    expect(await ana.db.blobs.get(row.id)).toMatchObject({ error: 'The file arrived damaged.', uploaded: false })
-    expect(notices).toEqual(['Upload failed: report.pdf: The file arrived damaged.'])
+    const damaged = 'The bytes received have another SHA-256 than the commit or the file says.'
+    expect(await ana.db.blobs.get(row.id)).toMatchObject({ error: damaged, uploaded: false })
+    expect(notices).toEqual([`Upload failed: report.pdf: ${damaged}`])
     const stored = (await ana.db.synced('files').get(row.id)) as unknown as FileRow
-    expect((await anaFiles.states([stored])).get(row.id)).toEqual({
-      kind: 'failed',
-      error: 'The file arrived damaged.',
-    })
+    expect((await anaFiles.states([stored])).get(row.id)).toEqual({ kind: 'failed', error: damaged })
     // Not retried by itself.
     expect((await anaFiles.flushPendingUploads()).uploaded).toBe(0)
 
@@ -270,7 +292,7 @@ describe('the file pipeline (docs/03 §10.2) against the server’s contract', (
 
   it('sets, replaces and removes a cover with the item’s imageFileId in the same batch', async () => {
     const n = await note()
-    const first = await anaFiles.setCover(n.id, fileOf(5, 'a.png', 'image/png'))
+    const first = await anaFiles.setCover(n.id, pngFile('a.png'))
     const entries = await ana.db.outbox.toArray()
     expect(entries.map((e) => [e.table, e.op])).toEqual([
       ['files', 'insert'],
@@ -280,7 +302,7 @@ describe('the file pipeline (docs/03 §10.2) against the server’s contract', (
     expect(await ana.db.synced('items').get(n.id)).toMatchObject({ imageFileId: first.file.id })
 
     // Replaced before it was synced: the first cover is deleted (the item's patch names it, so the insert stays).
-    const second = await anaFiles.setCover(n.id, fileOf(5, 'b.png', 'image/png', 2))
+    const second = await anaFiles.setCover(n.id, pngFile('b.png', 2))
     expect(await ana.db.synced('files').get(first.file.id)).toMatchObject({ deleted: true })
     expect(await ana.db.synced('items').get(n.id)).toMatchObject({ imageFileId: second.file.id })
 
@@ -298,6 +320,48 @@ describe('the file pipeline (docs/03 §10.2) against the server’s contract', (
     expect(server.table('files').get(second.file.id)).toMatchObject({ deleted: true })
     await anaFiles.sweep()
     expect(await ana.db.blobs.get(second.file.id)).toBeUndefined()
+  })
+
+  it('takes the stored bytes of an image whose metadata the server stripped at the commit: row and device', async () => {
+    const n = await note()
+    const { file } = await anaFiles.setCover(n.id, pngFile('Screenshot', 1, 'Author\u0000Somebody'))
+    expect(file).toMatchObject({ fileName: 'Screenshot', sizeBytes: png(1, 'Author\u0000Somebody').length })
+    await ana.engine.sync({ pull: true })
+    expect(await anaFiles.flushPendingUploads()).toMatchObject({ uploaded: 1 })
+    const stored = server.fileBytes.get(file.id)!.bytes
+    expect(stored).toEqual(png(1))
+    // The commit's answer laid over the row (it isn't all of it): the item and purpose stay, the stored bytes' facts come.
+    expect(await ana.db.synced('files').get(file.id)).toMatchObject({
+      itemId: n.id,
+      purpose: 'cover',
+      status: 'available',
+      fileName: 'Screenshot.png',
+      sizeBytes: stored.length,
+      sha256: await sha256Hex(stored.slice().buffer),
+      width: 4,
+      height: 3,
+    })
+    // The device holds what every other one gets.
+    expect(new Uint8Array((await ana.db.blobs.get(file.id))!.bytes)).toEqual(stored)
+    await ben.engine.sync({ pull: true })
+    expect(new Uint8Array(await (await benFiles.fileBlob(file.id)).arrayBuffer())).toEqual(stored)
+  })
+
+  it('shares the bytes the server has already: the same file attached again is available at once, no upload', async () => {
+    const n = await note()
+    const first = await anaFiles.attachFile({ itemId: n.id }, fileOf(10), 'attachment')
+    await ana.engine.sync({ pull: true })
+    await anaFiles.flushPendingUploads()
+    const again = await anaFiles.attachFile({ itemId: n.id }, fileOf(10, 'copy.pdf'), 'attachment')
+    await ana.engine.sync({ pull: true })
+    expect(await ana.db.synced('files').get(again.id)).toMatchObject({ status: 'available' })
+    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 0, failed: 0, stopped: null })
+    expect(chunkCalls(again.id)).toEqual([])
+    expect(server.fileBytes.get(again.id)).toBe(server.fileBytes.get(first.id))
+    // A chunk for a stored file (a commit whose answer was lost): 409 file_available, counted as uploaded.
+    await ana.db.synced('files').update(again.id, { status: 'pending' })
+    expect(await anaFiles.flushPendingUploads()).toEqual({ uploaded: 1, failed: 0, stopped: null })
+    expect(chunkCalls(again.id)).toEqual(['chunks/0'])
   })
 
   it('attached offline, the file goes up with the first sync once the device is back online (afterRun)', async () => {

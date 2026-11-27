@@ -108,6 +108,7 @@ public sealed class FileTests
         Assert.AreEqual(png.Length - 12 - "Author\0Somebody".Length, committed.Long("sizeBytes"), "the text chunk is gone");
         Assert.AreNotEqual(Sha(png), committed.Str("sha256"));
         Assert.AreEqual((1, 1), (committed.Int("width"), committed.Int("height")));
+        Assert.AreEqual("Cover.png", committed.Str("fileName"), "the name with the type's extension, as the row has it");
         await client.SyncAllAsync();
         var row = client.Row("files", id)!;
         Assert.AreEqual(("available", "Cover.png"), (row.Str("status"), row.Str("fileName")));

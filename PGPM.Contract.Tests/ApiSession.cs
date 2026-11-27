@@ -58,6 +58,18 @@ internal sealed class ApiSession : IDisposable
         return await Http.SendAsync(request);
     }
 
+    /// <summary>Raw bytes (a file chunk, docs/03 §10.2), with the CSRF header.</summary>
+    public async Task<HttpResponseMessage> SendBytesAsync(HttpMethod method, string path, byte[] bytes)
+    {
+        using var request = new HttpRequestMessage(method, path) { Content = new ByteArrayContent(bytes) };
+        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+        if (Cookie("XSRF-TOKEN") is { } token)
+        {
+            request.Headers.Add("X-XSRF-TOKEN", token.Value);
+        }
+        return await Http.SendAsync(request);
+    }
+
     /// <summary>The local sign-in: its answer (<c>next</c>, <c>me</c>).</summary>
     public Task<JsonElement> SignInAsync(string username, string password) =>
         CallAsync(HttpMethod.Post, "/api/v1/auth/login", new { username, password });

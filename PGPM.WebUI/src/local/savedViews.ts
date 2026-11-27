@@ -6,8 +6,8 @@ import type { ItemType, SavedViewRow } from './rows'
 /**
  * Saved list views (docs/01 §4.3, data model §7.8): the current search, filters, sort and columns under a name –
  * personal, or shared with everybody (*Configuration: Manage*). The device has its own views and the shared ones; they
- * are written through the repository (offline too). A shared view is changed by its owner, who needs Configuration:
- * Manage (the server checks the same).
+ * are written through the repository (offline too). A personal view is changed by its owner; a shared one – the seeded
+ * ones of the packages too – by anybody with Configuration: Manage (docs/02 §7.8; the server checks the same).
  */
 
 export interface ViewUser {
@@ -25,9 +25,9 @@ export function viewsFor(rows: readonly SavedViewRow[], type: ItemType, userId: 
     )
 }
 
-/** Whether the user may change (update, rename, delete) a view. */
+/** Whether the user may change (update, rename, delete) a view: a shared one with Configuration: Manage, else its owner. */
 export function canChange(view: SavedViewRow, user: ViewUser): boolean {
-  return view.ownerUserId === user.userId && (!view.isShared || user.configManage)
+  return view.isShared ? user.configManage : view.ownerUserId === user.userId
 }
 
 /** A view's name: 1–100 characters (data model §7.8). */
@@ -80,9 +80,7 @@ export async function createView(
 
 function check(view: SavedViewRow, user: ViewUser) {
   if (!canChange(view, user)) {
-    throw new Error(
-      view.isShared ? 'Shared views are changed by their owner with Configuration: Manage.' : 'Not yours.',
-    )
+    throw new Error(view.isShared ? 'Shared views are changed with Configuration: Manage.' : 'Not yours.')
   }
 }
 

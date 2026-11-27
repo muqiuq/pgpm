@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:7331'
+const browser = { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }
 
 /**
  * The browser tests (docs/05 §5), run by tools/e2e.sh in the Playwright image against a stack of their own. E2E_BASE_URL
@@ -21,5 +22,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } }],
+  // The first admin's test needs the fresh stack (the initial password, changed there): it runs before every other file,
+  // whatever their names.
+  projects: [
+    { name: 'first-admin', testMatch: /identity\.spec\.ts$/, use: browser },
+    { name: 'chromium', testIgnore: /identity\.spec\.ts$/, dependencies: ['first-admin'], use: browser },
+  ],
 })

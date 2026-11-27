@@ -113,7 +113,7 @@ describe('Administration → Statuses (docs/01 §5)', () => {
     name.value = 'elaborating'
     name.dispatchEvent(new Event('input'))
     submit().click()
-    await until(() => dialog().textContent!.includes('This name is taken.'), 'the server’s message')
+    await until(() => dialog().textContent!.includes('Another idea status has this name.'), 'the server’s message')
 
     name.value = 'Watch'
     name.dispatchEvent(new Event('input'))

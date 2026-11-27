@@ -23,7 +23,10 @@ import { uuidv7 } from '@/local/uuid'
  * evictions, access epochs and resets (`cursor: 0`, no rows), trash and restore (an item's shares stay out of its
  * batch), and the live channel: `reset` then close 4409, `session` then 4401, ack flow control (an ack below the sent
  * cursor is ignored), the server's `ping`, *… is editing* notices never sent to the editor's own user. Timestamps with
- * microseconds, as PostgreSQL keeps them. Checked against the real server by the e2e tests (e2e/sync.spec.ts).
+ * microseconds, as PostgreSQL keeps them. Phase 3: every synced table with the server's descriptors (whitelists,
+ * server-owned members, the items', persons', saved views' and children's rules), the file transfer (chunks in order,
+ * the commit's checks, PNG metadata stripped, shared bytes) and the statuses endpoints with the server's codes and
+ * answers. Checked against the real server by the e2e tests (e2e/*.spec.ts) and the contract tests (PGPM.Contract.Tests).
  */
 
 type ServerRow = Row & { id: string; seq: number; rev: number; deleted: boolean; deleteBatchId: string | null }
@@ -38,7 +41,10 @@ interface User {
   configManage: boolean
 }
 
-/** The patchable whitelist per table (docs/03 §11.5); others: read-only or insert-only. */
+/**
+ * The patchable whitelist per table, as the server's table descriptors have it (docs/03 §11.5; the `SyncTable` classes of `PGPM/`);
+ * `key.*` admits the members of a jsonb column. Others: read-only or insert-only.
+ */
 export const patchable: Record<string, readonly string[]> = {
   items: [
     'title',
@@ -60,42 +66,52 @@ export const patchable: Record<string, readonly string[]> = {
     'projectEndDate',
   ],
   persons: [
-    'notes',
     'displayName',
     'givenName',
     'surname',
     'email',
+    'userPrincipalName',
+    'userType',
     'jobTitle',
     'department',
     'companyName',
     'phone',
     'mobilePhone',
     'isActive',
+    'notes',
   ],
-  user_settings: ['value'],
+  user_settings: ['value', 'value.*'],
   assignments: ['role', 'sortOrder'],
   item_links: [],
-  files: ['fileName'],
+  files: ['fileName', 'thumbnail'],
   field_values: ['value'],
   item_sections: ['sortOrder'],
-  saved_views: ['name', 'definition', 'isShared', 'sortOrder'],
+  saved_views: ['name', 'description', 'definition', 'definition.*', 'isShared', 'sortOrder'],
   milestones: [
     'title',
     'description',
     'dueDate',
     'status',
-    'completedAt',
     'decision',
     'decisionNote',
-    'decidedAt',
-    'decidedBy',
     'onGoStatusId',
     'onNoGoStatusId',
     'color',
     'sortOrder',
   ],
   dod_items: ['text', 'state', 'note', 'sortOrder'],
-  maps: ['name', 'description', 'settings', 'matrix', 'defaultView', 'preview'],
+  maps: [
+    'name',
+    'description',
+    'settings',
+    'settings.*',
+    'matrix',
+    'matrix.*',
+    'defaultView',
+    'defaultView.*',
+    'isTemplate',
+    'preview',
+  ],
   map_layers: ['name', 'sortOrder', 'isVisible', 'isLocked'],
   map_elements: [
     'layerId',
@@ -109,8 +125,33 @@ export const patchable: Record<string, readonly string[]> = {
     'startElementId',
     'endElementId',
     'style',
+    'style.*',
     'config',
+    'config.*',
   ],
+}
+
+/** Whether a patch may change the key: in the whitelist, or a member of a jsonb column whose `key.*` is. */
+export function isPatchable(table: string, key: string): boolean {
+  const allowed = patchable[table] ?? []
+  if (allowed.includes(key)) return true
+  const dot = key.indexOf('.')
+  return dot > 0 && allowed.includes(`${key.slice(0, dot)}.*`) && key.split('.').every((p) => p && p !== '__proto__')
+}
+
+/**
+ * The members the server sets itself: ignored in an insert's row (and not patchable). `access` and `canEdit` are
+ * computed per user, `storagePath` and `unreferencedSince` never leave the server.
+ */
+const serverOwned: Record<string, readonly string[]> = {
+  items: ['number', 'ownerUserId', 'statusChangedAt', 'convertedToItemId', 'access'],
+  persons: ['source', 'entraTenantId', 'entraObjectId', 'directorySyncedAt', 'userId'],
+  files: ['status', 'storagePath', 'unreferencedSince'],
+  milestones: ['completedAt', 'decidedAt', 'decidedBy'],
+  dod_items: ['stateChangedBy', 'stateChangedAt'],
+  saved_views: ['ownerUserId'],
+  maps: ['ownerUserId', 'access'],
+  user_settings: ['userId'],
 }
 
 /** Every synced table, in the server's order (parents first). */
@@ -178,6 +219,67 @@ export const chunkBytes = 4 * 1024 * 1024
 const maxAttachment = 25 * 1024 * 1024
 const maxImage = 2 * 1024 * 1024
 const blockedExtensions = ['exe', 'msi', 'dll', 'scr', 'com', 'bat', 'cmd', 'ps1', 'vbs', 'js', 'jar', 'hta', 'lnk']
+/** The purposes that are images, checked by their bytes at the commit (FilesOptions.IsImage). */
+const imagePurposes = ['cover', 'map_image', 'embedded']
+/** The image types and their extensions (ImageCheck.ExtensionOf). */
+const imageExtensions: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+}
+
+/** The blocked extension in a name – double ones too (`invoice.exe.pdf`) – or null. */
+function blockedIn(name: string): string | null {
+  const parts = name.toLowerCase().split('.').slice(1)
+  return parts.find((p) => blockedExtensions.includes(p.trim())) ?? null
+}
+
+/** An image's name ends in its type's extension (FileNames.ImageName): `Screenshot` → `Screenshot.png`. */
+function imageName(name: string, extension: string): string {
+  const aliases: Record<string, string[]> = { png: ['png'], jpg: ['jpg', 'jpeg', 'jpe', 'jfif'], gif: ['gif'] }
+  const dot = name.lastIndexOf('.')
+  const current = dot > 0 ? name.slice(dot + 1) : ''
+  if ((aliases[extension] ?? [extension]).includes(current.toLowerCase())) return name
+  const stem = /^(?=.*[a-z])[a-z0-9]{1,10}$/i.test(current) ? name.slice(0, dot) : name
+  return `${stem}.${extension}`
+}
+
+const startsWith = (bytes: Uint8Array, prefix: number[], at = 0) => prefix.every((b, i) => bytes[at + i] === b)
+
+/**
+ * The commit's image check (ImageCheck), as far as the tests need it: the type from the magic bytes, PNG's size from its
+ * header and its metadata chunks (tEXt, zTXt, iTXt, eXIf, tIME) removed without re-encoding; null when it isn't one.
+ */
+function checkImage(
+  bytes: Uint8Array,
+): { bytes: Uint8Array; contentType: string; width?: number; height?: number } | null {
+  if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    const kept: Uint8Array[] = [bytes.slice(0, 8)]
+    let at = 8
+    while (at + 12 <= bytes.length) {
+      const length = view.getUint32(at)
+      const type = String.fromCharCode(...bytes.slice(at + 4, at + 8))
+      const end = at + 12 + length
+      if (end > bytes.length) return null
+      if (!['tEXt', 'zTXt', 'iTXt', 'eXIf', 'tIME'].includes(type)) kept.push(bytes.slice(at, end))
+      at = end
+    }
+    const out = new Uint8Array(kept.reduce((n, k) => n + k.length, 0))
+    let o = 0
+    for (const k of kept) {
+      out.set(k, o)
+      o += k.length
+    }
+    return { bytes: out, contentType: 'image/png', width: view.getUint32(16), height: view.getUint32(20) }
+  }
+  if (startsWith(bytes, [0xff, 0xd8, 0xff])) return { bytes, contentType: 'image/jpeg' }
+  if (startsWith(bytes, [0x47, 0x49, 0x46, 0x38])) return { bytes, contentType: 'image/gif' }
+  if (startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) && startsWith(bytes, [0x57, 0x45, 0x42, 0x50], 8))
+    return { bytes, contentType: 'image/webp' }
+  return null
+}
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>)
@@ -459,7 +561,7 @@ export class FakeSyncServer {
 
   private canWrite(user: User, table: string, row: Row, level: Access): boolean {
     if (table === 'user_settings') return row.userId === user.id
-    if (table === 'saved_views') return row.ownerUserId === user.id && (row.isShared !== true || user.configManage)
+    if (table === 'saved_views') return row.isShared === true ? user.configManage : row.ownerUserId === user.id
     if (table === 'persons') return true
     const access = this.accessTo(user, table, row)
     // Children of an item or map are written (and deleted) with edit on it; the item or map itself as asked.
@@ -482,9 +584,8 @@ export class FakeSyncServer {
   private insert(user: User, m: WireMutation, existing: ServerRow | undefined): Stored {
     if (existing) return this.rejected(m, 'duplicate_id')
     const row: Row & { id: string } = { ...(m.row ?? {}), id: m.id }
-    // Computed per user, or the server's own: ignored as the server ignores them.
-    if (m.table === 'items' || m.table === 'maps') delete row.access
-    delete row.storagePath
+    // The server's own members and the computed ones: ignored as the server ignores them (docs/03 §11.4).
+    for (const key of serverOwned[m.table] ?? []) delete row[key]
     if (m.table === 'items') return this.insertItem(user, m, row)
     if (m.table === 'item_shares' || m.table === 'map_shares') {
       const parentTable = m.table === 'item_shares' ? 'items' : 'maps'
@@ -506,22 +607,29 @@ export class FakeSyncServer {
     }
     if (this.ownerOf(m.table, row)) {
       const owner = this.ownerOf(m.table, row)!
-      if (!owner.row || owner.row.deleted) return this.rejected(m, 'parent_missing')
+      // A parent that is gone and one the user may not see are the same answer (RequireParentItemAsync).
+      if (!owner.row || owner.row.deleted || !this.accessTo(user, m.table, row))
+        return this.rejected(m, 'parent_missing')
       if (!this.canWrite(user, m.table, row, 'edit')) return this.rejected(m, 'missing_access')
       if (m.table === 'item_links') {
+        if (row.toItemId === row.fromItemId)
+          return this.rejected(m, 'validation_failed', null, { toItemId: ['An item doesn’t link to itself.'] })
         const target = this.table('items').get(row.toItemId as string)
-        if (!target || target.deleted) return this.rejected(m, 'parent_missing')
-        if (!this.itemAccess(user, target)) return this.rejected(m, 'missing_access')
+        if (!target || target.deleted || !this.itemAccess(user, target)) return this.rejected(m, 'parent_missing')
       }
-      if (m.table === 'files') {
-        const name = String(row.fileName ?? '')
-        const parts = name.toLowerCase().split('.').slice(1)
-        if (parts.some((p) => blockedExtensions.includes(p)))
-          return this.rejected(m, 'validation_failed', null, { fileName: ['This file type is blocked.'] })
-        const image = row.purpose !== 'attachment' && String(row.contentType ?? '').startsWith('image/')
-        if (Number(row.sizeBytes) > (image ? maxImage : maxAttachment))
-          return this.rejected(m, 'validation_failed', null, { sizeBytes: ['Too large.'] })
-        return this.accepted(m, this.write('files', { ...row, status: 'pending' }, user.id))
+      if (m.table === 'assignments') {
+        const person = this.table('persons').get(row.personId as string)
+        if (!person || person.deleted) return this.rejected(m, 'parent_missing')
+      }
+      if (m.table === 'files') return this.insertFile(user, m, row)
+      if (m.table === 'milestones') {
+        row.completedAt = row.status === 'done' ? this.now() : null
+        this.decided(user, row)
+      }
+      if (m.table === 'dod_items') {
+        const changed = (row.state ?? 'open') !== 'open'
+        row.stateChangedAt = changed ? this.now() : null
+        row.stateChangedBy = changed ? user.id : null
       }
       if (m.table === 'field_values') {
         const duplicate = [...this.table('field_values').values()].find(
@@ -562,26 +670,64 @@ export class FakeSyncServer {
     this.created.get(batch)!.add(id)
   }
 
+  /** The status a new item gets when none is sent: the template's default, else the type's (not archived). */
+  private defaultStatusOf(type: string, templateId: unknown): string | null {
+    const template = templateId ? this.table('project_templates').get(templateId as string) : undefined
+    if (type === 'project' && template?.defaultStatusId) return template.defaultStatusId as string
+    const status = [...this.table('statuses').values()].find(
+      (s) => s.itemType === type && s.isDefault === true && !s.deleted && !s.isArchived,
+    )
+    return status?.id ?? null
+  }
+
+  /** `statusId` and `imageFileId` as the server checks them (ItemsTable.ValidateAsync); null if fine. */
+  private itemErrors(row: Row & { id: string }, keys: readonly string[] | null): Record<string, string[]> | null {
+    const type = row.type as string
+    if ((keys === null || keys.includes('statusId')) && row.statusId) {
+      const status = this.table('statuses').get(row.statusId as string)
+      if (!status || status.deleted || status.itemType !== type) return { statusId: [`A status of ${type}s.`] }
+      if (status.isArchived) return { statusId: ['The status is archived.'] }
+    }
+    if ((keys === null || keys.includes('imageFileId')) && row.imageFileId) {
+      const file = this.table('files').get(row.imageFileId as string)
+      if (!file || file.deleted || file.itemId !== row.id || !String(file.contentType).startsWith('image/'))
+        return { imageFileId: ['An image file of this item.'] }
+    }
+    return null
+  }
+
   /**
-   * A new item of any type (phase 3): a title, a status of its type for ideas, leads and projects, the per-type number,
-   * the owner; an origin (conversion) must be readable, and the origin's `convertedToItemId` is set in the same
-   * transaction (docs/03 §12.8: the client never patches it).
+   * A new item of any type (phase 3): a title, a status of its type for ideas, leads and projects (none sent: the
+   * default), the per-type number, the owner; an origin (conversion) is an idea or lead the user reads – with edit on it,
+   * its `convertedToItemId` is set in the same transaction (docs/03 §11.4; the client never patches it).
    */
   private insertItem(user: User, m: WireMutation, row: Row & { id: string }): Stored {
     const type = row.type as string
-    if (!['note', 'idea', 'lead', 'project'].includes(type)) return this.rejected(m, 'validation_failed')
+    if (!['note', 'idea', 'lead', 'project'].includes(type)) return this.rejected(m, 'not_supported')
     if (typeof row.title !== 'string' || !row.title.trim() || row.title.length > 300)
-      return this.rejected(m, 'validation_failed', null, { title: ['A title is needed.'] })
-    const status = row.statusId ? this.table('statuses').get(row.statusId as string) : undefined
-    if (type === 'note' ? !!row.statusId : !status || status.itemType !== type)
-      return this.rejected(m, 'validation_failed', null, { statusId: ['A status of the type is required.'] })
+      return this.rejected(m, 'validation_failed', null, { title: ['1 to 300 characters.'] })
+    if (type !== 'note' && !row.statusId) row.statusId = this.defaultStatusOf(type, row.projectTemplateId)
+    if (type === 'note' ? !!row.statusId : !row.statusId)
+      return this.rejected(m, 'validation_failed', null, {
+        statusId: [type === 'note' ? 'Notes have no status.' : 'A status is required.'],
+      })
     if (type !== 'note' && row.pinned === true)
       return this.rejected(m, 'validation_failed', null, { pinned: ['Only notes are pinned.'] })
+    const errors = this.itemErrors(row, null)
+    if (errors) return this.rejected(m, 'validation_failed', null, errors)
     let origin: ServerRow | undefined
     if (row.originItemId) {
       origin = this.table('items').get(row.originItemId as string)
-      if (type !== 'project' || !origin || origin.deleted) return this.rejected(m, 'parent_missing')
-      if (!this.itemAccess(user, origin)) return this.rejected(m, 'missing_access')
+      if (
+        type !== 'project' ||
+        !origin ||
+        origin.deleted ||
+        !['idea', 'lead'].includes(origin.type as string) ||
+        !this.itemAccess(user, origin)
+      )
+        return this.rejected(m, 'validation_failed', null, {
+          originItemId: ['A project’s origin is an idea or a lead you can read.'],
+        })
     }
     const number = (this.numbers.get(type) ?? 0) + 1
     this.numbers.set(type, number)
@@ -596,9 +742,18 @@ export class FakeSyncServer {
       },
       user.id,
     )
-    if (origin) this.write('items', { ...origin, convertedToItemId: row.id }, user.id)
+    const originAccess = origin ? this.itemAccess(user, origin) : null
+    if (origin && originAccess && accessRank[originAccess] >= accessRank.edit)
+      this.write('items', { ...origin, convertedToItemId: row.id }, user.id)
     this.remember(m.batch, m.id)
     return this.accepted(m, stored)
+  }
+
+  /** A gate's decision stamps (MilestonesTable): who decided when, for a decision other than pending. */
+  private decided(user: User, row: Row) {
+    const decided = !!row.decision && row.decision !== 'pending'
+    row.decidedAt = decided ? this.now() : null
+    row.decidedBy = decided ? user.id : null
   }
 
   /** An insert of a unique pair: a duplicate is merged into the existing row (`mergedInto`, docs/03 §11.5). */
@@ -614,22 +769,31 @@ export class FakeSyncServer {
 
   private patch(user: User, m: WireMutation, row: ServerRow): Stored {
     if (row.deleted) return this.conflict(m, row, 'deleted_by_other', this.currentRow(user, m.table, row))
-    const allowed = patchable[m.table] ?? []
     const changes = m.changes ?? {}
-    if (Object.keys(changes).some((k) => !allowed.includes(k.split('.')[0]!)))
+    const keys = Object.keys(changes)
+    if (keys.some((k) => !isPatchable(m.table, k)))
       return this.rejected(m, 'not_patchable', this.currentRow(user, m.table, row))
-    if (!this.canWrite(user, m.table, row, 'edit'))
+    // A Microsoft person: notes only; a user's own person: not the name and e-mail (they follow the user).
+    if (
+      m.table === 'persons' &&
+      (row.source === 'microsoft'
+        ? keys.some((k) => k !== 'notes')
+        : !!row.userId && keys.some((k) => k === 'displayName' || k === 'email'))
+    )
+      return this.rejected(m, 'not_patchable', this.currentRow(user, m.table, row))
+    if (m.table === 'saved_views') {
+      // A shared view (or sharing one) needs Configuration: Manage; a personal one is its owner's.
+      if (row.isShared === true || keys.includes('isShared')) {
+        if (!user.configManage) return this.rejected(m, 'missing_right', this.currentRow(user, m.table, row))
+      } else if (row.ownerUserId !== user.id) {
+        return this.rejected(m, 'missing_access', this.currentRow(user, m.table, row))
+      }
+    } else if (!this.canWrite(user, m.table, row, 'edit'))
       return this.rejected(m, 'missing_access', this.currentRow(user, m.table, row))
-    if (m.table === 'persons' && row.source === 'microsoft' && Object.keys(changes).some((k) => k !== 'notes'))
-      return this.rejected(m, 'not_patchable', this.currentRow(user, m.table, row))
-    if (m.table === 'saved_views' && changes.isShared?.new === true && !user.configManage)
-      return this.rejected(m, 'missing_right', this.currentRow(user, m.table, row))
-    if (m.table === 'items' && changes.statusId) {
-      const status = this.table('statuses').get(changes.statusId.new as string)
-      if (!status || status.itemType !== row.type)
-        return this.rejected(m, 'validation_failed', this.currentRow(user, m.table, row), {
-          statusId: ['A status of the type is required.'],
-        })
+    if (m.table === 'items') {
+      const next = { ...row, ...Object.fromEntries(keys.map((k) => [k, changes[k]!.new])) }
+      const errors = this.itemErrors(next, keys)
+      if (errors) return this.rejected(m, 'validation_failed', this.currentRow(user, m.table, row), errors)
     }
     const apply: Record<string, { old: unknown; new: unknown }> = {}
     const conflicts: FieldConflict[] = []
@@ -653,8 +817,15 @@ export class FakeSyncServer {
     let stored = row
     if (Object.keys(apply).length) {
       const next = applyPatch(row, apply) as ServerRow
-      // The server ages the status (data model §7.1).
+      // The server ages the status (data model §7.1) and stamps milestones and DoD items (docs/03 §15 #50).
       if (m.table === 'items' && apply.statusId) next.statusChangedAt = this.now()
+      if (m.table === 'milestones' && apply.status)
+        next.completedAt = next.status === 'done' ? (next.completedAt ?? this.now()) : null
+      if (m.table === 'milestones' && apply.decision) this.decided(user, next)
+      if (m.table === 'dod_items' && apply.state) {
+        next.stateChangedAt = this.now()
+        next.stateChangedBy = user.id
+      }
       stored = this.write(m.table, next, user.id)
       for (const key of Object.keys(apply)) {
         this.lastChange.set(`${m.table}:${row.id}:${key}`, { by: user.name, at: stored.updatedAt as string })
@@ -685,7 +856,9 @@ export class FakeSyncServer {
   private remove(user: User, m: WireMutation, row: ServerRow): Stored {
     if (row.deleted) return this.accepted(m, row)
     if (['item_shares', 'map_shares', 'user_settings'].includes(m.table)) return this.rejected(m, 'not_supported')
-    if (!this.canWrite(user, m.table, row, 'manage'))
+    if (m.table === 'saved_views' && row.isShared === true) {
+      if (!user.configManage) return this.rejected(m, 'missing_right', this.currentRow(user, m.table, row))
+    } else if (!this.canWrite(user, m.table, row, 'manage'))
       return this.rejected(m, 'missing_access', this.currentRow(user, m.table, row))
     if (!m.force && m.baseRev !== null && row.rev !== m.baseRev) {
       return this.conflict(m, row, 'changed_since_delete', this.currentRow(user, m.table, row))
@@ -808,133 +981,301 @@ export class FakeSyncServer {
     return { batchId, restored, skipped: 0 }
   }
 
-  // --- files (docs/03 §10.2) --------------------------------------------------------------------------------------
+  // --- files (docs/03 §10.3, PGPM/Files/FileService.cs) -----------------------------------------------------------
 
-  /** The files row a transfer is for, if the user may write it (edit on its item or map). */
+  /** The files row a transfer is for: 404 when it doesn't exist or is hidden, 403 `missing_access` below the level. */
   private fileFor(userId: string, id: string, level: 'read' | 'edit'): ServerRow {
     const user = this.user(userId)
     const row = this.table('files').get(id)
-    if (!row || row.deleted || !this.visible(user, 'files', row)) throw new ApiError(404, { code: 'not_found' })
+    if (!row || row.deleted || !this.visible(user, 'files', row))
+      throw new ApiError(404, { code: 'not_found', detail: 'File not found.' })
     if (level === 'edit' && !this.canWrite(user, 'files', row, 'edit'))
-      throw new ApiError(403, { code: 'missing_access' })
+      throw new ApiError(403, { code: 'missing_access', detail: 'You need edit access to the file’s item or map.' })
     return row
   }
 
-  /** `PUT /api/v1/files/{id}/chunks/{n}`: chunk 0 starts over; the next chunk must follow the received bytes. */
+  /**
+   * A new `files` row (FilesTable): either an item or a map, image purposes PNG/JPEG/GIF/WebP, no blocked name, at most
+   * the purpose's limit; `pending` – unless the same bytes (SHA-256 and size) are stored already for a file the user can
+   * read: then it is `available` at once and shares them (no upload, docs/03 §10.3).
+   */
+  private insertFile(user: User, m: WireMutation, row: Row & { id: string }): Stored {
+    const image = imagePurposes.includes(row.purpose as string)
+    const errors: Record<string, string[]> = {}
+    if (row.purpose === 'map_image' ? !row.mapId : !row.itemId)
+      errors.purpose = ['Map images belong to maps; covers, attachments and embedded images to items.']
+    const name = String(row.fileName ?? '')
+    if (!name.trim() || name.length > 255 || /[/\\]/.test(name)) errors.fileName = ['1 to 255 characters, no path.']
+    else if (blockedIn(name)) errors.fileName = [`Files ending in .${blockedIn(name)} can't be stored.`]
+    if (image && !imageExtensions[String(row.contentType)]) errors.contentType = ['Images are PNG, JPEG, GIF or WebP.']
+    if (!/^[0-9a-f]{64}$/i.test(String(row.sha256 ?? ''))) errors.sha256 = ['The SHA-256 of the bytes, hex.']
+    const size = Number(row.sizeBytes)
+    if (!(size > 0)) errors.sizeBytes = ['More than 0 bytes.']
+    else if (size > (image ? maxImage : maxAttachment)) errors.sizeBytes = ['Too large for this purpose.']
+    if (typeof row.thumbnail === 'string' && row.thumbnail.length > 32 * 1024) errors.thumbnail = ['At most 32 KB.']
+    if (Object.keys(errors).length) return this.rejected(m, 'validation_failed', null, errors)
+    const sha256 = String(row.sha256).toLowerCase()
+    const shared = [...this.table('files').values()]
+      .sort((a, b) => b.seq - a.seq)
+      .find(
+        (f) =>
+          f.sha256 === sha256 &&
+          f.sizeBytes === size &&
+          f.status === 'available' &&
+          !f.deleted &&
+          this.fileBytes.has(f.id) &&
+          this.visible(user, 'files', f) &&
+          (!image || String(f.contentType).startsWith('image/')),
+      )
+    if (shared) this.fileBytes.set(row.id, this.fileBytes.get(shared.id)!)
+    const values: Row = shared
+      ? { status: 'available', contentType: shared.contentType, width: shared.width, height: shared.height }
+      : { status: 'pending' }
+    return this.accepted(m, this.write('files', { ...row, sha256, ...values }, user.id))
+  }
+
+  /**
+   * `PUT /api/v1/files/{id}/chunks/{n}`: chunk 0 starts (over), every other must be the next (409 `chunk_out_of_order`
+   * with `expected`); 409 `file_available` when stored already; 413 `too_large` for a chunk over 4 MiB or more bytes
+   * than the row's size.
+   */
   putChunk(userId: string, id: string, index: number, bytes: Uint8Array): { received: number } {
     if (!this.online) throw new ApiError(0, undefined)
     const row = this.fileFor(userId, id, 'edit')
-    if (row.status === 'available') throw new ApiError(409, { code: 'already_available' })
-    if (bytes.length > chunkBytes) throw new ApiError(413, { code: 'chunk_too_large' })
+    if (row.status === 'available')
+      throw new ApiError(409, { code: 'file_available', detail: 'The file’s bytes are stored already.' })
+    if (bytes.length > chunkBytes) throw new ApiError(413, { code: 'too_large', detail: 'A chunk is at most 4 MiB.' })
     if (index === 0) this.uploads.set(id, [])
     const parts = this.uploads.get(id)
-    if (!parts || parts.length !== index) throw new ApiError(409, { code: 'upload_out_of_order' })
+    if (!parts || parts.length !== index)
+      throw new ApiError(409, {
+        code: 'chunk_out_of_order',
+        detail: 'Start the upload again with chunk 0.',
+        expected: parts?.length ?? 0,
+      })
     parts.push(bytes.slice())
     const received = parts.reduce((n, p) => n + p.length, 0)
-    const limit =
-      row.purpose !== 'attachment' && String(row.contentType).startsWith('image/') ? maxImage : maxAttachment
-    if (received > limit) {
+    if (received > Number(row.sizeBytes)) {
       this.uploads.delete(id)
-      throw new ApiError(413, { code: 'too_large', detail: 'The file is too large.' })
+      throw new ApiError(413, { code: 'too_large', detail: 'More bytes than the file has.' })
     }
     return { received }
   }
 
-  /** `POST /api/v1/files/{id}/commit`: size and sha256 checked, the bytes kept, the row `available` (a new seq). */
+  /** The commit's answer: the stored file (FileCommitted). */
+  private committed(row: ServerRow): Row {
+    const { id, status, sha256, sizeBytes, contentType, width, height, fileName, rev, seq } = row
+    return { id, status, sha256, sizeBytes, contentType, width, height, fileName, rev, seq }
+  }
+
+  /**
+   * `POST /api/v1/files/{id}/commit`: size and SHA-256 as received and as the row says (409 `size_mismatch` /
+   * `sha256_mismatch`, the upload discarded; 409 `upload_missing` without one), a blocked name 422 `blocked_type`; an image
+   * checked by its bytes (415 `not_an_image`) and its metadata stripped (here: PNG's text and time chunks) – the stored
+   * hash, size, type, pixel size and a name with the type's extension go into the row (new rev) and the answer. A commit of
+   * a stored file answers with it (a retry).
+   */
   async commit(userId: string, id: string, body: { sha256: string; size: number }): Promise<Row> {
     if (!this.online) throw new ApiError(0, undefined)
+    const errors: Record<string, string[]> = {}
+    if (!/^[0-9a-f]{64}$/i.test(String(body.sha256 ?? ''))) errors.sha256 = ['The SHA-256 of the bytes, hex.']
+    if (!(Number(body.size) > 0)) errors.size = ['The size in bytes.']
+    if (Object.keys(errors).length) throw new ApiError(400, { code: 'validation_failed', errors })
     const row = this.fileFor(userId, id, 'edit')
+    if (row.status === 'available') return this.committed(row)
     const parts = this.uploads.get(id)
-    if (!parts) throw new ApiError(409, { code: 'no_upload' })
+    if (!parts)
+      throw new ApiError(409, { code: 'upload_missing', detail: 'No upload of this file: send its chunks first.' })
     const bytes = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
     let at = 0
     for (const p of parts) {
       bytes.set(p, at)
       at += p.length
     }
-    const hash = await sha256Hex(bytes)
-    if (bytes.length !== body.size || hash !== body.sha256 || hash !== row.sha256) {
+    if (bytes.length !== body.size || body.size !== row.sizeBytes) {
       this.uploads.delete(id)
-      throw new ApiError(422, { code: 'checksum_mismatch', detail: 'The file arrived damaged.' })
+      throw new ApiError(409, { code: 'size_mismatch', detail: `Received ${bytes.length} bytes.` })
+    }
+    const hash = await sha256Hex(bytes)
+    if (hash !== body.sha256.toLowerCase() || hash !== row.sha256) {
+      this.uploads.delete(id)
+      throw new ApiError(409, {
+        code: 'sha256_mismatch',
+        detail: 'The bytes received have another SHA-256 than the commit or the file says.',
+      })
+    }
+    const blocked = blockedIn(String(row.fileName))
+    if (blocked)
+      throw new ApiError(422, { code: 'blocked_type', detail: `Files ending in .${blocked} can't be stored.` })
+    let stored: Uint8Array = bytes
+    const values: Row = {}
+    if (imagePurposes.includes(row.purpose as string)) {
+      const check = checkImage(bytes)
+      if (!check) throw new ApiError(415, { code: 'not_an_image', detail: 'Not a PNG, JPEG, GIF or WebP image.' })
+      stored = check.bytes
+      values.contentType = check.contentType
+      if (check.width) values.width = check.width
+      if (check.height) values.height = check.height
+      values.fileName = imageName(String(row.fileName), imageExtensions[check.contentType]!)
     }
     this.uploads.delete(id)
-    this.fileBytes.set(id, { bytes, type: String(row.contentType) })
-    const stored = this.write('files', { ...row, status: 'available', storagePath: `2026/11/${id}` }, userId)
+    this.fileBytes.set(id, { bytes: stored, type: String(values.contentType ?? row.contentType) })
+    const written = this.write(
+      'files',
+      { ...row, ...values, status: 'available', sha256: await sha256Hex(stored), sizeBytes: stored.length },
+      userId,
+    )
     this.publish()
-    return this.wireRow(this.user(userId), 'files', stored)
+    return this.committed(written)
   }
 
-  /** `GET /api/v1/files/{id}/{name}`. */
+  /** `GET /api/v1/files/{id}/{name}`: read access; 404 `file_pending` before the commit. */
   download(userId: string, id: string): { bytes: Uint8Array; type: string } {
     if (!this.online) throw new ApiError(0, undefined)
-    this.fileFor(userId, id, 'read')
+    const row = this.fileFor(userId, id, 'read')
+    if (row.status !== 'available')
+      throw new ApiError(404, { code: 'file_pending', detail: 'The file’s bytes haven’t been uploaded yet.' })
     const stored = this.fileBytes.get(id)
-    if (!stored) throw new ApiError(404, { code: 'not_found' })
-    return stored
+    if (!stored) throw new ApiError(404, { code: 'not_found', detail: 'File not found.' })
+    // Images inline as their type, everything else as bytes to save.
+    const image = imagePurposes.includes(row.purpose as string) && !!imageExtensions[String(row.contentType)]
+    return { bytes: stored.bytes, type: image ? String(row.contentType) : 'application/octet-stream' }
   }
 
-  // --- statuses (Configuration: Manage) ---------------------------------------------------------------------------
+  // --- statuses (Configuration: Manage; PGPM/Config/ConfigService.cs) ----------------------------------------------
 
   private configUser(userId: string): User {
     const user = this.user(userId)
-    if (!user.configManage && !user.isAdmin) throw new ApiError(403, { code: 'missing_right' })
+    if (!user.configManage && !user.isAdmin)
+      throw new ApiError(403, { code: 'missing_right', detail: 'You need Configuration: Manage.' })
     return user
   }
 
+  /** `StatusItem`: what the endpoints answer. */
+  private statusItem(row: ServerRow): Row {
+    const { id, itemType, name, color, icon, category, sortOrder, isDefault, maxDays, isArchived, rev } = row
+    return { id, itemType, name, color, icon, category, sortOrder, isDefault, maxDays, isArchived, rev }
+  }
+
+  /** The request checked as the server does: 400 `validation_failed` with `errors` by field. */
+  private statusInput(body: Row): Row {
+    const errors: Record<string, string[]> = {}
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    if (name.length < 1 || name.length > 100) errors.name = ['1 to 100 characters.']
+    const color = typeof body.color === 'string' ? body.color.toLowerCase() : ''
+    if (!/^#[0-9a-f]{6}$/.test(color)) errors.color = ['A colour #rrggbb.']
+    const icon = typeof body.icon === 'string' && body.icon.trim() ? body.icon.trim() : null
+    if (icon !== null && !/^pi-[a-z0-9-]+$/.test(icon)) errors.icon = ['A PrimeIcons name (pi-lightbulb), or none.']
+    if (!['open', 'active', 'closed'].includes(body.category as string)) errors.category = ['open, active or closed.']
+    const maxDays = body.maxDays ?? null
+    if (maxDays !== null && !(Number.isInteger(maxDays) && (maxDays as number) >= 1 && (maxDays as number) <= 36500))
+      errors.maxDays = ['1 to 36,500 days, or none.']
+    if (Object.keys(errors).length) throw new ApiError(400, { code: 'validation_failed', errors })
+    return { name, color, icon, category: body.category, maxDays }
+  }
+
+  private statusesOf(itemType: unknown): ServerRow[] {
+    return [...this.table('statuses').values()].filter((s) => s.itemType === itemType && !s.deleted)
+  }
+
+  /** 409 `duplicate_name`: another live, not archived status of the type has the name (ignoring case). */
+  private uniqueStatusName(itemType: unknown, name: string, except: string | null) {
+    const taken = this.statusesOf(itemType).some(
+      (s) => !s.isArchived && s.id !== except && String(s.name).toLowerCase() === name.toLowerCase(),
+    )
+    if (taken)
+      throw new ApiError(409, { code: 'duplicate_name', detail: `Another ${String(itemType)} status has this name.` })
+  }
+
   /** Exactly one default per type: setting one clears the others. */
-  private onlyDefault(itemType: string, id: string, by: string) {
-    for (const s of this.table('statuses').values()) {
-      if (s.itemType === itemType && s.id !== id && s.isDefault && !s.deleted)
-        this.write('statuses', { ...s, isDefault: false }, by)
+  private onlyDefault(itemType: unknown, id: string, by: string) {
+    for (const s of this.statusesOf(itemType)) {
+      if (s.id !== id && s.isDefault) this.write('statuses', { ...s, isDefault: false }, by)
     }
   }
 
+  /** `POST /api/v1/config/statuses`: the first of a type, or `isDefault`, is the default; sort order last + 10. */
   createStatus(userId: string, body: Row): Row {
     this.configUser(userId)
-    const name = String(body.name ?? '').trim()
-    if (!name) throw new ApiError(400, { code: 'validation_failed', errors: { name: ['A name is needed.'] } })
-    const same = [...this.table('statuses').values()].filter((s) => s.itemType === body.itemType && !s.deleted)
-    if (same.some((s) => !s.isArchived && String(s.name).toLowerCase() === name.toLowerCase()))
-      throw new ApiError(409, { code: 'duplicate_name', errors: { name: ['This name is taken.'] } })
+    if (!['idea', 'lead', 'project'].includes(body.itemType as string))
+      throw new ApiError(400, { code: 'validation_failed', errors: { itemType: ['idea, lead or project.'] } })
+    const input = this.statusInput(body)
+    this.uniqueStatusName(body.itemType, input.name as string, null)
+    const same = this.statusesOf(body.itemType)
+    const isDefault = body.isDefault === true || !same.some((s) => s.isDefault)
     const id = uuidv7()
     const stored = this.write(
       'statuses',
-      { ...body, id, name, isArchived: false, sortOrder: Math.max(0, ...same.map((s) => Number(s.sortOrder))) + 10 },
+      {
+        id,
+        itemType: body.itemType,
+        ...input,
+        isDefault,
+        isArchived: false,
+        sortOrder: Math.max(0, ...same.map((s) => Number(s.sortOrder))) + 10,
+      },
       userId,
     )
-    if (body.isDefault) this.onlyDefault(String(body.itemType), id, userId)
+    if (isDefault) this.onlyDefault(body.itemType, id, userId)
     this.publish()
-    return clone(stored)
+    return this.statusItem(stored)
   }
 
+  /** `PUT /api/v1/config/statuses/{id}`: 409 `default_required` to undo the default, `status_archived` to make one. */
   updateStatus(userId: string, id: string, body: Row): Row {
     this.configUser(userId)
+    const input = this.statusInput(body)
     const row = this.table('statuses').get(id)
-    if (!row) throw new ApiError(404, { code: 'not_found' })
-    const stored = this.write('statuses', { ...row, ...body, id, itemType: row.itemType }, userId)
-    if (body.isDefault) this.onlyDefault(String(row.itemType), id, userId)
+    if (!row || row.deleted) throw new ApiError(404, { code: 'not_found', detail: 'Status not found.' })
+    if (body.itemType != null && body.itemType !== row.itemType)
+      throw new ApiError(400, {
+        code: 'validation_failed',
+        errors: { itemType: ['A status’s item type doesn’t change.'] },
+      })
+    if (!row.isArchived) this.uniqueStatusName(row.itemType, input.name as string, id)
+    if (row.isDefault && body.isDefault === false)
+      throw new ApiError(409, { code: 'default_required', detail: 'Make another status the default instead.' })
+    const makeDefault = body.isDefault === true && !row.isDefault
+    if (makeDefault && row.isArchived)
+      throw new ApiError(409, { code: 'status_archived', detail: 'An archived status can’t be the default.' })
+    if (makeDefault) this.onlyDefault(row.itemType, id, userId)
+    const stored = this.write('statuses', { ...row, ...input, isDefault: row.isDefault || makeDefault }, userId)
     this.publish()
-    return clone(stored)
+    return this.statusItem(stored)
   }
 
-  archiveStatus(userId: string, id: string, archived: boolean) {
+  /** `POST …/{id}/archive` · `/unarchive`: never the default (409 `default_status`). */
+  archiveStatus(userId: string, id: string, archived: boolean): Row {
     this.configUser(userId)
     const row = this.table('statuses').get(id)
-    if (!row) throw new ApiError(404, { code: 'not_found' })
+    if (!row || row.deleted) throw new ApiError(404, { code: 'not_found', detail: 'Status not found.' })
     if (archived && row.isDefault)
-      throw new ApiError(409, { code: 'default_status', detail: 'The default status can’t be archived.' })
-    this.write('statuses', { ...row, isArchived: archived }, userId)
+      throw new ApiError(409, {
+        code: 'default_status',
+        detail: 'The default status can’t be archived: make another one the default first.',
+      })
+    if (!archived && row.isArchived) this.uniqueStatusName(row.itemType, String(row.name), id)
+    const stored = this.write('statuses', { ...row, isArchived: archived }, userId)
     this.publish()
+    return this.statusItem(stored)
   }
 
-  orderStatuses(userId: string, itemType: string, ids: string[]) {
+  /** `PUT …/order {itemType, ids}`: every id of the type once; sort orders 10, 20, …; the type's statuses in order. */
+  orderStatuses(userId: string, itemType: string, ids: string[]): Row[] {
     this.configUser(userId)
+    const statuses = this.statusesOf(itemType)
+    if (
+      ids.length !== statuses.length ||
+      new Set(ids).size !== ids.length ||
+      !ids.every((i) => statuses.some((s) => s.id === i))
+    )
+      throw new ApiError(400, { code: 'validation_failed', errors: { ids: ['Every id of the list, once.'] } })
     ids.forEach((id, i) => {
-      const row = this.table('statuses').get(id)
-      if (row && row.itemType === itemType && row.sortOrder !== (i + 1) * 10)
-        this.write('statuses', { ...row, sortOrder: (i + 1) * 10 }, userId)
+      const row = this.table('statuses').get(id)!
+      if (row.sortOrder !== (i + 1) * 10) this.write('statuses', { ...row, sortOrder: (i + 1) * 10 }, userId)
     })
     this.publish()
+    return ids.map((id) => this.statusItem(this.table('statuses').get(id)!))
   }
 
   /**
@@ -972,16 +1313,14 @@ export class FakeSyncServer {
           })
         }
         if (path === '/api/v1/config/statuses' && method === 'POST') {
-          return json(201, this.createStatus(userId, (await request.json()) as Row))
+          return json(200, this.createStatus(userId, (await request.json()) as Row))
         }
         if (path === '/api/v1/config/statuses/order' && method === 'PUT') {
           const body = (await request.json()) as { itemType: string; ids: string[] }
-          this.orderStatuses(userId, body.itemType, body.ids)
-          return json(204)
+          return json(200, this.orderStatuses(userId, body.itemType, body.ids))
         }
         if ((m = /^\/api\/v1\/config\/statuses\/([^/]+)\/(archive|unarchive)$/.exec(path)) && method === 'POST') {
-          this.archiveStatus(userId, m[1]!, m[2] === 'archive')
-          return json(204)
+          return json(200, this.archiveStatus(userId, m[1]!, m[2] === 'archive'))
         }
         if ((m = /^\/api\/v1\/config\/statuses\/([^/]+)$/.exec(path)) && method === 'PUT') {
           return json(200, this.updateStatus(userId, m[1]!, (await request.json()) as Row))

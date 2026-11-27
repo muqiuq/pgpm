@@ -4213,6 +4213,7 @@
           "contentType",
           "width",
           "height",
+          "fileName",
           "rev",
           "seq"
         ],
@@ -4248,6 +4249,9 @@
               "integer"
             ],
             "format": "int32"
+          },
+          "fileName": {
+            "type": "string"
           },
           "rev": {
             "type": "integer",

@@ -162,6 +162,12 @@ public static partial class HostingSetup
             return next(context);
         });
 
+    /// <summary>
+    /// The application property by which WebApplication knows the pipeline has its UseAuthentication (not public API:
+    /// <c>WebApplicationBuilder.AuthenticationMiddlewareSetKey</c>); without it, it adds one before everything else.
+    /// </summary>
+    public const string AuthenticationMiddlewareSet = "__AuthenticationMiddlewareSet";
+
     /// <summary>The name of the endpoint HttpMethodMatcherPolicy creates for a 405 (not public API).</summary>
     public const string Http405EndpointDisplayName = "405 HTTP Method Not Supported";
 }

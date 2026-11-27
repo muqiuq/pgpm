@@ -20,7 +20,7 @@ import {
   titleError,
 } from './items'
 import { Repo } from './repo'
-import type { ItemRow, StatusRow } from './rows'
+import type { FileRow, ItemRow, StatusRow } from './rows'
 
 const ANA = '01970000-0000-7000-8000-00000000a001'
 const BEN = '01970000-0000-7000-8000-00000000b001'
@@ -202,7 +202,20 @@ describe('idea / lead → project conversion (docs/01 §8, docs/03 §12.8)', () 
     return c
   }
 
-  it('converts offline in one batch – shares, persons, links, origin, cover – and the server marks the source', async () => {
+  /** A file of the idea on the server: stored (`available`, its bytes kept) or still on another device (`pending`). */
+  function serverFile(itemId: string, id: string, purpose: string, status: 'available' | 'pending', seed: number) {
+    const bytes = Uint8Array.from({ length: 6 }, (_, i) => i * seed)
+    const sha256 = `${seed}`.repeat(64).slice(0, 64)
+    server.seed(
+      'files',
+      { id, itemId, mapId: null, purpose, fileName: `${id}.png`, contentType: 'image/png', sizeBytes: 6, sha256 },
+      ANA,
+    )
+    server.table('files').get(id)!.status = status
+    if (status === 'available') server.fileBytes.set(id, { bytes, type: 'image/png' })
+  }
+
+  it('converts offline in one batch – shares, persons, links, origin, cover, attachments – and the server marks the source', async () => {
     const ana = client(ANA)
     ana.engine.start()
     await until(() => ana.engine.status.connection === 'live', 'live')
@@ -212,7 +225,7 @@ describe('idea / lead → project conversion (docs/01 §8, docs/03 §12.8)', () 
         title: 'Chat bot',
         statusId: 's-idea-new',
         shares: [{ groupId: G1, access: 'edit' }],
-        values: { description: 'Answers questions', color: '#16a34a', imageFileId: 'f-cover' },
+        values: { description: 'Answers questions', color: '#16a34a' },
       })
       const target = await createItem(tx, {
         type: 'project',
@@ -225,34 +238,55 @@ describe('idea / lead → project conversion (docs/01 §8, docs/03 §12.8)', () 
       return { idea, target }
     })
     await until(async () => (await ana.db.outbox.count()) === 0, 'the idea on the server')
+    // Its cover and an attachment are stored on the server; another attachment is still on the device it came from.
+    const cover = '01970000-0000-7000-8000-0000000c0001'
+    const attachment = '01970000-0000-7000-8000-0000000c0002'
+    const elsewhere = '01970000-0000-7000-8000-0000000c0003'
+    serverFile(idea.id, cover, 'cover', 'available', 1)
+    serverFile(idea.id, attachment, 'attachment', 'available', 2)
+    serverFile(idea.id, elsewhere, 'attachment', 'pending', 3)
+    server.change(ANA, 'items', idea.id, { imageFileId: cover })
+    await until(async () => (await ana.db.synced('items').get(idea.id))?.imageFileId === cover, 'the cover at Ana')
+    await until(async () => (await ana.db.synced('files').count()) === 3, 'the files at Ana')
 
     ana.goOffline()
     const result = await convertToProject(ana.repo, idea.id, statuses)
     const project = result.project
     expect(result.sourceStatus?.name).toBe('Selected')
-    expect(result.copied).toEqual({ shares: 1, assignments: 1, links: 1 })
+    expect(result.copied).toEqual({ shares: 1, assignments: 1, links: 1, files: 2 })
+    // The cover and the stored attachment as files of the project (new rows, the same bytes).
+    const copies = (await ana.db.synced('files').where('itemId').equals(project.id).toArray()) as unknown as FileRow[]
+    expect(copies.map((f) => [f.purpose, f.sha256.slice(0, 2), f.status]).sort()).toEqual([
+      ['attachment', '22', 'pending'],
+      ['cover', '11', 'pending'],
+    ])
+    const coverCopy = copies.find((f) => f.purpose === 'cover')!
     expect(project).toMatchObject({
       type: 'project',
       title: 'Chat bot',
       description: 'Answers questions',
       color: '#16a34a',
-      imageFileId: 'f-cover',
+      imageFileId: coverCopy.id,
       originItemId: idea.id,
       statusId: 's-project-draft',
     })
     const outbox = await ana.db.outbox.toArray()
     expect(new Set(outbox.map((e) => e.batch)).size).toBe(1)
+    // The project's cover is a patch after its file's insert: the server takes only a file of the project itself.
     expect(outbox.map((e) => `${e.op} ${e.table}`)).toEqual([
       'insert items',
       'insert item_shares',
+      'insert files',
+      'insert files',
+      'patch items',
       'insert assignments',
       'insert item_links',
       'insert item_links',
       'patch items',
     ])
-    expect(outbox.find((e) => e.op === 'patch')?.changes).toEqual({
-      statusId: { old: 's-idea-new', new: 's-idea-selected' },
-    })
+    expect(outbox[0]!.row).not.toHaveProperty('imageFileId', coverCopy.id)
+    expect(outbox[4]!.changes).toEqual({ imageFileId: { old: null, new: coverCopy.id } })
+    expect(outbox[8]!.changes).toEqual({ statusId: { old: 's-idea-new', new: 's-idea-selected' } })
     // Converted already on the device, before the server says so.
     expect((await convertedProject(ana.db, (await ana.db.synced('items').get(idea.id)) as ItemRow))?.id).toBe(
       project.id,
@@ -265,7 +299,18 @@ describe('idea / lead → project conversion (docs/01 §8, docs/03 §12.8)', () 
       convertedToItemId: project.id,
       statusId: 's-idea-selected',
     })
-    expect(server.table('items').get(project.id)).toMatchObject({ number: 2, originItemId: idea.id })
+    expect(server.table('items').get(project.id)).toMatchObject({
+      number: 2,
+      originItemId: idea.id,
+      imageFileId: coverCopy.id,
+    })
+    // Shared bytes: the copies are stored at once, nothing to upload.
+    expect(server.table('files').get(coverCopy.id)).toMatchObject({ status: 'available', itemId: project.id })
+    expect(server.fileBytes.get(coverCopy.id)).toBe(server.fileBytes.get(cover))
+    await until(
+      async () => (await ana.db.synced('files').get(coverCopy.id))?.status === 'available',
+      'the cover’s copy available at Ana',
+    )
     await until(
       async () => (await ana.db.synced('items').get(idea.id))?.convertedToItemId === project.id,
       'the source marked at Ana',

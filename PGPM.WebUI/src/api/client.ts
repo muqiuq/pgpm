@@ -131,8 +131,8 @@ function isRaw(body: unknown): body is BodyInit {
 }
 
 /**
- * A v1 call outside openapi-fetch – raw bytes (file chunks and downloads, docs/03 §10.2), and the phase 3 endpoints
- * until openapi.json has them – with the rules of {@link call}: same origin, the CSRF header on unsafe methods, an
+ * A v1 call outside openapi-fetch – raw bytes (file chunks and downloads, docs/03 §10.2) – with the rules of
+ * {@link call}: same origin, the CSRF header on unsafe methods, an
  * {@link ApiError} for an error answer (status 0: not reached), the error listeners told. Answers the Response.
  */
 export async function fetchApi(path: string, options: FetchOptions = {}): Promise<Response> {

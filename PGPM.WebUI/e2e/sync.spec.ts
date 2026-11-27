@@ -554,7 +554,7 @@ test.describe('sync between two browsers', () => {
     await createNote(ana.page, 'Being edited')
     await openNote(ben.page, 'Being edited')
 
-    const edit = (page: Page) => page.getByRole('button', { name: 'Edit', exact: true }).click()
+    const edit = (page: Page) => page.getByRole('button', { name: 'Edit content', exact: true }).click()
     await edit(ana.page)
     await expect(ben.page.getByText(`${anaUser!.name} is editing`)).toBeVisible()
     await edit(ben.page)

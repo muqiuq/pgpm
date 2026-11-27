@@ -575,8 +575,12 @@ export class SyncEngine {
     if (error instanceof DOMException && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
       return { ok: false, offline: true, status: 0, error: 'The server did not answer in time.' }
     }
+    const message = error instanceof Error ? error.message : String(error)
+    // A run the engine was stopped under (sign-out wiping the database, a test's teardown): nothing to report.
+    if (!this.running && error instanceof Error && error.name === 'DatabaseClosedError')
+      return { ok: false, error: message }
     console.error('PGPM sync failed', error)
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    return { ok: false, error: message }
   }
 
   private reportRejected(rejected: ResultSummary['rejected']) {

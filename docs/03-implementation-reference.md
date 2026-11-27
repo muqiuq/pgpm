@@ -180,7 +180,11 @@ simpler at the root scope).
   1. `UseForwardedHeaders` → security headers (CSP) → `UseApiErrors` → static SPA
   2. `UseRouting` → plain 404s for unknown `/api` → `UseRateLimiter` → `UseMcpOriginCheck`
   3. `UseWhen(path is not /mcp) → UseAuthentication` → `UseAuthorization`
-     (fallback policy = authenticated user, deny by default) → `UseSessionGates`
+     (fallback policy = authenticated user, deny by default) → `UseSessionGates`. The app marks its pipeline as having
+     authentication (`HostingSetup.AuthenticationMiddlewareSet`): a `UseAuthentication` inside `UseWhen` doesn't count
+     for `WebApplication`, which then put one of its own before everything – the static files included, where a stale
+     cookie (the service worker's precache, sent before a password change) was answered with its deletion and wiped the
+     fresh session (found at the phase 3 integration; `LoginTests.AStaleCookieOnTheFilesOfTheUiIsLeftAlone`).
   4. `/healthz` → `MapControllers` → `MapPgpmMcp` → SPA fallback (`index.html`)
 
 CSP additions for PGPM (PNMTD allows only `'self'`): `worker-src 'self'`,
@@ -250,8 +254,8 @@ with `errors` by field.
 
 | Endpoint | Needs | Body → answer |
 |---|---|---|
-| `POST /api/v1/config/statuses` | Configuration: Manage | `{itemType: idea\|lead\|project, name, color #rrggbb, icon?, category: open\|active\|closed, maxDays?, isDefault?}` → `StatusItem {id, itemType, name, color, icon, category, sortOrder, isDefault, maxDays, isArchived, rev}`; the first status of a type, or `isDefault: true`, becomes the default (the old one isn't any more); 409 `duplicate_name` (per type, non-archived, ignoring case) |
-| `PUT /api/v1/config/statuses/{id}` | 〃 | the same without `itemType` (immutable) → `StatusItem`; 409 `default_required` for `isDefault: false` on the default |
+| `POST /api/v1/config/statuses` | Configuration: Manage | `{itemType: idea\|lead\|project, name (1–100), color #rrggbb (stored lower case), icon? (`pi-xxx`), category: open\|active\|closed, maxDays? (1–36,500), isDefault?}` → `StatusItem {id, itemType, name, color, icon, category, sortOrder, isDefault, maxDays, isArchived, rev}` (200); the first status of a type, or `isDefault: true`, becomes the default (the old one isn't any more); 400 `validation_failed` with `errors.{itemType,name,color,icon,category,maxDays}`; 409 `duplicate_name` (per type, non-archived, ignoring case; a `detail`, no `errors`) |
+| `PUT /api/v1/config/statuses/{id}` | 〃 | the same; `itemType` may be sent but not changed (400) → `StatusItem`; 409 `default_required` for `isDefault: false` on the default, `status_archived` to make an archived one the default |
 | `POST /api/v1/config/statuses/{id}/archive` · `/unarchive` | 〃 | → `StatusItem`; 409 `default_status` for the default |
 | `PUT /api/v1/config/statuses/order` | 〃 | `{itemType, ids: [all of the type]}` → `[StatusItem]` (sort orders 10, 20, …) |
 | `POST /api/v1/config/sections` · `PUT …/{id}` | 〃 | `{name, description?, appliesTo: [idea, project], defaultFor ⊆ appliesTo, collapsedByDefault?, access?: [{groupId, level: view\|edit}]}` (`access` null on PUT: unchanged) → `SectionItem {id, …, access: [{groupId, groupName, level}], rev}`; a change of who may *view* bumps the affected users' `access_epoch` (reset), the row is re-stamped for `canEdit`; 409 `section_in_template` when `project` is dropped while templates use it |
@@ -271,7 +275,7 @@ with `errors` by field.
 | `PUT /api/v1/maps/{id}/shares` | manage on the map | `[{groupId, access}]` → `[{id, groupId, groupName, access}]` (re-stamp, evictions `{kind: "map"}`) |
 | `POST /api/v1/maps/{id}/owner` | manage on the map | `{userId}` → 204 |
 | `PUT /api/v1/files/{id}/chunks/{n}` | edit on the file's item/map | raw bytes (≤ 4 MiB) → `{received}` (§10.2) |
-| `POST /api/v1/files/{id}/commit` | 〃 | `{sha256, size}` → `{id, status: "available", sha256, sizeBytes, contentType, width, height, rev, seq}` |
+| `POST /api/v1/files/{id}/commit` | 〃 | `{sha256, size}` → `{id, status: "available", sha256, sizeBytes, contentType, width, height, fileName, rev, seq}` |
 | `GET /api/v1/files/{id}/{name}` | read on the file's item/map | the bytes |
 
 The Trash lists maps too (`rootKind: "map"`, `rootType: canvas\|matrix`, `title` = the map's name).
@@ -991,8 +995,9 @@ descriptor), `FileService` (chunks, commit, download), `FileCleanup`/`FileCheck`
   `blocked_type`. Images (cover, map image, embedded) are checked by their bytes (415 `not_an_image`; 413 `too_large` over
   10,000 px a side or 40 MP) and their metadata stripped **without re-encoding**: the stored bytes may then differ from
   the uploaded ones – the answer and the row carry the stored `sha256` and `sizeBytes`, the detected `contentType`, `width`,
-  `height`, and a name with the type's extension (`Screenshot` → `Screenshot.png`). The row becomes `available` (new rev,
-  delivered live). A commit of a stored file answers with it (a retry).
+  `height`, and a name with the type's extension (`Screenshot` → `Screenshot.png`; the answer's `fileName`, phase 3
+  integration). The row becomes `available` (new rev, delivered live). A commit of a stored file answers with it (a
+  retry).
 - **Download** `GET …/{id}/{name}`: read access; 404 `file_pending` before the commit. Images inline as their type,
   everything else `application/octet-stream` + `attachment`; ranges (206); `ETag` = `"<sha256>"`; `Cache-Control: private,
   max-age=31536000, immutable`.
@@ -1019,11 +1024,21 @@ read for it): uploaded or downloaded bytes go oldest first, on-demand attachment
 unuploaded bytes; prefetch (`cover`, `map_image`, `embedded`) only fills the budget by evicting attachments. Markdown
 attachment links are not fetched on sight (the resolver answers the server URL online, null offline); images resolve
 through `fileBlob()` (sha256 checked) to blob: URLs. Removing a cover deletes its file only when it belongs to the
-item and no other local item shows it (a converted project reuses the idea's cover, §12.8); otherwise only
-`imageFileId` is cleared. A removed, never-synced file goes with its bytes; other bytes go once the server confirmed
-the delete. Server behaviour assumed beyond §10.2: chunk n > 0 of an unknown or stale upload answers 409; a checksum
-mismatch on commit 409 or 422; a chunk for a file already available 409 `already_available` (treated as uploaded);
-the error's `detail` is shown to the user.
+item and no other local item shows it; otherwise only `imageFileId` is cleared. A removed, never-synced file goes with
+its bytes; other bytes go once the server confirmed the delete.
+
+*Integrated with the server (phase 3 integration):* a chunk past 0 refused with 409 (`chunk_out_of_order`, the server
+lost or never had the upload) or a wrong `received` starts over from chunk 0 once; so does a 409 of the commit
+(`size_mismatch`, `sha256_mismatch` – the server discarded the upload –, `upload_missing`); 422 `blocked_type`, 415
+`not_an_image` and 413 `too_large` are final (*Failed* with the server's `detail`, *Retry*). 409 `file_available` (the
+bytes are stored already: a commit whose answer was lost, or bytes the server shared at the insert) counts as uploaded.
+503 `file_storage_unavailable`, 429 `too_many_uploads` and 5xx stop the run and keep the state. The commit's answer is
+only part of the row: it is laid over the row as the server had it (item, purpose, thumbnail stay; a newer row from the
+live channel wins by rev). When the commit stripped an image's metadata (the answer's `sha256` differs from the
+uploaded one), the stored bytes are downloaded at once (checked against the new hash) and **replace** the uploader's
+local ones, so every device holds the same bytes; should that fail, the uploaded bytes stay (the same picture) until
+evicted. A download refused with 404 `file_pending` is *Not uploaded yet*, other 404/403 *gone*. An insert whose bytes
+the server shares arrives as `available`: nothing is uploaded (§12.8, conversion).
 
 ---
 
@@ -1754,9 +1769,14 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
   milestones, a milestone its DoD items and assignments, a map its shares, layers, elements and files), so phases 4 and
   5 need no Dexie version. `items` got the index `originItemId` (`revised: 2`, the version-1 schema kept under
   `before`, so the upgrade adds it). Read-only for clients: statuses, groups, sections, field definitions, templates
-  and their children, assignment roles. `src/test/fakeSyncServer.ts` mirrors all of them (patchable whitelists,
-  visibility through the item or map, duplicate pairs merged, an item's children deleted in its batch), plus the file
-  and statuses endpoints as a `fetch` (`fetchFor(userId)`).
+  and their children, assignment roles. `src/test/fakeSyncServer.ts` mirrors all of them as the server's table
+  descriptors have them (checked at the phase 3 integration): the patchable whitelists (`key.*` for jsonb members),
+  server-owned members ignored on insert (`ownerUserId`, `number`, `status` of files, the milestones' and DoD items'
+  stamps, which it sets), a Microsoft person's notes only and a user's person without name and e-mail, a parent that is
+  gone or invisible as `parent_missing`, the items' default status, origin and cover (`imageFileId`) checks, shared views
+  for *Configuration: Manage*, visibility through the item or map, duplicate pairs merged, an item's children deleted in
+  its batch – plus the file and statuses endpoints as a `fetch` (`fetchFor(userId)`) with the server's codes, answers
+  (`StatusItem`, the commit's partial row), PNG metadata stripping and shared bytes.
 - **Dexie zones**: the repository's operations answer Dexie promises (`inTransaction()`); a helper taking a
   `RepoTransaction` that ends by awaiting another async helper answers through `inTransaction` too. Dexie keeps its
   transaction zone across one native `await` only – otherwise the caller's next write lands outside the transaction
@@ -1781,8 +1801,9 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
   `tools/check-packages.py`; unknown ids (`field:…`) are dropped; key and title always show. `list:<type>` keeps
   `{viewId, search, filters, sort[], columns, pageSize}`; `?view=<id>` applies a view. Saved views
   (`local/savedViews.ts`, `SavedViewMenu` in the bar's `#end`): own and shared views (shared first), *All …*, *Save as
-  new view…* (shared needs Configuration: Manage), *Update*, *Rename…*, *Delete…* for the owner (a shared view: the
-  owner with Configuration: Manage); a changed state shows *(modified)*. Bulk actions on the selected rows (assign a
+  new view…* (shared needs Configuration: Manage), *Update*, *Rename…*, *Delete…* for the owner of a personal view; a
+  shared one – anybody's, the packages' seeded ones too – for everybody with Configuration: Manage (docs/02 §7.8, as the
+  server checks it); a changed state shows *(modified)*. Bulk actions on the selected rows (assign a
   person with a role, status, colour, delete) run in one outbox batch each; rows without *edit* (*manage* to delete)
   are skipped and counted in the toast. *Add to map* comes with phase 5.
 - **Create dialog** (`ItemCreateDialog`): title, the type's default status (changeable), *Share with* preselected with
@@ -1798,14 +1819,20 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
   local search) needs *edit* on the link's source – for an inverse relation that is the picked item. Duplicates are not
   created (the server would merge them anyway). The seeded *Learnings* view works through `hasLink`.
 - **Conversion** idea/lead → project (`convertToProject`, `ConvertDialog`), on the device in one batch, offline too:
-  the project gets title (editable), description, colour, the cover image **by reference** (the same file id; the
-  client can't copy bytes it may not have), the source's shares (inserted with the project, as the create dialog does),
-  assignments and outgoing links, `originItemId` = the source, and a `related` link back to the source. Decision on
-  attachments: they **stay on the source** (no `files` rows are copied – a row can't point at another file's bytes),
-  reachable through that link. The source moves to *Selected* (ideas) / *Won* (leads) when such a status exists. The
-  client never patches `convertedToItemId` (server-owned): the server sets the origin's when it accepts a project with
-  `originItemId`; until then the source counts as converted through the local project naming it (index
-  `originItemId`). Phase 4 adds the template, sections and field values.
+  the project gets title (editable), description, colour, the source's shares (inserted with the project, as the create
+  dialog does), assignments and outgoing links, `originItemId` = the source, and a `related` link back to the source.
+  **Cover and attachments are copied** (phase 3 integration; docs/01 §8): new `files` rows of the project with the
+  source file's name, type, size and SHA-256 – the server shares the stored bytes of an available file the user can read
+  (§10.3), so the copy is `available` at once and nothing is uploaded; bytes on this device are copied along (an upload
+  still waiting goes up for the copy too); a file whose bytes are only on another device and not uploaded yet stays on
+  the source. The project's `imageFileId` is set by a patch after the cover copy's insert (the server takes only an
+  image file of the item itself – the earlier *by reference* cover was refused). Images embedded in the description
+  keep pointing at the source's files (readable through the copied shares). The source moves to *Selected* (ideas) /
+  *Won* (leads) when such a status exists. The client never patches `convertedToItemId` (server-owned): the server
+  accepts `originItemId` with read access to the origin and sets the origin's `convertedToItemId` when the user may edit
+  it – the client converts only with edit (the source's status changes too); until the server's row arrives the source
+  counts as converted through the local project naming it (index `originItemId`). Phase 4 adds the template, sections
+  and field values.
 - **Persons, statuses, search** (`views/persons/`, `views/admin/StatusesView.vue`, `components/GlobalSearch.vue`,
   `local/search.ts`): the persons list (`list:person`) searches name, e-mail, job title, department and company, filters
   source, members/guests and department and shows active persons unless *With inactive*; *New person* (Persons: Edit)
@@ -1814,10 +1841,16 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
   and e-mail), a Microsoft person's notes only; manual persons can be deactivated. Statuses: one list per type
   (`?type=`) over the synced rows; *New*, edit (colour presets + hex, icon `pi-…` with preview, category, default, max.
   days), up/down (`PUT …/order` with every id of the type), *Set as default*, archive/unarchive (not the default) through
-  `api/config.ts` – `fetchJson` until openapi.json has the endpoints –, each followed by `engine.syncNow()`, disabled
-  offline (*Available online only*). Global search: local items and active persons, every word must occur, without
+  `api/config.ts` (the generated client, typed `StatusItem` answers), each followed by `engine.syncNow()`, disabled
+  offline (*Available online only*). Errors show under their field: `validation_failed`'s `errors`, and the conflicts
+  `duplicate_name` (name), `default_required` / `status_archived` (default) with the server's `detail`. Global search: local items and active persons, every word must occur, without
   diacritics; key, then title prefix, title, description; grouped *Items* / *Persons* (8 each) in an ARIA
-  combobox/listbox with ↑/↓/Enter/Esc.
+  combobox/listbox with ↑/↓/Enter/Esc; another page closes it, a change of the page's query (a list writing its search
+  to the URL) does not.
+- **Integration notes (phase 3).** PrimeVue's `Select` takes its accessible name from the selected option unless
+  `aria-labelledby` names its label (a `<label for>` doesn't reach its combobox): the status selects of the create,
+  convert, bulk and status dialogs do so. The e2e specs wait for the service worker (`offlineReady`) before going
+  offline – pages not opened yet load from the precache only then; `localRows(page, store)` reads the local database.
 
 ## 13. Maps [PNMTD canvas pieces + NEW editing]
 
@@ -2103,6 +2136,10 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | 63 | `directory_sync_state` adds `last_mode`, `seen_count`, `linked_count`, `last_full_at`, `last_succeeded_at` | the weekly full run's due date and the admin page |
 | 64 | The directory job writes one `SyncWriter` unit per Graph page and sets the persons' properties inside it (not as client mutations); no user in `created_by`/`updated_by` | the counter's lock is not held across Graph calls; the persons table refuses client patches of directory fields |
 | 65 | *Run now* answers 202 and wakes the background task (no run inside the request); 409 `directory_off` while `Directory:Enabled` is off or the registration incomplete | a full run of a large tenant takes minutes |
+| 66 | After a commit that stripped an image's metadata, the uploading device replaces its local bytes by the stored ones (downloaded at once, checked against the new sha256; PLM keeps what it uploaded) | every device holds the same bytes, verified against the row |
+| 67 | Conversion copies the cover and the attachments as new `files` rows of the project that share the stored bytes; images embedded in the description keep pointing at the source's files (docs/01 §8 names attachments, not embedded images) | a row belongs to one item, nothing is uploaded twice; copying embedded images would mean rewriting the description |
+| 68 | The commit's answer also carries `fileName` (an image's name gets its type's extension) | the client lays the answer over its row: the name must not lag behind the bytes |
+| 69 | Playwright runs `identity.spec.ts` as a project of its own (`first-admin`) that every other spec depends on (phase 2: first by file name) | it needs the fresh stack's initial password; later specs' names must not change the order |
 
 ## 16. Score evaluation [NEW]
 

@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext } from '@playwright/test'
-import { createTeam, problems, signInAs, type Team } from './helpers'
+import { createTeam, offlineReady, problems, signInAs, type Team } from './helpers'
 
 /**
  * The persons directory (docs/01 §16, docs/05 §3 phase 3): a manual person created offline by someone with Persons:
@@ -29,6 +29,7 @@ test('a manual person created offline syncs, is found by search and can be deact
   await signInAs(anaPage, ana, '/persons')
   await expect(anaPage.getByRole('heading', { level: 1, name: 'Persons' })).toBeVisible()
 
+  await offlineReady(anaPage)
   await anaContext.setOffline(true)
   await anaPage.getByRole('button', { name: 'New person' }).click()
   const dialog = anaPage.getByRole('dialog', { name: 'New person' })

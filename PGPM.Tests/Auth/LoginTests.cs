@@ -222,6 +222,29 @@ public sealed class LoginTests
     }
 
     [TestMethod]
+    public async Task AStaleCookieOnTheFilesOfTheUiIsLeftAlone()
+    {
+        // The service worker precaches the shell with the cookie the page has: an answer to a request that left before a
+        // password change must not delete the fresh cookie. Only the API checks the session (and clears a rejected one).
+        var (_, name, password) = await NewUserAsync(app);
+        var here = new Browser(app);
+        var elsewhere = new Browser(app);
+        await here.LoginAsync(name, password);
+        await elsewhere.LoginAsync(name, password);
+        Assert.AreEqual(HttpStatusCode.NoContent,
+            await here.StatusAsync(HttpMethod.Post, "/api/v1/account/password", new { currentPassword = password, newPassword = "another-password-1" }));
+
+        foreach (var file in new[] { "/sw.js", "/index.html", "/assets/index-3f9a.js", "/manifest.webmanifest" })
+        {
+            Assert.AreEqual(HttpStatusCode.OK, await elsewhere.StatusAsync(HttpMethod.Get, file), file);
+            Assert.IsEmpty(elsewhere.LastSetCookies, $"{file}: {string.Join(" | ", elsewhere.LastSetCookies)}");
+        }
+        Assert.IsTrue(elsewhere.Cookies.ContainsKey("pgpm.auth"));
+        Assert.AreEqual(HttpStatusCode.Unauthorized, await elsewhere.StatusAsync(HttpMethod.Get, "/api/v1/auth/me"));
+        Assert.IsFalse(elsewhere.Cookies.ContainsKey("pgpm.auth"), "the API clears the rejected session's cookie");
+    }
+
+    [TestMethod]
     public async Task SignOutEverywhereKeepsThisSession()
     {
         var (_, name, password) = await NewUserAsync(app);

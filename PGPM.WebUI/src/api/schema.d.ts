@@ -3668,6 +3668,7 @@ export interface components {
             width: null | number;
             /** Format: int32 */
             height: null | number;
+            fileName: string;
             /** Format: int32 */
             rev: number;
             /** Format: int64 */

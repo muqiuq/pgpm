@@ -6,7 +6,7 @@ import { mountWithUi } from '@/test/mount'
 import GlobalSearch from './GlobalSearch.vue'
 
 const push = vi.fn()
-const route = reactive({ fullPath: '/notes' })
+const route = reactive({ path: '/notes', fullPath: '/notes' })
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }), useRoute: () => route }))
 
 describe('the global search (docs/01 §3)', () => {
@@ -70,6 +70,23 @@ describe('the global search (docs/01 §3)', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
     expect(document.activeElement).toBe(input.element)
+    wrapper.unmount()
+  })
+
+  it('stays open while the page writes its query (a list’s search), closes on another page', async () => {
+    const wrapper = mountWithUi(GlobalSearch, { attachTo: document.body })
+    const input = wrapper.get('input')
+    await input.setValue('web')
+    await until(() => wrapper.findAll('[role="option"]').length === 3, 'three results')
+    route.fullPath = '/persons?search=partner'
+    await wrapper.vm.$nextTick()
+    expect(input.attributes('aria-expanded')).toBe('true')
+    route.path = '/ideas'
+    route.fullPath = '/ideas'
+    await wrapper.vm.$nextTick()
+    expect(input.attributes('aria-expanded')).toBe('false')
+    route.path = '/notes'
+    route.fullPath = '/notes'
     wrapper.unmount()
   })
 })

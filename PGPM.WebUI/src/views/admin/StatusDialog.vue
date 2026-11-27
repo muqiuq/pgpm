@@ -79,8 +79,8 @@ function validate(): boolean {
   if (!/^#[0-9a-fA-F]{6}$/.test(color.value.trim())) next.color = 'A colour #rrggbb.'
   const value = iconName(icon.value)
   if (value && !/^pi-[a-z0-9-]+$/.test(value)) next.icon = 'A PrimeIcons name such as pi-eye.'
-  if (maxDays.value !== null && (!Number.isInteger(maxDays.value) || maxDays.value < 1))
-    next.maxDays = 'Whole days, at least 1 – or empty.'
+  if (maxDays.value !== null && (!Number.isInteger(maxDays.value) || maxDays.value < 1 || maxDays.value > 36500))
+    next.maxDays = 'Whole days, 1 to 36,500 – or empty.'
   errors.value = next
   return !Object.values(next).some(Boolean)
 }
@@ -103,7 +103,14 @@ async function save() {
     visible.value = false
     emit('saved')
   } catch (e) {
-    if (e instanceof ApiError && Object.keys(e.errors).length) {
+    // A conflict about one field (409 duplicate_name, default_required, status_archived) shows under it.
+    const conflict =
+      e instanceof ApiError
+        ? { duplicate_name: 'name', default_required: 'isDefault', status_archived: 'isDefault' }[e.code]
+        : undefined
+    if (e instanceof ApiError && conflict) {
+      errors.value = { [conflict]: e.detail ?? e.message }
+    } else if (e instanceof ApiError && Object.keys(e.errors).length) {
       errors.value = Object.fromEntries(
         ['name', 'color', 'icon', 'category', 'isDefault', 'maxDays'].map((f) => [f, e.field(f)]),
       )
@@ -157,10 +164,11 @@ async function save() {
       </div>
       <div class="form-grid">
         <div class="field">
-          <label for="st-category">Category</label>
+          <label id="st-category-label" for="st-category">Category</label>
           <Select
             v-model="category"
             input-id="st-category"
+            aria-labelledby="st-category-label"
             :options="categories"
             option-label="label"
             option-value="value"
@@ -184,6 +192,7 @@ async function save() {
         <ToggleSwitch v-model="isDefault" input-id="st-default" />
         <label for="st-default">Default for new {{ typeNames[itemType] }}s</label>
       </div>
+      <small v-if="errors.isDefault" class="field-error">{{ errors.isDefault }}</small>
     </form>
     <template #footer>
       <Button label="Cancel" severity="secondary" text @click="visible = false" />

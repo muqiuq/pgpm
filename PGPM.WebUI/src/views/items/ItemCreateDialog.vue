@@ -94,7 +94,7 @@ async function create() {
         <small v-if="error" class="field-error">{{ error }}</small>
       </div>
       <div v-if="info.hasStatus" class="field">
-        <label :for="`${formId}-status`">Status</label>
+        <label :id="`${formId}-status-label`" :for="`${formId}-status`">Status</label>
         <Message v-if="noStatus" severity="warn" :closable="false" size="small">
           There are no {{ info.label }} statuses yet: an administrator sets them up under Administration → Statuses.
         </Message>
@@ -102,6 +102,7 @@ async function create() {
           v-else
           v-model="statusId"
           :input-id="`${formId}-status`"
+          :aria-labelledby="`${formId}-status-label`"
           :options="options"
           option-label="name"
           option-value="id"

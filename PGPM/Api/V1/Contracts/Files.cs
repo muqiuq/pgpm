@@ -14,7 +14,8 @@ public sealed class FileCommitRequest
 
 /// <summary>
 /// A stored file: <c>status</c> <c>available</c>, with the stored bytes' hash and size (an image's metadata removed: they may
-/// differ from what was sent), type and pixel size, and the row's new <c>rev</c>/<c>seq</c> (the sync delivers the row too).
+/// differ from what was sent), type, pixel size and name (an image's with its type's extension), and the row's new
+/// <c>rev</c>/<c>seq</c> (the sync delivers the row too).
 /// </summary>
-public sealed record FileCommitted(Guid Id, string Status, string Sha256, long SizeBytes, string ContentType, int? Width, int? Height, int Rev,
-    long Seq);
+public sealed record FileCommitted(Guid Id, string Status, string Sha256, long SizeBytes, string ContentType, int? Width, int? Height,
+    string FileName, int Rev, long Seq);

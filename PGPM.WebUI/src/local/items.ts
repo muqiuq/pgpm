@@ -5,6 +5,7 @@ import { inTransaction, type Repo, type RepoTransaction } from './repo'
 import {
   allowsAccess,
   type AssignmentRow,
+  type FileRow,
   type ItemLinkRow,
   type ItemRow,
   type ItemShareRow,
@@ -308,7 +309,7 @@ export interface Conversion {
   project: Stored<ItemRow>
   /** The source's new status (*Selected*, *Won*), if one was found. */
   sourceStatus: StatusRow | null
-  copied: { shares: number; assignments: number; links: number }
+  copied: { shares: number; assignments: number; links: number; files: number }
 }
 
 /** The project the item was converted into: the server's `convertedToItemId`, or a local project naming it as origin. */
@@ -335,11 +336,71 @@ export function convertedStatus(all: readonly StatusRow[], type: ItemType): Stat
 }
 
 /**
+ * The source's cover and attachments as files of the project (docs/01 §8, docs/03 §12.8): new `files` rows with the same
+ * name, type, size and SHA-256 – the server shares the stored bytes of an available file the user can read, so nothing
+ * is uploaded again (docs/03 §10.3) – and the bytes on this device copied along (an upload still waiting goes up for the
+ * copy too). A file whose bytes are only on another device and not uploaded yet stays on the source. Answers the
+ * cover's copy, if any, and how many files were copied.
+ */
+function copyFiles(
+  tx: RepoTransaction,
+  source: ItemRow,
+  projectId: string,
+): Promise<{ cover: string | null; files: number }> {
+  return inTransaction(copyEach(tx, source, projectId))
+}
+
+async function copyEach(
+  tx: RepoTransaction,
+  source: ItemRow,
+  projectId: string,
+): Promise<{ cover: string | null; files: number }> {
+  const rows = (
+    (await tx.db.synced('files').where('itemId').equals(source.id).toArray()) as unknown as Stored<FileRow>[]
+  ).filter((f) => !f.deleted && (f.purpose === 'attachment' || f.id === source.imageFileId))
+  rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || (a.id < b.id ? -1 : 1))
+  let cover: string | null = null
+  let files = 0
+  for (const file of rows) {
+    const bytes = await tx.db.blobs.get(file.id)
+    if (file.status !== 'available' && !bytes) continue
+    const copy = await tx.create<FileRow>('files', {
+      itemId: projectId,
+      mapId: null,
+      purpose: file.purpose,
+      fileName: file.fileName,
+      contentType: file.contentType,
+      sizeBytes: file.sizeBytes,
+      sha256: file.sha256,
+      width: file.width,
+      height: file.height,
+      thumbnail: file.thumbnail,
+    })
+    if (bytes) {
+      // The server has the source's bytes: the copy shares them at its insert, nothing to upload.
+      const uploaded = file.status === 'available'
+      await tx.db.blobs.put({
+        ...bytes,
+        id: copy.id,
+        uploaded,
+        nextChunk: 0,
+        error: null,
+        cachedAt: new Date().toISOString(),
+      })
+    }
+    if (file.id === source.imageFileId) cover = copy.id
+    files++
+  }
+  return { cover, files }
+}
+
+/**
  * Converts an idea or lead into a project, on the device (offline too), in one batch: a new project with the source's
- * title, description, colour and cover image (the same file, docs/03 §12.8), its shares, its assignments and its
- * outgoing links, `originItemId` = the source (the server sets the source's `convertedToItemId`), a `related` link from
- * the project to the source – its attachments stay on the source, reachable through that link – and the source moved
- * to *Selected* / *Won* where such a status exists. Needs *edit* on the source (its status changes).
+ * title, description and colour, its cover image and attachments (copies sharing the stored bytes, {@link copyFiles}),
+ * its shares, its assignments and its outgoing links, `originItemId` = the source (the server sets the source's
+ * `convertedToItemId`), a `related` link from the project to the source, and the source moved to *Selected* / *Won*
+ * where such a status exists. Needs *edit* on the source (its status changes). The cover is set by a patch after the
+ * copy's insert: the server takes only an image file of the project itself as its `imageFileId`.
  */
 export async function convertToProject(
   repo: Repo,
@@ -368,11 +429,12 @@ export async function convertToProject(
       values: {
         description: source.description,
         color: source.color,
-        imageFileId: source.imageFileId,
         originItemId: source.id,
         projectTemplateId: options.templateId ?? null,
       },
     })
+    const copies = await copyFiles(tx, source, project.id)
+    if (copies.cover) await tx.patch('items', project.id, { imageFileId: copies.cover })
 
     let assignments = 0
     for (const a of await assignmentsOf(db, sourceId)) {
@@ -390,10 +452,11 @@ export async function convertToProject(
 
     const next = convertedStatus(statuses, source.type)
     if (next && next.id !== source.statusId) await tx.patch('items', sourceId, { statusId: next.id })
+    const stored = (await db.synced('items').get(project.id)) ?? project
     return {
-      project: withoutLocal(project) as Stored<ItemRow>,
+      project: withoutLocal(stored) as Stored<ItemRow>,
       sourceStatus: next,
-      copied: { shares: shares.length, assignments, links },
+      copied: { shares: shares.length, assignments, links, files: copies.files },
     }
   })
 }

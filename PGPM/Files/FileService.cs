@@ -203,7 +203,7 @@ public sealed partial class FileService(PgpmDbContext db, FileStore store, SyncW
     }
 
     private static FileCommitted Committed(FileEntity f) =>
-        new(f.Id, EnumText.Of(f.Status), f.Sha256, f.SizeBytes, f.ContentType, f.Width, f.Height, f.Rev, f.Seq);
+        new(f.Id, EnumText.Of(f.Status), f.Sha256, f.SizeBytes, f.ContentType, f.Width, f.Height, f.FileName, f.Rev, f.Seq);
 
     /// <summary>
     /// A stored file for <c>GET /api/v1/files/{id}/{name}</c> (read access to its item or map): its row and where it is.

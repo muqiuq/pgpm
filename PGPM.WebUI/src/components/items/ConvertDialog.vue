@@ -77,10 +77,11 @@ async function convert() {
         <small v-if="error" class="field-error">{{ error }}</small>
       </div>
       <div class="field">
-        <label for="convert-status">Status</label>
+        <label id="convert-status-label" for="convert-status">Status</label>
         <Select
           v-model="statusId"
           input-id="convert-status"
+          aria-labelledby="convert-status-label"
           :options="projectStatuses"
           option-label="name"
           option-value="id"
@@ -94,9 +95,9 @@ async function convert() {
       <div class="carried">
         <span class="label">The project gets</span>
         <ul>
-          <li>title, description, colour and cover image</li>
+          <li>title, description, colour, cover image and attachments</li>
           <li>sharing, assigned persons and links</li>
-          <li>a link to this {{ label }} (its attachments stay here)</li>
+          <li>a link to this {{ label }}</li>
         </ul>
         <p class="muted">
           The {{ label }} is kept<template v-if="next">

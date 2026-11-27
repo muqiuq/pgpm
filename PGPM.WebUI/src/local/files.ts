@@ -6,7 +6,7 @@ import type { FileSink, FileUrlResolver, StoredFile } from '@/components/markdow
 import type { MarkdownFile } from '@/components/markdown/types'
 import { imageTypes, limits, prepareFile, UploadError } from '@/components/markdown/useUpload'
 import { applyServerRow, syncScope } from './apply'
-import { localDb, type BlobRow, type PgpmDb } from './db'
+import { localDb, withoutLocal, type BlobRow, type PgpmDb } from './db'
 import { canvasImages, fromBase64, type ImageInfo, type ImageTools } from './images'
 import type { Row } from './outbox'
 import { metaOf, type Repo, type RepoTransaction } from './repo'
@@ -199,6 +199,19 @@ async function patchBlob(db: PgpmDb, id: string, changes: Partial<BlobRow>): Pro
     const row = await db.blobs.get(id)
     if (row) await db.blobs.put({ ...row, ...changes })
   })
+}
+
+/**
+ * The commit's answer (`{id, status, sha256, sizeBytes, contentType, width, height, fileName, rev, seq}`, docs/03 §10.3)
+ * is only part of the row: it is laid over the row as the server had it (the base while local changes wait), so that
+ * the item, purpose and thumbnail stay; a newer row from the live channel wins (rev).
+ */
+async function applyCommitted(db: PgpmDb, committed: Row) {
+  const stored = await db.synced('files').get(committed.id as string)
+  if (!stored) return
+  const meta = metaOf(stored)
+  const base = meta.pending && meta.base ? meta.base : withoutLocal(stored)
+  await applyServerRow(db, 'files', { ...base, ...committed })
 }
 
 export class FilePipeline {
@@ -538,8 +551,9 @@ export class FilePipeline {
         try {
           committed = await this.transport.commit(row.id, { sha256: row.sha256, size })
         } catch (e) {
-          // The server lost the upload or got it damaged: once more from the start.
-          if (e instanceof ApiError && (e.status === 409 || e.status === 422) && !restarted) {
+          // The server lost the upload or got it damaged (409 upload_missing, size_mismatch, sha256_mismatch): once more
+          // from the start. A refusal of the file itself (422 blocked_type, 415, 413) is final.
+          if (e instanceof ApiError && e.status === 409 && !restarted) {
             await restart()
             continue
           }
@@ -547,16 +561,42 @@ export class FilePipeline {
         }
         await db.transaction('rw', syncScope(db), async () => {
           if (committed && typeof committed === 'object' && committed.id === row.id) {
-            await applyServerRow(db, 'files', committed)
+            await applyCommitted(db, committed)
           }
           await patchBlob(db, row.id, { uploaded: true, nextChunk: 0, error: null, cachedAt: nowIso() })
         })
+        if (typeof committed?.sha256 === 'string' && committed.sha256 !== row.sha256) {
+          await this.replaceStripped(row, committed)
+        }
         return 'uploaded'
       }
     } catch (e) {
       return this.uploadFailed(row, e)
     } finally {
       delete this.transfers[row.id]
+    }
+  }
+
+  /**
+   * The server stripped an image's metadata at the commit (docs/03 §10.3): its bytes – and the row's `sha256` and
+   * `sizeBytes` – differ from the uploaded ones. The stored bytes replace the local ones (downloaded now, checked against
+   * the new hash), so this device holds what every other one gets; should that fail, the uploaded bytes stay (the same
+   * picture) until the cache evicts them.
+   */
+  private async replaceStripped(row: Stored<FileRow>, committed: Row) {
+    const db = this.db()
+    try {
+      const name = typeof committed.fileName === 'string' ? committed.fileName : row.fileName
+      const data = await this.transport.download(row.id, name)
+      if ((await sha256Hex(data.bytes)) !== committed.sha256) return
+      await db.transaction('rw', db.blobs, async () => {
+        const blob = await db.blobs.get(row.id)
+        if (!blob) return
+        const type = typeof committed.contentType === 'string' ? committed.contentType : blob.type
+        await db.blobs.put({ ...blob, bytes: data.bytes, type, size: data.bytes.byteLength, cachedAt: nowIso() })
+      })
+    } catch {
+      // Offline again, or the file went meanwhile: the uploaded bytes stay.
     }
   }
 
@@ -570,8 +610,8 @@ export class FilePipeline {
       return 'server'
     }
     if (error.status === 401) return 'signed-out'
-    // A commit whose answer was lost: the server has the bytes; the row's `available` comes with the pull.
-    if (error.status === 409 && error.code === 'already_available') {
+    // A commit whose answer was lost (or bytes the server shares already): it has them; `available` comes with the pull.
+    if (error.status === 409 && error.code === 'file_available') {
       await patchBlob(this.db(), row.id, { uploaded: true, nextChunk: 0, error: null })
       return 'uploaded'
     }
@@ -613,6 +653,10 @@ export class FilePipeline {
         data = await this.transport.download(id, row.fileName)
       } catch (e) {
         if (isOffline(e)) throw new NotDownloaded()
+        // The row said available, the server not yet (404 file_pending): the bytes are still on their way.
+        if (e instanceof ApiError && e.code === 'file_pending') {
+          throw new NotDownloaded('Not uploaded yet: it is still on the device it came from.')
+        }
         if (e instanceof ApiError && (e.status === 404 || e.status === 403)) throw new FileGone()
         throw e
       }

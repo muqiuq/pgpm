@@ -1,3 +1,4 @@
+import { deflateSync } from 'node:zlib'
 import { expect, request, type APIRequestContext, type Page } from '@playwright/test'
 
 /** The first admin of the e2e stack (tools/e2e.sh passes Auth__InitialAdmin__Password) … */
@@ -25,6 +26,14 @@ export function problems(page: Page): string[] {
     }
   })
   return seen
+}
+
+/**
+ * Waits until the service worker controls the page (the first one claims it: src/sw.ts) – from then on every chunk of
+ * the app is precached, so pages not opened yet load offline too, as for a user who has used the app once before.
+ */
+export async function offlineReady(page: Page) {
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 30_000 })
 }
 
 /** The local sign-in form, filled and sent. */
@@ -175,4 +184,57 @@ export async function signInAs(page: Page, user: TestUser, path = '/notes') {
   await expect(suggestion.or(menu)).toBeVisible()
   if (await suggestion.isVisible()) await page.getByRole('button', { name: 'Later' }).click()
   await expect(menu).toBeVisible()
+}
+
+/** The rows of a store of the app's local database (IndexedDB `pgpm`, docs/03 §11.3), as the page has them now. */
+export function localRows(page: Page, store: string): Promise<Record<string, unknown>[]> {
+  return page.evaluate(
+    (name) =>
+      new Promise<Record<string, unknown>[]>((resolve, reject) => {
+        const open = indexedDB.open('pgpm')
+        open.onerror = () => reject(open.error)
+        open.onsuccess = () => {
+          const db = open.result
+          const read = db.transaction(name, 'readonly').objectStore(name).getAll()
+          read.onsuccess = () => {
+            db.close()
+            resolve(read.result as Record<string, unknown>[])
+          }
+          read.onerror = () => reject(read.error)
+        }
+      }),
+    store,
+  )
+}
+
+/** A real PNG (2 × 2) with a tEXt chunk: metadata the server strips at the commit (docs/03 §10.3). */
+export function pngWithMetadata(): Buffer {
+  const table = Array.from({ length: 256 }, (_, n) => {
+    let c = n
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+    return c >>> 0
+  })
+  const crc = (bytes: Buffer) => {
+    let c = 0xffffffff
+    for (const b of bytes) c = table[(c ^ b) & 0xff]! ^ (c >>> 8)
+    return (c ^ 0xffffffff) >>> 0
+  }
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data])
+    const length = Buffer.alloc(4)
+    length.writeUInt32BE(data.length)
+    const sum = Buffer.alloc(4)
+    sum.writeUInt32BE(crc(body))
+    return Buffer.concat([length, body, sum])
+  }
+  const header = Buffer.from([0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0])
+  // Each row: the filter byte, then two RGB pixels.
+  const pixels = Buffer.from([0, 220, 38, 38, 22, 163, 74, 0, 37, 99, 235, 234, 179, 8])
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('tEXt', Buffer.from('Author\0Somebody', 'latin1')),
+    chunk('IDAT', deflateSync(pixels)),
+    chunk('IEND', Buffer.alloc(0)),
+  ])
 }

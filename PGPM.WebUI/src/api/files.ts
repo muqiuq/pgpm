@@ -7,9 +7,13 @@ import { fetchApi, fetchJson } from './client'
  *
  * | Call | Body | Answer |
  * |---|---|---|
- * | `PUT /api/v1/files/{id}/chunks/{n}` | raw bytes ≤ 4 MiB; chunk 0 starts over | `{received}` |
- * | `POST /api/v1/files/{id}/commit` | `{sha256, size}` | the `files` row (status `available`) |
- * | `GET /api/v1/files/{id}/{name}` | – | the bytes (Range, ETag = sha256) |
+ * | `PUT /api/v1/files/{id}/chunks/{n}` | raw bytes ≤ 4 MiB; chunk 0 starts over, others in order | `{received}` |
+ * | `POST /api/v1/files/{id}/commit` | `{sha256, size}` | part of the row: `{id, status: "available", sha256, sizeBytes, contentType, width, height, fileName, rev, seq}` – an image's stored bytes (metadata stripped) |
+ * | `GET /api/v1/files/{id}/{name}` | – | the bytes (Range, ETag = sha256); 404 `file_pending` before the commit |
+ *
+ * Refusals (ProblemDetails `code`, docs/03 §10.3): 409 `chunk_out_of_order` (+ `expected`), `file_available`,
+ * `size_mismatch`, `sha256_mismatch`, `upload_missing`; 413 `too_large`; 415 `not_an_image`; 422 `blocked_type`; 429
+ * `too_many_uploads`; 503 `file_storage_unavailable`; 404 for a row the user can't see, 403 `missing_access` for a reader.
  */
 export interface FileTransport {
   putChunk(id: string, index: number, bytes: ArrayBuffer, signal?: AbortSignal): Promise<{ received: number }>

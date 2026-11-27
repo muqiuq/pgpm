@@ -101,8 +101,10 @@ function onBlur() {
   open.value = false
 }
 
+// Another page closes the results – not a change of the page's query (a list writes its search and filters there, a
+// moment after typing: that closed the results while one typed here).
 watch(
-  () => route.fullPath,
+  () => route.path,
   () => (open.value = false),
 )
 

@@ -82,8 +82,13 @@ public partial class Program
         app.UsePlainNotFound();            // no endpoint: empty 404 (never the fallback policy's 401)
         app.UseRateLimiter();              // the login endpoints
         app.UseMcpOriginCheck();           // /mcp from another site's page: 403 (DNS rebinding)
-        // A browser's cookie never authenticates an MCP call; /mcp's policy names the token scheme only.
+        // A browser's cookie never authenticates an MCP call; /mcp's policy names the token scheme only. WebApplication adds a
+        // UseAuthentication of its own at the very start unless the pipeline calls it – this call inside a branch doesn't
+        // count (a branch has properties of its own) –, and that one validated the session cookie on every file of the UI: a
+        // stale cookie (the service worker precaching while the password changes) answered with its deletion, which then
+        // deleted the fresh one. So the pipeline says it has one (the framework's key).
         app.UseWhen(c => !HostingSetup.IsMcpPath(c.Request.Path), b => b.UseAuthentication());
+        ((IApplicationBuilder)app).Properties[HostingSetup.AuthenticationMiddlewareSet] = true;
         app.UseAuthorization();            // deny by default: the fallback policy wants a signed-in user
         app.UseSessionGates();             // a temporary password, a required 2FA setup, the day's code: first
         app.UseChangeContext();            // changes of synced rows are the signed-in user's (change_log, updated_by)

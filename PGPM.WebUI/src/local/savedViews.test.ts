@@ -59,11 +59,12 @@ describe('saved views (docs/01 §4.3, data model §7.8)', () => {
     expect(viewsFor(rows, 'note', 'u-ana').map((v) => v.id)).toEqual(['learnings', 'mine'])
   })
 
-  it('lets owners change their views; shared ones need Configuration: Manage', () => {
+  it('lets owners change their views; shared ones – anybody’s – need Configuration: Manage', () => {
     expect(canChange(view('a', {}), ana)).toBe(true)
     expect(canChange(view('a', { isShared: true }), ana)).toBe(false)
     expect(canChange(view('a', { isShared: true, ownerUserId: 'u-boss' }), admin)).toBe(true)
     expect(canChange(view('a', { ownerUserId: 'u-boss' }), ana)).toBe(false)
+    expect(canChange(view('a', { ownerUserId: 'u-ben' }), admin)).toBe(false)
   })
 
   it('creates, updates, renames and deletes through the repository (outbox), shared only with the right', async () => {
@@ -102,7 +103,7 @@ describe('saved views (docs/01 §4.3, data model §7.8)', () => {
     await deleteView(repo, changed, ana)
     expect(await db.synced('saved_views').get(created.id)).toBeUndefined()
     expect(await db.outbox.count()).toBe(0)
-    await expect(deleteView(repo, view('shared', { isShared: true }), ana)).rejects.toThrow(/owner/)
+    await expect(deleteView(repo, view('shared', { isShared: true }), ana)).rejects.toThrow(/Configuration: Manage/)
   })
 
   it('compares definitions: the same state is not modified; columns only if the view has them', () => {

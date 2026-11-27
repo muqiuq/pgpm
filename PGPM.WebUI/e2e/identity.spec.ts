@@ -4,7 +4,7 @@ import { adminPassword, changePassword, initialAdminPassword, problems, signIn, 
 /**
  * Identity and rights (docs/05 §3 phase 1): the first admin signs in with the initial password and must change it; an
  * admin creates a group and a user; that user signs in, changes the temporary password and sees no administration.
- * Runs first (file order): the stack is fresh, the admin's password still the initial one.
+ * Runs first (its own project in playwright.config.ts): the stack is fresh, the admin's password still the initial one.
  */
 test('the first admin, a new group and user, and what that user sees', async ({ page }) => {
   test.skip(!initialAdminPassword, 'E2E_ADMIN_PASSWORD is not set (tools/e2e.sh sets it)')

@@ -205,6 +205,7 @@ const opacities = [1, 0.85, 0.7, 0.5, 0.3].map((v) => ({ label: `${Math.round(v 
       <SelectButton
         :model-value="value('align') ?? null"
         :options="aligns"
+        option-label="label"
         option-value="value"
         data-key="value"
         size="small"

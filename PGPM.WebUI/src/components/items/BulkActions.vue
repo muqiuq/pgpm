@@ -118,10 +118,11 @@ const headers = { person: 'Assign a person', status: 'Change the status', color:
         </div>
       </template>
       <div v-else-if="open === 'status'" class="field">
-        <label for="bulk-status">Status</label>
+        <label id="bulk-status-label" for="bulk-status">Status</label>
         <Select
           v-model="statusId"
           input-id="bulk-status"
+          aria-labelledby="bulk-status-label"
           :options="statusOptions"
           option-label="name"
           option-value="id"
