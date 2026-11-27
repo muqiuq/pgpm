@@ -123,6 +123,11 @@ const rowsFocus = computed(() => props.selectable && !props.rowLinks)
   table-layout: fixed;
 }
 
+/* A cell's one-line text ends with an ellipsis at the column's edge – inline, it ran on over the next column. */
+.list-table :deep(td > .ellipsis) {
+  display: block;
+}
+
 .list-table :deep(.row-muted) {
   opacity: 0.6;
 }

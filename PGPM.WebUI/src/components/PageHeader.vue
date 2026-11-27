@@ -70,6 +70,19 @@ defineProps<{ title: string; crumbs?: { label: string; to?: string | object }[] 
   gap: var(--pgpm-space-2);
 }
 
+/* On a phone the title wraps instead of being cut to a few letters; the key and status go below it. */
+@media (max-width: 599px) {
+  .titles {
+    flex-wrap: wrap;
+  }
+
+  h1 {
+    flex: 1 1 10rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
 /* Printed, the title wraps instead of being cut; the actions stay on screen. */
 @media print {
   .actions {

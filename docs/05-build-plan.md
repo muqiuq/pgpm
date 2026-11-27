@@ -244,6 +244,9 @@ production deployment (P2, P3) and the dev-tenant check of SSO and the directory
 KPI tracking (F9), funnel/ambition dashboard (F10), MCP assessment drafts (F11),
 tags, export, import, presence on maps, push notifications (doc 01 §17).
 
+Planned for 1.1: comments on fields, a single line beside a field's value, switched on
+per field ([08 Field comments](08-field-comments.md)).
+
 ## 4. Definition of done for every feature
 
 - Works **offline and live** (data features) – covered by a Playwright case.

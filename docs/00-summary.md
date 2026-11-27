@@ -1,7 +1,7 @@
 # PGPM – Summary
 
 > Status: v0.2 (2026-11-27) · one-page overview of structure and features.
-> Details: [01 Functional overview](01-functional-overview.md) · [02 Data model](02-data-model.md) · [03 Implementation](03-implementation-reference.md) · [04 Innovation method](04-innovation-methodology.md) · [05 Build plan](05-build-plan.md) · [06 Security review](06-security-review.md) · [07 Performance](07-performance.md)
+> Details: [01 Functional overview](01-functional-overview.md) · [02 Data model](02-data-model.md) · [03 Implementation](03-implementation-reference.md) · [04 Innovation method](04-innovation-methodology.md) · [05 Build plan](05-build-plan.md) · [06 Security review](06-security-review.md) · [07 Performance](07-performance.md) · [08 Field comments (plan)](08-field-comments.md)
 
 ## What it is
 

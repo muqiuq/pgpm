@@ -39,6 +39,22 @@ const emit = defineEmits<{ toggle: []; remove: []; conflict: [] }>()
 const fields = computed(() =>
   (props.catalogue.fieldsBySection.get(props.section.id) ?? []).filter((f) => !f.isArchived),
 )
+
+/**
+ * The sub-headings shown: where a field's differs from the one before it. The package names the area on every field of
+ * it (the four feasibility areas), so a heading is shown once per area, not above each statement.
+ */
+const headings = computed(() => {
+  const shown = new Map<string, string>()
+  let previous: string | null = null
+  for (const f of fields.value) {
+    const heading = subheadingOf(f)
+    if (heading && heading !== previous) shown.set(f.id, heading)
+    previous = heading
+  }
+  return shown
+})
+
 const scoreFields = computed(() => fields.value.filter((f) => f.type === 'score'))
 const bodyId = computed(() => `section-${props.item.id}-${props.section.id}`)
 const readOnlySection = computed(() => !props.section.canEdit)
@@ -99,7 +115,7 @@ const menu = computed<MenuItem[]>(() =>
       <p v-if="!fields.length" class="muted">This section has no fields yet.</p>
       <dl v-else class="facts">
         <template v-for="f in fields" :key="f.id">
-          <dt v-if="subheadingOf(f)" class="subheading">{{ subheadingOf(f) }}</dt>
+          <dt v-if="headings.has(f.id)" class="subheading">{{ headings.get(f.id) }}</dt>
           <dt :class="{ required: f.required }">
             <span>{{ f.label }}</span>
             <i

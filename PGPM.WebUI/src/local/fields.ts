@@ -48,16 +48,21 @@ async function readValues(db: PgpmDb, itemId: string): Promise<Stored<FieldValue
   return oneValuePerField(rows)
 }
 
-/** The live values, one per field: the oldest row of a pair wins (the server merges the younger into it). */
+/**
+ * The live values, one per item and field: the oldest row of a pair wins (the server merges the younger into it). Keyed
+ * by both, so the rows of many items (the lists' field columns) keep each item's values – keyed by the field alone, only
+ * the oldest item's survived.
+ */
 export function oneValuePerField<T extends FieldValueRow>(rows: readonly T[]): T[] {
-  const byField = new Map<string, T>()
+  const byPair = new Map<string, T>()
   for (const row of rows) {
     if (row.deleted) continue
-    const other = byField.get(row.fieldId)
+    const pair = `${row.itemId} ${row.fieldId}`
+    const other = byPair.get(pair)
     if (!other || row.createdAt < other.createdAt || (row.createdAt === other.createdAt && row.id < other.id))
-      byField.set(row.fieldId, row)
+      byPair.set(pair, row)
   }
-  return [...byField.values()]
+  return [...byPair.values()]
 }
 
 /** The values by field key, as score.ts reads them. */

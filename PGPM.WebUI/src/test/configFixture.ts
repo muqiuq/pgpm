@@ -122,6 +122,9 @@ export const feasibilityKeys = [
   'feas_ai_understanding',
 ] as const
 
+/** The feasibility statements' four areas, three statements each (the fields' `subheading`). */
+export const FEASIBILITY_AREAS = ['Data & infrastructure', 'Algorithms & solution', 'Processes & systems', 'Know-how']
+
 /** The playbook's example (p. 34): 53 rating points + 5 for < 3 months = 58 of 65. */
 export const playbookRatings: Record<(typeof feasibilityKeys)[number], number> = {
   feas_data_access: 5,
@@ -160,7 +163,8 @@ export const fields: FieldDefinitionRow[] = [
       key,
       `Statement ${i + 1}`,
       'rating',
-      i === 0 ? { ...rating, subheading: 'Data & infrastructure' } : rating,
+      // The package names each statement's area (three each), as innovation-ai.pgpm.json does.
+      { ...rating, subheading: FEASIBILITY_AREAS[Math.floor(i / 3)] },
     ),
   ),
   field('sec-feas', 'time_to_proof_of_value', 'Time to a verified proof of value', 'select', {

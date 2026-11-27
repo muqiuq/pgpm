@@ -1946,7 +1946,7 @@ messages, which OpenAPI doesn't describe, are typed in `local/live.ts`.
   input is missing, optional thresholds), `FieldValue` (read-only, list cells).
 - **Sections on ideas and projects** (`local/fields.ts`, `ItemSections` + `SectionPanel` in the Overview's `#sections`
   slot): `item_sections` order (integers, new ones last + 10), open/collapsed from `collapsedByDefault` until toggled on
-  the page, scores also in the section header, sub-headings from `config.subheading`, archived fields hidden, a lock where
+  the page, scores also in the section header, sub-headings from `config.subheading` (shown where a field's differs from the one before: once per area, though the package names it on every field), archived fields hidden, a lock where
   `canEdit = false` (inputs read-only; the server refuses such values anyway), a conflict marker per field value (opens
   the conflict dialog). *Add section* (applying to the type, not archived; fills the fields' default values) and
   *Remove section* (tombstones the row, values stay). One value row per field: `setFieldValue` inserts once, then

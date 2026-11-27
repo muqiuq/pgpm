@@ -51,7 +51,10 @@ describe('field widgets (docs/01 §6.1, docs/03 §12.7)', () => {
     expect(fieldWidget({ type: 'rating' })).toMatchObject({ oneClick: true, inline: null })
     expect(fieldWidget({ type: 'score' })).toMatchObject({ computed: true, inline: null })
     expect(subheadingOf(f('feas_data_access'))).toBe('Data & infrastructure')
-    expect(subheadingOf(f('feas_infra'))).toBeNull()
+    expect(subheadingOf(f('feas_infra'))).toBe('Data & infrastructure')
+    expect(subheadingOf(f('feas_ai_understanding'))).toBe('Know-how')
+    expect(subheadingOf(f('time_to_proof_of_value'))).toBeNull()
+    expect(subheadingOf({ ...f('feas_infra'), config: { subheading: '  ' } })).toBeNull()
     expect(ratingScale(f('feas_infra').config)).toEqual({
       min: 0,
       max: 5,

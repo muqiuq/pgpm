@@ -12,7 +12,16 @@ import {
 import { memoryDb } from '@/test/memoryDb'
 import { loadCatalogue, loadTemplates } from './catalogue'
 import type { PgpmDb } from './db'
-import { addSection, fieldValuesOf, itemSectionsOf, removeSection, scoreOf, setFieldValue, valuesByKey } from './fields'
+import {
+  addSection,
+  fieldValuesOf,
+  itemSectionsOf,
+  oneValuePerField,
+  removeSection,
+  scoreOf,
+  setFieldValue,
+  valuesByKey,
+} from './fields'
 import { bulkPatch, convertToProject, createItem } from './items'
 import { Repo } from './repo'
 import type { DodItemRow, FieldValueRow, ItemRow, MilestoneRow, Stored } from './rows'
@@ -121,6 +130,21 @@ describe('sections, values and templates on the device (docs/01 §6.2, §10.2)',
     // Clearing a value makes it incomplete again.
     await repo.transaction((tx) => setFieldValue(tx, item.id, time, null))
     expect(await score()).toBeNull()
+  })
+
+  it('keeps one value per item and field: the oldest row of a pair, every item’s own', () => {
+    const row = (id: string, itemId: string, fieldId: string, createdAt: string, value: unknown) =>
+      ({ id, itemId, fieldId, value, createdAt, deleted: false }) as Stored<FieldValueRow>
+    const rows = [
+      row('v1', 'idea-a', 'f-unit', '2026-01-01T10:00:00Z', 'Sales'),
+      row('v2', 'idea-b', 'f-unit', '2026-01-02T10:00:00Z', 'HR'),
+      row('v3', 'idea-b', 'f-unit', '2026-01-03T10:00:00Z', 'Legal'),
+      row('v4', 'idea-b', 'f-reach', '2026-01-02T10:00:00Z', 4),
+    ]
+    // The lists read the rows of all items at once: each keeps its value (idea-b's younger pair row loses).
+    expect(oneValuePerField(rows).map((v) => v.id)).toEqual(['v1', 'v2', 'v4'])
+    expect(oneValuePerField([rows[2]!, rows[1]!]).map((v) => v.value)).toEqual(['HR'])
+    expect(oneValuePerField([{ ...rows[0]!, deleted: true }])).toEqual([])
   })
 
   it('applies a template offline in one batch: status, shares, sections, defaults, milestones with due dates', async () => {

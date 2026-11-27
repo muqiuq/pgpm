@@ -12,7 +12,7 @@ import { fieldValuesOf, itemSectionsOf, setFieldValue } from '@/local/fields'
 import { Repo, setRepoContext } from '@/local/repo'
 import type { ItemRow, Stored } from '@/local/rows'
 import { createConfiguredItem } from '@/local/templates'
-import { feasibilityKeys, playbookRatings, seedConfig } from '@/test/configFixture'
+import { FEASIBILITY_AREAS, feasibilityKeys, playbookRatings, seedConfig } from '@/test/configFixture'
 import { memoryDb, until } from '@/test/memoryDb'
 import ItemSections from './ItemSections.vue'
 
@@ -90,7 +90,9 @@ describe('the sections of an item (docs/01 §6.2, docs/03 §12.7)', () => {
     // A read-only select is shown as its value, not as a picker.
     expect(board.find('[role="combobox"]').exists()).toBe(false)
     expect(w.get('[data-testid="section-sec-feas"]').text()).toContain('Twelve statements rated 0–5.')
-    expect(w.get('[data-testid="section-sec-feas"]').text()).toContain('Data & infrastructure')
+    // Every statement names its area; each area's heading is shown once, above its first statement.
+    const headings = w.findAll('[data-testid="section-sec-feas"] dt.subheading').map((h) => h.text())
+    expect(headings).toEqual(FEASIBILITY_AREAS)
   })
 
   it('rates with one click and shows the feasibility index live: 58 / 65 for the playbook example', async () => {
