@@ -23,9 +23,16 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
+    <!-- File references in Markdown (FileCleanupTask, docs/03 §18.3). -->
+    <PackageReference Include="Markdig" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="PGPM.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The configuration packages and their schema (docs/03 §17): built in, read by the importer and the seeder. -->
+    <EmbeddedResource Include="Packages/BuiltIn/*.pgpm.json" LogicalName="PGPM.Packages.BuiltIn.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../spec/config-package.schema.json" LogicalName="PGPM.Packages.config-package.schema.json" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PGPM.Lib\PGPM.Lib.csproj" />

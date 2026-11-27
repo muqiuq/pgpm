@@ -44,6 +44,24 @@ public static class FractionalKey
         return key.Length == integerLength || key[^1] != '0';
     }
 
+    /// <summary>
+    /// <paramref name="count"/> increasing keys of the package's format, for rows put in order by the server (an imported
+    /// package's integer order, a template's milestones): <c>a0</c> … <c>az</c>, then <c>b00</c> … (up to 3,906 keys).
+    /// </summary>
+    public static IReadOnlyList<string> Sequence(int count)
+    {
+        if (count is < 0 or > 62 + 62 * 62)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count));
+        }
+        var keys = new List<string>(count);
+        for (var i = 0; i < count; i++)
+        {
+            keys.Add(i < 62 ? $"a{Digits[i]}" : $"b{Digits[(i - 62) / 62]}{Digits[(i - 62) % 62]}");
+        }
+        return keys;
+    }
+
     /// <summary>The order of two rows: by key (ordinal), then by id.</summary>
     public static int Compare(string aKey, Guid aId, string bKey, Guid bId)
     {

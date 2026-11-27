@@ -104,8 +104,11 @@ public abstract class SyncTable(string name, Type entityType)
     /// <summary>The table and column names of the database, for the bulk statements (re-stamp, purge).</summary>
     public string SqlTable(PgpmDbContext db) => db.Model.FindEntityType(EntityType)!.GetTableName()!;
 
-    /// <summary>The root item of a row (History, editing), if it belongs to one.</summary>
-    public virtual Guid? ItemIdOf(ISyncedEntity row) => null;
+    /// <summary>The root item of a row (History, editing), if it belongs to one; may look up its parent in <paramref name="db"/>.</summary>
+    public virtual Guid? ItemIdOf(PgpmDbContext db, ISyncedEntity row) => null;
+
+    /// <summary>The map a row belongs to (<c>change_log.map_id</c>), if any.</summary>
+    public virtual Guid? MapIdOf(PgpmDbContext db, ISyncedEntity row) => null;
 
     /// <summary>The row as the wire has it, without computed columns: a tombstone is <c>{id, seq, rev, deleted: true}</c>.</summary>
     public JsonObject ToWire(PgpmDbContext db, ISyncedEntity row, bool withBatch = false)
@@ -234,7 +237,14 @@ public abstract class SyncTable<T>(string name) : SyncTable(name, typeof(T)) whe
 
     protected virtual Guid? ItemOf(T row) => null;
 
-    public sealed override Guid? ItemIdOf(ISyncedEntity row) => ItemOf((T)row);
+    /// <summary>The root item, when the row only names its parent (a DoD item's milestone): looked up in <paramref name="db"/>.</summary>
+    protected virtual Guid? ItemOf(PgpmDbContext db, T row) => ItemOf(row);
+
+    protected virtual Guid? MapOf(T row) => null;
+
+    public sealed override Guid? ItemIdOf(PgpmDbContext db, ISyncedEntity row) => ItemOf(db, (T)row);
+
+    public sealed override Guid? MapIdOf(PgpmDbContext db, ISyncedEntity row) => MapOf((T)row);
 
     /// <summary>Adds the computed columns (<c>access</c>) to delivered rows; tombstones have none.</summary>
     protected virtual Task AddComputedAsync(PullScope scope, IReadOnlyList<(T Row, JsonObject Wire)> rows, CancellationToken ct) => Task.CompletedTask;
@@ -263,6 +273,13 @@ public abstract class SyncTable<T>(string name) : SyncTable(name, typeof(T)) whe
     protected virtual void Validate(T row, ApiValidator v)
     {
     }
+
+    /// <summary>
+    /// The checks that read other rows (a status of the item's type, a field value's definition), after <see cref="Validate"/>
+    /// passed: <paramref name="changed"/> is null for an insert, else the keys applied by the patch.
+    /// </summary>
+    protected virtual Task ValidateAsync(SyncWrite w, T row, IReadOnlyCollection<string>? changed, ApiValidator v, CancellationToken ct) =>
+        Task.CompletedTask;
 
     /// <summary>A key of the whitelist; <c>key.*</c> admits the members of a jsonb column. Per row where the row decides.</summary>
     protected virtual bool IsPatchable(T row, string key, PgpmDbContext db)
@@ -387,6 +404,8 @@ public abstract class SyncTable<T>(string name) : SyncTable(name, typeof(T)) whe
         await PrepareInsertAsync(w, row, ct);
         Validate(row, v);
         ThrowIfInvalid(v, null);
+        await ValidateAsync(w, row, null, v, ct);
+        ThrowIfInvalid(v, null);
         if (SamePair(row) is { } pair && await Set(w.Db).IgnoreQueryFilters().Where(r => !r.Deleted).FirstOrDefaultAsync(pair, ct) is { } existing)
         {
             return await MergeAsync(w, m, row, existing, ct);
@@ -493,6 +512,10 @@ public abstract class SyncTable<T>(string name) : SyncTable(name, typeof(T)) whe
         if (applied.Count > 0)
         {
             Validate(row, v);
+            if (!v.HasErrors)
+            {
+                await ValidateAsync(w, row, applied, v, ct);
+            }
         }
         if (v.HasErrors)
         {
@@ -508,7 +531,7 @@ public abstract class SyncTable<T>(string name) : SyncTable(name, typeof(T)) whe
             var (by, at) = await w.LastChangeAsync(this, row, key, ct);
             w.AddConflict(new SyncConflict(m.MutationId, Name, row.Id, key, theirs?.DeepClone(), by, at, row.Rev));
             var yours = changes[key].TryGetPropertyValue("new", out var mine) ? mine?.DeepClone() : null;
-            w.Log(this, row.Id, ItemOf(row), ChangeActions.Conflict,
+            w.Log(this, row.Id, ItemOf(w.Db, row), ChangeActions.Conflict,
                 new JsonObject { ["field"] = key, ["yours"] = yours, ["theirs"] = theirs?.DeepClone(), ["by"] = by });
         }
         if (conflicts.Count > 0)
@@ -613,7 +636,7 @@ public abstract class SyncTable<T>(string name) : SyncTable(name, typeof(T)) whe
     private static string Describe(WireColumn column)
     {
         var type = Nullable.GetUnderlyingType(column.ClrType) ?? column.ClrType;
-        return type.IsEnum ? $"value ({string.Join(", ", Enum.GetNames(type).Select(n => n.ToLowerInvariant()))})"
+        return type.IsEnum ? $"value ({string.Join(", ", EnumText.All(type))})"
             : type == typeof(Guid) ? "uuid"
             : type == typeof(DateOnly) ? "date (yyyy-MM-dd)"
             : type == typeof(DateTime) ? "timestamp"
@@ -640,6 +663,52 @@ public abstract class SyncTable<T>(string name) : SyncTable(name, typeof(T)) whe
 
     private static SyncMutationResult Conflict(SyncMutationIn m, T row, string kind, JsonObject current) =>
         new() { MutationId = m.MutationId, Status = SyncStatus.Conflict, Id = row.Id, Rev = row.Rev, Seq = row.Seq, Kind = kind, Current = current };
+
+    /// <summary>
+    /// The item a new row hangs below: <c>parent_missing</c> when it doesn't exist, is deleted or the user can't see it,
+    /// <c>missing_access</c> below <paramref name="needed"/>. Returns it (untracked).
+    /// </summary>
+    protected static async Task<Items.ItemEntity> RequireParentItemAsync(SyncWrite w, Guid itemId, Items.ItemAccess needed, CancellationToken ct)
+    {
+        var item = await w.Db.Items.AsNoTracking().FirstOrDefaultAsync(i => i.Id == itemId && !i.Deleted, ct);
+        var access = item is null ? Items.ItemAccess.None : await w.Access.ItemAccessAsync(w.Viewer, itemId, ct);
+        if (item is null || access == Items.ItemAccess.None)
+        {
+            throw new SyncRejection(SyncCodes.ParentMissing, "The item doesn't exist (or you may not see it).");
+        }
+        if (access < needed)
+        {
+            throw new SyncRejection(SyncCodes.MissingAccess, $"You need {needed.ToString().ToLowerInvariant()} access to the item.");
+        }
+        return item;
+    }
+
+    /// <summary>The map a new row hangs below, as <see cref="RequireParentItemAsync"/>.</summary>
+    protected static async Task<Maps.MapEntity> RequireParentMapAsync(SyncWrite w, Guid mapId, Items.ItemAccess needed, CancellationToken ct)
+    {
+        var map = await w.Db.Maps.AsNoTracking().FirstOrDefaultAsync(m => m.Id == mapId && !m.Deleted, ct);
+        var access = map is null ? Items.ItemAccess.None : await w.Access.MapAccessAsync(w.Viewer, mapId, ct);
+        if (map is null || access == Items.ItemAccess.None)
+        {
+            throw new SyncRejection(SyncCodes.ParentMissing, "The map doesn't exist (or you may not see it).");
+        }
+        if (access < needed)
+        {
+            throw new SyncRejection(SyncCodes.MissingAccess, $"You need {needed.ToString().ToLowerInvariant()} access to the map.");
+        }
+        return map;
+    }
+
+    /// <summary>The access of a row's map for the user: rejection <c>missing_access</c> below <paramref name="needed"/>.</summary>
+    protected async Task RequireMapAccessAsync(SyncWrite w, T row, Guid mapId, Items.ItemAccess needed, CancellationToken ct)
+    {
+        var access = await w.Access.MapAccessAsync(w.Viewer, mapId, ct);
+        if (access < needed)
+        {
+            throw new SyncRejection(SyncCodes.MissingAccess, $"You need {needed.ToString().ToLowerInvariant()} access to the map.",
+                await CurrentAsync(w, row, ct));
+        }
+    }
 
     /// <summary>The access of a row's item for the user: rejection <c>missing_access</c> below <paramref name="needed"/>.</summary>
     protected async Task RequireItemAccessAsync(SyncWrite w, T row, Guid itemId, Items.ItemAccess needed, CancellationToken ct)

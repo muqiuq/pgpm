@@ -135,9 +135,19 @@ public sealed class GroupService(PgpmDbContext db, SessionCache sessions, IHttpC
             share.Deleted = true;
             share.DeleteBatchId = batch.Id;
         }
+        foreach (var share in await db.MapShares.Where(s => s.GroupId == id && !s.Deleted).ToListAsync(ct))
+        {
+            share.Deleted = true;
+            share.DeleteBatchId = batch.Id;
+        }
+        // Its section access goes too: who sees a section it restricted may change for everybody.
+        var sectionRows = await db.SectionGroups.Where(g => g.GroupId == id).ToListAsync(ct);
+        db.SectionGroups.RemoveRange(sectionRows);
         await db.SaveChangesAsync(ct);
-        await Sharing.AccessService.BumpAccessEpochAsync(db, memberIds, ct);
-        memberIds.ForEach(sessions.Forget);
+        var affected = sectionRows.Any(r => r.Access == Config.SectionAccess.View)
+            ? await db.Users.Where(u => !u.IsAdmin).Select(u => u.Id).ToListAsync(ct) : memberIds;
+        await Sharing.AccessService.BumpAccessEpochAsync(db, affected, ct);
+        affected.ForEach(sessions.Forget);
     }
 
     public async Task<GroupDetail> SetMembersAsync(Guid id, GroupMembersRequest request, CancellationToken ct)

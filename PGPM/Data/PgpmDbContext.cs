@@ -26,7 +26,7 @@ namespace PGPM.Data;
 /// <item>No lazy loading: every navigation a query needs is in an Include or a projection.</item>
 /// </list>
 /// </summary>
-public class PgpmDbContext(DbContextOptions<PgpmDbContext> options) : DbContext(options)
+public partial class PgpmDbContext(DbContextOptions<PgpmDbContext> options) : DbContext(options)
 {
     public DbSet<KeyValueEntity> KeyValues => Set<KeyValueEntity>();
 
@@ -257,12 +257,14 @@ public class PgpmDbContext(DbContextOptions<PgpmDbContext> options) : DbContext(
             e.HasIndex(a => a.Event);
         });
 
+        ConfigureContent(modelBuilder);
+
         EnumsAsLowerCaseText(modelBuilder);
         base.OnModelCreating(modelBuilder);
     }
 
     /// <summary>The synced-row columns' indexes (docs/02 §1.1): seq unique (the pull's cursor), the delete batch's rows.</summary>
-    private static void Synced<T>(EntityTypeBuilder<T> e) where T : class, ISyncedEntity
+    internal static void Synced<T>(EntityTypeBuilder<T> e) where T : class, ISyncedEntity
     {
         e.HasIndex(nameof(ISyncedEntity.Seq)).IsUnique();
         e.HasIndex(nameof(ISyncedEntity.DeleteBatchId)).HasFilter("delete_batch_id IS NOT NULL");
@@ -272,7 +274,7 @@ public class PgpmDbContext(DbContextOptions<PgpmDbContext> options) : DbContext(
     internal static void EnumCheck<TEnum>(TableBuilder table, string tableName, string column, IEnumerable<TEnum>? values = null)
         where TEnum : struct, Enum
     {
-        var allowed = (values ?? Enum.GetValues<TEnum>()).Select(v => $"'{v.ToString().ToLowerInvariant()}'");
+        var allowed = (values ?? Enum.GetValues<TEnum>()).Select(v => $"'{EnumText.Of(v)}'");
         table.HasCheckConstraint($"ck_{tableName}_{column}", $"{column} IN ({string.Join(", ", allowed)})");
     }
 
@@ -298,10 +300,13 @@ public class PgpmDbContext(DbContextOptions<PgpmDbContext> options) : DbContext(
         v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
 }
 
-/// <summary>An enum as lower-case text: <c>GateDecision.NoGo</c> ↔ <c>"nogo"</c>. Reading ignores case.</summary>
+/// <summary>
+/// An enum as lower-case text (<see cref="EnumText"/>): <c>ItemType.Note</c> ↔ <c>"note"</c>, <c>GateDecision.NoGo</c> ↔
+/// <c>"no_go"</c> (its <c>JsonStringEnumMemberName</c>). Reading ignores case.
+/// </summary>
 public sealed class LowerCaseEnumConverter<TEnum>() : ValueConverter<TEnum, string>(
-    v => v.ToString().ToLowerInvariant(),
-    v => Enum.Parse<TEnum>(v, true))
+    v => EnumText.Of(v),
+    v => EnumText.Parse<TEnum>(v))
     where TEnum : struct, Enum;
 
 /// <summary>A few small values with a name (docs/02-data-model.md §3: task health, small system settings).</summary>

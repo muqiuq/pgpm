@@ -24,6 +24,9 @@ public static class TestDefaults
 
     public static IConfiguration Configuration { get; private set; } = null!;
 
+    /// <summary>Files:Path of every app of the run.</summary>
+    public static string FilesPath { get; private set; } = null!;
+
     [AssemblyInitialize]
     public static void Apply(TestContext _)
     {
@@ -39,6 +42,11 @@ public static class TestDefaults
 
         var scratch = Directory.CreateTempSubdirectory("pgpm-tests-");
         Environment.SetEnvironmentVariable("DataProtection__KeysPath", Path.Combine(scratch.FullName, "keys"));
+        // The files folder (docs/03 §10), and no configuration packages at the start: the tests make what they need (the
+        // package tests import them into a database of their own).
+        FilesPath = Directory.CreateDirectory(Path.Combine(scratch.FullName, "files")).FullName;
+        Environment.SetEnvironmentVariable("Files__Path", FilesPath);
+        Environment.SetEnvironmentVariable("Packages__SeedOnFirstStart", "");
         WebRoot = CreateWebRoot(scratch.FullName);
 
         Configuration = new ConfigurationBuilder().AddEnvironmentVariables().Build();

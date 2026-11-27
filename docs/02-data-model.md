@@ -1,8 +1,9 @@
 # PGPM – Data Model
 
-> Status: v0.2 (2026-11-26) – object sharing, generic statuses, sections for
+> Status: v0.3 (2026-11-27) – object sharing, generic statuses, sections for
 > ideas, rating/score fields, gates, item links, matrix maps, map templates,
-> saved views, trash, evictions, user-resolved conflicts
+> saved views, trash, evictions, user-resolved conflicts; phases 3–5 as built
+> (assignment roles, import hashes, the file pipeline's columns)
 > Related: [01-functional-overview.md](01-functional-overview.md) · [03-implementation-reference.md](03-implementation-reference.md) · [04-innovation-methodology.md](04-innovation-methodology.md) · [05-build-plan.md](05-build-plan.md)
 
 ## 1. Conventions
@@ -314,9 +315,14 @@ transaction. Indexes: (`type`, `deleted`), `status_id`, `owner_user_id`,
 `GIN(tags)`, trigram on `title` (phase 3).
 
 Phase 2: one entity class (`ItemEntity`) with every column (doc 03 §15 #30); no
-foreign keys yet to `statuses`, `files`, `project_templates` or other items, none
+foreign keys to `statuses`, `files`, `project_templates` or other items, none
 to `users` (an item outlives its owner's account); CHECKs `type`, `type = 'note'
 OR status_id IS NOT NULL`, title 1–300 characters, `lead_probability` 0–100.
+Phase 3: every type is created by clients; `origin_item_id` is set by the client on
+a project's insert (conversion), the server then sets the origin's
+`converted_to_item_id`; the trigram index on `title` exists (`pg_trgm`). The
+children's tables have foreign keys to their parents (cascade) and to the
+configuration they use (restrict), none for references a row may outlive.
 
 ### `assignments` [S]
 
@@ -366,7 +372,12 @@ in the same delete batch.
 | `storage_path` | text null | server-only, `yyyy/MM/{id}-{slug}.{ext}`; never sent |
 | + synced-row columns | | |
 
-`CHECK (num_nonnulls(item_id, map_id) = 1)`; index on `sha256`.
+| `unreferenced_since` | timestamptz null | server-only, never sent: an `embedded` file no text of its item names, since (counted from its creation) |
+
+`CHECK (num_nonnulls(item_id, map_id) = 1)`; index on `sha256`. Files with the
+same bytes may share `storage_path` (an insert of bytes the user can read already
+is `available` at once; doc 03 §10.3); stored files no row names are removed by
+the cleanup.
 
 Markdown text (descriptions, note content, milestone descriptions, `markdown`
 fields) references files as `/api/v1/files/{id}/{name}` – images as
@@ -377,7 +388,8 @@ History restores working).
 ### `file_uploads` (server-only)
 
 Chunked upload in progress: `file_id` PK, `user_id`, `received_bytes`,
-`started_at`, `temp_path`. Removed on commit; stale after 24 h.
+`next_chunk` (chunks come in order), `started_at`, `temp_path`. Removed on commit;
+stale after 24 h.
 
 ## 7. Configuration
 
@@ -426,9 +438,11 @@ Sections the user may not view are not delivered.
 | `group_id` | uuid → groups | PK part |
 | `access` | text | `view` \| `edit` |
 
-No `view`/`edit` rows → visible to everyone with access to the item; no `edit`
-rows → editable by everyone with *edit* on the item. `edit` implies `view`.
-Effective field access = min(item access, section access).
+No `view` rows → visible to everyone with access to the item (with `view` rows:
+to the groups with any row – `edit` implies `view`); no `edit` rows → editable by
+everyone who sees it and has *edit* on the item. Effective field access = min(item
+access, section access); admins see and edit every section. Delivered as the
+computed `sections.can_edit` (the section's part; doc 03 §15 #47).
 
 ### 7.4 `field_definitions` [S, ro]
 
@@ -577,6 +591,7 @@ and `dod_items` in one outbox batch.
 | `item_type` | text | `note` \| `idea` \| `lead` \| `project` \| `gate` (gate-decision list) |
 | `name` | text | |
 | `definition` | jsonb | `{search, filters, sort, columns}` (same shape as `user_settings` list state) |
+| `description` | text null | max 500, for the view picker (packages have it) |
 | `is_shared` | bool | visible to all users; only *Configuration: Manage* may set/edit shared views |
 | `sort_order` | int | |
 | + synced-row columns | | |
@@ -586,9 +601,19 @@ Delivered: own views + shared views.
 ### 7.9 `config_keys` (server-only)
 
 Stable keys of configuration entities for configuration packages (doc 03 §17):
-`entity` text, `key` text (e.g. `field:feasibility_index`), `id` uuid,
-`package` text null; unique (`entity`, `key`). Re-importing a package updates the
-entities with known keys instead of duplicating them.
+`entity` text (the table's wire name: `statuses`, `field_definitions`,
+`template_milestones`, `maps`, `map_layers`, `map_elements`, …), `key` text (e.g.
+`field:feasibility_index`, `template:ai_use_case/g1`), `id` uuid, `package` text
+null, `hash` text null (SHA-256 of the entity's package form as imported last – a
+dry run tells local edits apart); PK (`entity`, `key`), index `id`. Re-importing a
+package updates the entities with known keys instead of duplicating them.
+
+### 7.10 `assignment_roles` [S, ro]
+
+Suggestions for `assignments.role` (configuration packages' `roles`, doc 03 §17):
+`id`, `name` (unique among live ones, ignoring case), `description` null (max 500),
+`sort_order` int, `is_archived`, synced-row columns. Written by
+`/api/v1/config/roles`; deleting one changes no assignment.
 
 ## 8. Milestones and gates
 
@@ -603,11 +628,11 @@ entities with known keys instead of duplicating them.
 | `description` | text null | |
 | `due_date` | date null | |
 | `status` | text | `planned` \| `in_progress` \| `done` \| `cancelled` |
-| `completed_at` | timestamptz null | |
+| `completed_at` | timestamptz null | set by the server when the status becomes `done` |
 | `decision` | text null | gates: `pending` \| `go` \| `no_go` \| `iterate` \| `pivot` \| `park` |
 | `decision_note` | text null | |
-| `decided_at` | timestamptz null | |
-| `decided_by` | uuid null → users | |
+| `decided_at` | timestamptz null | set by the server with a decision other than `pending` |
+| `decided_by` | uuid null → users | 〃 (no foreign key) |
 | `on_go_status_id`, `on_no_go_status_id` | uuid null → statuses | copied from the template |
 | `color` | text null | null → project color |
 | `sort_order` | text | fractional index |
@@ -622,8 +647,8 @@ entities with known keys instead of duplicating them.
 | `text` | text | |
 | `state` | text | `open` \| `done` \| `na` |
 | `note` | text null | evidence (link or text); required when `na` |
-| `state_changed_by` | uuid null → users | |
-| `state_changed_at` | timestamptz null | |
+| `state_changed_by` | uuid null → users | set by the server on every state change |
+| `state_changed_at` | timestamptz null | 〃 |
 | `sort_order` | text | fractional index |
 | + synced-row columns | | |
 
@@ -648,7 +673,8 @@ entities with known keys instead of duplicating them.
 | *`access`* | computed | §1.2 |
 
 Map templates are delivered to every user (read access implied for *New map
-from template*); their elements are copied on the client.
+from template*, manage with *Configuration: Manage*); their elements are copied on
+the client. Matrix presets of packages are matrix map templates with one layer.
 
 `matrix`:
 

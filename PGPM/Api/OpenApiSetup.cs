@@ -55,6 +55,36 @@ public static class OpenApiSetup
                 }
                 return Task.CompletedTask;
             });
+            // A raw body read by the action itself (a file chunk): bytes, application/octet-stream.
+            o.AddOperationTransformer((operation, context, _) =>
+            {
+                if (context.Description.ActionDescriptor.EndpointMetadata.OfType<V1.RawBodyAttribute>().Any())
+                {
+                    operation.RequestBody = new OpenApiRequestBody
+                    {
+                        Required = true,
+                        Content = new Dictionary<string, OpenApiMediaType>
+                        {
+                            ["application/octet-stream"] = new() { Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" } },
+                        },
+                    };
+                }
+                return Task.CompletedTask;
+            });
+            // A file's bytes as the answer: application/octet-stream (images as their type).
+            o.AddOperationTransformer((operation, context, _) =>
+            {
+                if (context.Description.ActionDescriptor.EndpointMetadata.OfType<V1.BinaryResponseAttribute>().Any()
+                    && operation.Responses?.TryGetValue("200", out var ok) == true && ok is OpenApiResponse response)
+                {
+                    response.Description = "The file's bytes.";
+                    response.Content = new Dictionary<string, OpenApiMediaType>
+                    {
+                        ["application/octet-stream"] = new() { Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" } },
+                    };
+                }
+                return Task.CompletedTask;
+            });
             // A file upload is multipart/form-data, which the document does not infer without the Consumes constraint that
             // ApiSetup turns off.
             o.AddOperationTransformer((operation, context, _) =>

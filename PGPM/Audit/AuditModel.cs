@@ -59,6 +59,8 @@ public sealed record AuditTarget(string Type, Guid? Id, string? Name)
     public static AuditTarget Person(Guid id, string name) => new(AuditSubjects.Person, id, name);
 
     public static AuditTarget Item(Guid id, string title) => new(AuditSubjects.Item, id, title);
+
+    public static AuditTarget Map(Guid id, string name) => new(AuditSubjects.Map, id, name);
 }
 
 /// <summary>One change of a field. A secret has no values; a long text a summary of its lines.</summary>

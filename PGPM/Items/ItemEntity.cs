@@ -3,8 +3,14 @@ using PGPM.Sync;
 
 namespace PGPM.Items;
 
-/// <summary>The four kinds of item (docs/02 §6). Phase 2 creates notes only.</summary>
-public enum ItemType { Note, Idea, Lead, Project }
+/// <summary>The four kinds of item (docs/02 §6).</summary>
+public enum ItemType
+{
+    [JsonStringEnumMemberName("note")] Note,
+    [JsonStringEnumMemberName("idea")] Idea,
+    [JsonStringEnumMemberName("lead")] Lead,
+    [JsonStringEnumMemberName("project")] Project,
+}
 
 /// <summary>Access to an item or map (docs/02 §4.1), ordered: read &lt; edit &lt; manage. Lower case in every JSON.</summary>
 public enum ItemAccess

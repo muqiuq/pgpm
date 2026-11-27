@@ -244,6 +244,38 @@ sharing (`PUT /api/v1/items/{id}/shares`, `PUT /api/v1/maps/{id}/shares`,
 `POST /api/v1/trash/{batchId}/restore`, `DELETE /api/v1/trash/{batchId}`), files,
 history, MCP token management, system diagnostics.
 
+**Phases 3–5 endpoints (as built).** Reads of configuration come from the sync; every write goes through a `SyncWrite`
+(source `admin`), so devices get it live. Errors are ProblemDetails with `code`; validation is 400 `validation_failed`
+with `errors` by field.
+
+| Endpoint | Needs | Body → answer |
+|---|---|---|
+| `POST /api/v1/config/statuses` | Configuration: Manage | `{itemType: idea\|lead\|project, name, color #rrggbb, icon?, category: open\|active\|closed, maxDays?, isDefault?}` → `StatusItem {id, itemType, name, color, icon, category, sortOrder, isDefault, maxDays, isArchived, rev}`; the first status of a type, or `isDefault: true`, becomes the default (the old one isn't any more); 409 `duplicate_name` (per type, non-archived, ignoring case) |
+| `PUT /api/v1/config/statuses/{id}` | 〃 | the same without `itemType` (immutable) → `StatusItem`; 409 `default_required` for `isDefault: false` on the default |
+| `POST /api/v1/config/statuses/{id}/archive` · `/unarchive` | 〃 | → `StatusItem`; 409 `default_status` for the default |
+| `PUT /api/v1/config/statuses/order` | 〃 | `{itemType, ids: [all of the type]}` → `[StatusItem]` (sort orders 10, 20, …) |
+| `POST /api/v1/config/sections` · `PUT …/{id}` | 〃 | `{name, description?, appliesTo: [idea, project], defaultFor ⊆ appliesTo, collapsedByDefault?, access?: [{groupId, level: view\|edit}]}` (`access` null on PUT: unchanged) → `SectionItem {id, …, access: [{groupId, groupName, level}], rev}`; a change of who may *view* bumps the affected users' `access_epoch` (reset), the row is re-stamped for `canEdit`; 409 `section_in_template` when `project` is dropped while templates use it |
+| `POST /api/v1/config/sections/{id}/archive` · `/unarchive`, `PUT …/sections/order {ids}` | 〃 | → `SectionItem` / `[SectionItem]` |
+| `POST /api/v1/config/fields` · `PUT …/{id}` | 〃 | `{sectionId, key (create only, ^[a-z][a-z0-9_]{1,62}$, unique → 409 duplicate_key), label, helpText?, type (create only), config {…}, required?, defaultValue?}` → `FieldItem {id, sectionId, key, label, helpText, type, config, required, defaultValue, sortOrder, isArchived, rev}`; config checked by type, scores by `ScoreConfigValidator` (codes in `errors.config`: `cycle`, `input_max_required`, …), also every score that uses the field; another key/type on PUT → 400 |
+| `POST /api/v1/config/fields/{id}/archive` · `/unarchive` | 〃 | → `FieldItem`; 409 `used_by_score` |
+| `GET /api/v1/config/fields/{id}/usage` | 〃 | → `{id, key, values, items, scores: [keys], templates}` |
+| `DELETE /api/v1/config/fields/{id}?confirm=<values>` | 〃 | → 204; the field, its values and template defaults tombstoned in one `other` batch; 409 `confirmation_required` (+ `values`) without the right count, 409 `used_by_score` |
+| `PUT /api/v1/config/fields/order` | 〃 | `{sectionId, ids}` → `[FieldItem]` |
+| `POST /api/v1/config/templates` · `PUT …/{id}` | 〃 | `{name, description?, color?, icon?, defaultStatusId?, statusIds: [], sectionIds: [] (in order), fieldDefaults: [{fieldId, value}], defaultShares: [{groupId, access}], milestones: [{id?, kind, title, description?, offsetDays?, dod: [""], onGoStatusId?, onNoGoStatusId?}] (in order)}` – every list complete → `TemplateDetail` (the same with ids and the milestones' fractional `sortOrder`); a milestone with the id of an existing one is updated, others created, missing ones tombstoned |
+| `POST /api/v1/config/templates/{id}/archive` · `/unarchive`, `PUT …/templates/order {ids}` | 〃 | → `TemplateDetail` / `[TemplateDetail]` |
+| `POST /api/v1/config/roles` · `PUT …/{id}` · `DELETE …/{id}` | 〃 | `{name, description?, sortOrder?}` → `RoleItem {id, name, description, sortOrder, isArchived, rev}` / 204; 409 `duplicate_name` |
+| `GET /api/v1/config/packages` | 〃 | → `[{name, title, description, version, builtIn, imported: {version, importedAt, importedBy, importedByName} \| null}]` |
+| `POST /api/v1/config/packages/dry-run` | 〃 | `{package: {…} \| builtIn: "core", overwrite?: [keys]}` → `{name, version, entries: [{key, entity, name, action: create\|update\|unchanged\|conflict, adopted, changed: [members]}], counts {create, update, unchanged, conflict}, needsAdmin, isAdmin}`; 400 `invalid_package` with `problems: [""]` |
+| `POST /api/v1/config/packages/apply` | 〃 (+ admin when `needsAdmin`: 403 `admin_required`) | the same body → `{diff, created, updated, skipped}` (skipped = conflicts not overwritten) |
+| `GET /api/v1/config/packages/export?package=` | 〃 | → a package document (all configuration, or what that package brought) |
+| `PUT /api/v1/maps/{id}/shares` | manage on the map | `[{groupId, access}]` → `[{id, groupId, groupName, access}]` (re-stamp, evictions `{kind: "map"}`) |
+| `POST /api/v1/maps/{id}/owner` | manage on the map | `{userId}` → 204 |
+| `PUT /api/v1/files/{id}/chunks/{n}` | edit on the file's item/map | raw bytes (≤ 4 MiB) → `{received}` (§10.2) |
+| `POST /api/v1/files/{id}/commit` | 〃 | `{sha256, size}` → `{id, status: "available", sha256, sizeBytes, contentType, width, height, rev, seq}` |
+| `GET /api/v1/files/{id}/{name}` | read on the file's item/map | the bytes |
+
+The Trash lists maps too (`rootKind: "map"`, `rootType: canvas\|matrix`, `title` = the map's name).
+
 ### 3.4 Audit
 
 PNMTD's `AuditChangesInterceptor` (EF `SaveChangesInterceptor`) with entity
@@ -784,8 +816,8 @@ protected override async Task ExecuteAsync(CancellationToken stop)
 | `LiveSyncHub` | continuous | NEW | owns WebSocket connections, change feed, heartbeats (§11.6) |
 | `McpTokenExpiryTask` | 5 min | PNMTD | record token ends |
 | `DirectorySyncTask` | 6 h (+ run now) | NEW | §8 |
-| `FileCleanupTask` | 1 h | PNMTD + PLM | stale uploads (24 h), bytes of purged files, `file_uploads` temp files |
-| `FileCheckTask` | 1 h | PNMTD | free disk space (`Files:MinFreeMb`) |
+| `FileCleanupTask` | 1 h | PNMTD + PLM | stale uploads (24 h), bytes no row names (purged files), `file_uploads` temp files, `embedded` files unreferenced for 30 days (§10.3) |
+| `FileCheckTask` | 1 h | PNMTD | the folder, free disk space (`Files:MinFreeMb`), missing or changed files |
 | `TombstonePruner` | 1 h | PLM | delete tombstones of `other` delete batches older than `Sync:TombstoneDays` (90) and rows of purged batches; update `sync_state.tombstone_horizon_seq`. Trash batches are never pruned automatically. |
 | `LogPruner` | daily | PNMTD | `mcp_log` (10,000), `sync_mutations` (30 d), `sync_evictions` (90 d), `change_log` map moves (90 d) |
 
@@ -842,6 +874,40 @@ Client flow:
 PLM pitfall carried over as a to-do: uploads restart from chunk 0 after an
 interruption; resuming from `received` is a cheap improvement (PLM
 docs/19 §5.3).
+
+### 10.3 As built (phase 3)
+
+`PGPM/Files/`: `FileStore` (the folder, PNMTD's), `ImageCheck` and `FileNames` (copied from PNMTD), `FilesTable` (the sync
+descriptor), `FileService` (chunks, commit, download), `FileCleanup`/`FileCheck` (+ tasks), `FilesOptions` (Files:*).
+
+- **The row** (sync, edit on its item or map): `{itemId | mapId, purpose, fileName, contentType, sizeBytes, sha256 (hex),
+  width?, height?, thumbnail? (base64, ≤ 32 KB)}`; `status` is the server's (`pending`), `storagePath` never sent. Covers,
+  attachments and embedded images belong to items, map images to maps; image purposes need PNG, JPEG, GIF or WebP; the
+  name's (double) extension must not be blocked; `sizeBytes` ≤ the purpose's limit (`Files:MaxImageBytes` for images,
+  `Files:MaxAttachmentBytes` else). Patchable: `fileName`, `thumbnail`. **Shared bytes:** an insert whose SHA-256 and size
+  are those of an available file the user can read is `available` at once (same stored bytes, no upload) – conversions and
+  copies need no upload; the client sees `status: "available"` in the insert's row.
+- **Chunks** `PUT /api/v1/files/{id}/chunks/{n}`: raw body, ≤ 4 MiB (413 `too_large`), the total ≤ the row's `sizeBytes`
+  (413); chunk 0 starts the upload over, every other must be the next one (409 `chunk_out_of_order` with `expected`; the
+  client restarts from 0). 409 `file_available` when stored already, 429 `too_many_uploads` (`Files:UploadsPerHour`,
+  counted at chunk 0), 503 `file_storage_unavailable`. A row the user can't see is 404, one they only read 403
+  `missing_access`. `file_uploads.next_chunk` keeps the order.
+- **Commit** `POST …/commit {sha256, size}`: size and hash must be those received and the row's (409 `size_mismatch` /
+  `sha256_mismatch` – the upload is then discarded, 409 `upload_missing` for a commit without one); a blocked name is 422
+  `blocked_type`. Images (cover, map image, embedded) are checked by their bytes (415 `not_an_image`; 413 `too_large` over
+  10,000 px a side or 40 MP) and their metadata stripped **without re-encoding**: the stored bytes may then differ from
+  the uploaded ones – the answer and the row carry the stored `sha256` and `sizeBytes`, the detected `contentType`, `width`,
+  `height`, and a name with the type's extension (`Screenshot` → `Screenshot.png`). The row becomes `available` (new rev,
+  delivered live). A commit of a stored file answers with it (a retry).
+- **Download** `GET …/{id}/{name}`: read access; 404 `file_pending` before the commit. Images inline as their type,
+  everything else `application/octet-stream` + `attachment`; ranges (206); `ETag` = `"<sha256>"`; `Cache-Control: private,
+  max-age=31536000, immutable`.
+- **Cleanup** (`FileCleanupTask`, hourly): uploads older than 24 h (and leftovers in `.tmp/`); stored files no row names
+  (purged rows, pruned tombstones) older than an hour; `embedded` files no text of their item names (Markdig over the
+  description, the `markdown` field values and the milestones' descriptions – links, images, autolinks, reference
+  definitions to `/api/v1/files/{id}/…`) for 30 days, counted from their creation (`files.unreferenced_since`), are
+  tombstoned through a `SyncWrite` (source `system`, an `other` batch). **Check** (`FileCheckTask`, hourly): the folder,
+  `Files:MinFreeMb`, every available file's bytes and size; problems logged and in the task's health entry.
 
 ---
 
@@ -1035,6 +1101,37 @@ messages (only `hello`, `ack`, `pong`), so it adds no CSRF surface.
   HTTP 403 before the upgrade (a browser sees 1006; `4403` is not sent). `app {version}` and close 1001 at a deploy.
   The server's `ping` every 25 s is answered with `pong`; the client's `ping` gets a `pong`. A browser refused with 403
   (a wrong `PublicUrl`) sees close 1006 and keeps reconnecting with backoff while it polls over HTTP.
+- **Phases 3–5 tables** (in this order in `changes`): `groups`, `persons`, `statuses`, `sections`, `field_definitions`,
+  `project_templates`, `template_statuses`, `template_sections`, `template_field_defaults`, `template_milestones`,
+  `assignment_roles`, `saved_views`, `items`, `item_shares`, `maps`, `map_shares`, `files`, `item_sections`, `field_values`,
+  `milestones`, `dod_items`, `assignments`, `item_links`, `map_layers`, `map_elements`, `user_settings`. Rows as before
+  (camelCase columns of docs/02); enums lower case with underscores where the data model has them (`no_go`,
+  `in_progress`, `map_image`, `contributes_to`); jsonb columns as JSON (`field_values.value` exactly docs/02 §7.5,
+  `config`, `style`, `settings`, `matrix`, `definition`, `dod`, `defaultShares`); `files.thumbnail` and `maps.preview` base64.
+  Computed: `access` on `items` and `maps` (a map template is `read` for everybody, `manage` with *Configuration: Manage*),
+  `canEdit` on `sections` (the section's own rule, docs/02 §7.3 – combine it with the item's access). Never delivered:
+  `files.storagePath`, `files.unreferencedSince`; sections a user may not view, their `field_definitions`, their
+  `field_values`, `item_sections` and `template_field_defaults`.
+- **Phases 3–5 writes** (sync): configuration tables (`statuses` … `assignment_roles`) are read-only (`not_supported`).
+  `items` of every type with the type's *Create* right; ideas, leads, projects need a status of their type (none sent: the
+  template's default, else the type's), not archived, a project's within its template's allowed set; server-owned:
+  `number`, `ownerUserId`, `statusChangedAt`, `convertedToItemId`; `originItemId` only on a project's insert (an idea or lead
+  the user reads; with edit on it the server sets its `convertedToItemId`); `imageFileId` an image file of the item.
+  Children need edit on their item (`parent_missing` when it is gone or invisible): `assignments` (item xor milestone; a
+  person once – duplicates `mergedInto`), `item_links` (edit on the source, read on the target; duplicates `mergedInto`; no
+  patches), `item_sections` (the section applies to the type; duplicates `mergedInto`), `field_values` (the field's section
+  visible and editable, the value of its type – see `FieldValueRules`; scores never; a duplicate pair becomes a patch from
+  null, which may conflict), `milestones` (projects only; `decision` and status suggestions only for gates; server-owned
+  `completedAt`, `decidedAt`, `decidedBy`), `dod_items` (`na` needs a `note`; server-owned `stateChangedBy/At`), `files`
+  (§10.3). `saved_views`: own views; `isShared` (setting it, editing or deleting a shared view) needs *Configuration: Manage*;
+  owner server-owned. `maps`: *Maps: Create*, owner server-owned, `isTemplate` needs *Configuration: Manage*, `defaultView`
+  manage, delete manage (to the Trash, root `map`); `kind` and `templateSourceId` insert only; a matrix map has its
+  `matrix`, a canvas none. `map_shares` as `item_shares` (only with a new map in the same batch). `map_layers` and
+  `map_elements` with edit on the map; a map keeps one layer; elements: x/y finite within ±1,000,000 (rounded to two
+  decimals), width/height > 0, `z` and `sortOrder` fractional keys, references by kind (an item card's item readable – none
+  on matrix maps –, a milestone's or timeline's project readable, an image's file a `map_image` of the same map, connector
+  ends elements of the map), `points` only for lines. Deleting an item tombstones its cards on all maps and its incoming
+  links; a restore brings them back while their map exists.
 - **REST** (online): `PUT /api/v1/items/{id}/shares` `[{groupId, access}]` → the new list `[{id, groupId, groupName,
   access}]`; `POST /api/v1/items/{id}/owner {userId}` → 204; `GET /api/v1/trash?page&pageSize` → `{items: [{batchId,
   rootKind: "item", rootId, rootType: "note", title, deletedAt, deletedBy, deletedByName}], page, pageSize,
@@ -1142,7 +1239,9 @@ table name, `Visible`, `Patchable` incl. `col.*` jsonb paths, `ServerOwned`, `Hi
 (pull), `TrashService`, `TombstonePruner`/`LogPruner`; `PGPM/Sharing/` `AccessService` (+ `Viewer`) and
 `SharingService`; `PGPM/Sync/Live/` `LiveSyncHub`, `LiveConnection`, `EditingRegistry`. Descriptors: `GroupsTable`
 (`Sync/SyncTables.cs`), `PersonsTable` (`Persons/`), `ItemsTable` and `ItemSharesTable` (`Items/ItemTables.cs`),
-`UserSettingsTable` (`Settings/`). A new table = entity (`: SyncedEntity`) + model configuration (`Synced(e)`) +
+`UserSettingsTable` (`Settings/`); phases 3–5: `Config/ConfigTables.cs` (configuration, saved views),
+`Items/ItemChildTables.cs`, `Files/FilesTable.cs`, `Maps/MapTables.cs`; `ValidateAsync` for the checks that read other rows,
+`ItemOf(db, row)`/`MapOf` for the History's `item_id`/`map_id`. A new table = entity (`: SyncedEntity`) + model configuration (`Synced(e)`) +
 migration + descriptor in `SyncTables.All` after its parents; `SyncRegistryTests` fails until the descriptor exists
 and round-trips every whitelisted key. A patch whose keys all conflict (or are no-ops) is `conflict` with `kind:
 "field"`; an insert that fails a database constraint is `rejected` (`validation_failed`, unique: `duplicate_id`).
@@ -1785,6 +1884,18 @@ ASP.NET configuration as in PNMTD (`appsettings.json` + environment overrides
 | 37 | Trigram index on `items.title` deferred to phase 3 (global search) | needs `pg_trgm`; nothing searches server-side yet |
 | 38 | The client closes the live socket on the browser's `offline` event (docs/03 §11.7 "Integration") | an offline browser's socket (DevTools' and Playwright's offline mode, a closed lid) may stay open and keep the indicator *Live*; `online` catches up over HTTP |
 | 39 | Wire timestamps always with six fractional digits (`UtcMicrosecondsJsonConverter`), not System.Text.Json's trimmed ones | the client sorts and compares them as text |
+| 40 | Enum spellings from `[JsonStringEnumMemberName]` where a value has two words (`no_go`, `in_progress`, `map_image`), lower case otherwise, for the database, the wire and the REST API alike (`EnumText`) | the data model's values; one spelling everywhere |
+| 41 | `assignment_roles` [S, ro], `saved_views.description`, `config_keys.hash`, `files.unreferenced_since`, `file_uploads.next_chunk` added to doc 02 | roles of the packages; views' descriptions in packages; local edits told apart; the 30-day rule; chunk order |
+| 42 | `items.origin_item_id` is set by the client on a project's insert (conversion offline); the server sets the origin's `converted_to_item_id` | conversion works offline like any create |
+| 43 | A `files` insert whose bytes (SHA-256, size) the user can already read is `available` at once and shares the stored bytes; stored bytes no row names are removed by the cleanup | conversion and copies need no upload; purges free the disk |
+| 44 | Image metadata is stripped at the commit, so a stored image's `sha256`/`sizeBytes` may differ from the uploaded bytes (the row then carries the stored ones) | PNMTD strips without re-encoding; the client verifies downloads against the row |
+| 45 | Chunks must come in order (`n` = 0 or the next; 409 `chunk_out_of_order`) | a retried chunk would otherwise be appended twice |
+| 46 | Package requests wrap the package: `{package}` or `{builtIn}` (+ `overwrite`) | `overwrite` next to a package that allows no extra members |
+| 47 | Visibility of a section: restricted only by `view` rows; `edit` rows alone restrict editing (docs/02 §7.3 read as the package schema says) | the review board decides, everybody sees the decision |
+| 48 | Map templates: read by everybody, managed with *Configuration: Manage* (besides owner and admins) | the template catalogue is configuration |
+| 49 | Configuration tables have no History (`change_log`); their changes are in the audit log (`config.*` events) | History is per item |
+| 50 | `milestones.completed_at`, `decided_at`, `decided_by` and `dod_items.state_changed_*` are set by the server | "set automatically" (docs/01 §11) |
+| 51 | Foreign keys from children to their parents (cascade) and to configuration (restrict); none to users, nor for references a row may outlive (status, template, cover image, connector ends) | integrity where a purge removes both anyway |
 
 ## 16. Score evaluation [NEW]
 
@@ -1917,6 +2028,33 @@ Format decisions (2026-11-27):
 | Scores | a normalised score as input counts with max 100; `op: sum` with `na: rescale` needs `max` = the sum of the inputs' maxima |
 | Rights | `{Area: Level}` of §6.2; a package can't make a group admin |
 | Icons, colours | PrimeIcons 7 names without the `pi ` class (`pi-bolt`); lower-case `#rrggbb` from the Tailwind/Aura palette |
+
+**As built (phase 4).** `PGPM/Packages/`: the built-in packages and `spec/config-package.schema.json` are embedded;
+`PackageSchema` evaluates the schema as `tools/check-packages.py`'s evaluator does (the same keywords and messages),
+`PackageChecker` its semantic rules (a test runs the script's self-test variants against it, another compares the
+PrimeIcons list); `PackageImporter` checks, plans, applies and exports; `ConfigPackageSeeder` (a hosted service after the
+migration) imports `Packages:SeedOnFirstStart` once per database (`key_values` `seed.packages`; the tests' default is
+none).
+
+- **Checking** an import: the package and the packages it requires – built-in ones as shipped, others as exported from
+  what they brought – with the same rules, except that the default status is "at most one per item type in the package"
+  (the importer makes it the type's default) instead of "exactly one across the built-in set". A required package must be
+  imported already (`key_values` `package:<name>`, the import state).
+- **Comparing**: each entity in its package form – keys instead of ids (`config_keys`), defaults filled in, unordered lists
+  sorted, integer orders of fractional columns as ranks (milestones, layers, elements). Equal → `unchanged`; different →
+  `update` when `config_keys.hash` (the form's SHA-256 as imported last) still matches the database, else `conflict`
+  (edited here; also an adopted entity that differs, and one deleted here). Children are part of their parent's form and
+  keyed `<parent key>/<local key>`.
+- **Applying** (one `SyncWrite`, source `admin`; the seeder's `system`): in dependency order; integer `sortOrder`/`z` of
+  fractional columns become `a0`, `a1` … (`FractionalKey.Sequence`); view filters and matrix filters get ids for keys;
+  matrix presets are matrix map templates with one layer `Base` (`<key>/base`); saved views and map templates belong to
+  the importing user (the seeder: the first admin); section access through the same code as the endpoint (resets);
+  changed group rights forget the members' sessions. Conflicts are kept unless `overwrite` names their keys; the first
+  start overwrites everything (the migration's seed groups become core's).
+- The request wraps the package (`{package}` or `{builtIn}`) so that `overwrite` can sit next to it; a package that creates
+  or changes groups (rights) needs an admin (403 `admin_required`).
+- **Export**: every live, non-archived configuration entity (shared views, map templates) under its key, or a key made up
+  from its name where it has none; `?package=` limits it to what a package brought. The export passes the checker.
 
 ## 18. Markdown editing [PNMTD]
 

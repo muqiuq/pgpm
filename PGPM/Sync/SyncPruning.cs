@@ -47,7 +47,7 @@ public static class TombstonePruner
 /// <summary>
 /// Keeps the sync's logs small (docs/03 §9): <c>sync_mutations</c> after 30 days (a client retrying later gets the
 /// mutation applied again, which the per-field checks make harmless), <c>sync_evictions</c> after 90 days – with the
-/// horizon raised past them, so a client that would miss one resets.
+/// horizon raised past them, so a client that would miss one resets – and the map elements' History after 90 days.
 /// </summary>
 public static class LogPruner
 {
@@ -57,11 +57,16 @@ public static class LogPruner
 
     public static readonly TimeSpan EvictionsFor = TimeSpan.FromDays(90);
 
+    /// <summary>The History of map elements (moves, mostly): kept as long as tombstones.</summary>
+    public static readonly TimeSpan MapElementsFor = TimeSpan.FromDays(90);
+
     public static async Task<(int Mutations, int Evictions)> RunOnceAsync(PgpmDbContext db, CancellationToken ct)
     {
         var now = Clock.UtcNow;
         var mutationsBefore = now - MutationsFor;
         var mutations = await db.SyncMutations.Where(m => m.ProcessedAt < mutationsBefore).ExecuteDeleteAsync(ct);
+        var elementsBefore = now - MapElementsFor;
+        await db.ChangeLog.Where(c => c.Entity == "map_elements" && c.At < elementsBefore).ExecuteDeleteAsync(ct);
         var evictionsBefore = now - EvictionsFor;
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await SyncCounter.LockAsync(db, ct);

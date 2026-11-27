@@ -10,20 +10,22 @@ using PGPM.Sharing;
 namespace PGPM.Sync;
 
 /// <summary>
-/// The Trash (docs/01 §4.9, docs/03 §11.6), online: the delete batches of items (maps in phase 5) the user may manage,
+/// The Trash (docs/01 §4.9, docs/03 §11.6), online: the delete batches of items and maps the user may manage,
 /// restore through a <see cref="SyncWrite"/> (new seqs, revs + 1, rows whose parent is gone and duplicates of unique pairs
 /// stay deleted), and the admin's purge, which removes the rows and raises the tombstone horizon (clients behind it reset).
 /// </summary>
 public sealed class TrashService(PgpmDbContext db, SyncWriter writer, IHttpContextAccessor accessor)
 {
+    /// <summary>The deleted items and maps the user may manage (admins: all), newest first by default, paged in memory.</summary>
     public async Task<Paged<TrashItem>> ListAsync(Viewer viewer, PageQuery query, CancellationToken ct)
     {
         var me = viewer.UserId;
         var groups = viewer.GroupIds.ToList();
         var admin = viewer.IsAdmin;
+        var configures = viewer.Rights.Has(Auth.Rights.Area.Configuration, Auth.Rights.Level.Manage);
         var (field, descending) = Paging.Sort(query.Sort, "-deletedAt", "deletedat", "title");
         var pattern = SearchText.Pattern(query.Search);
-        var found =
+        var items = await (
             from b in db.DeleteBatches.AsNoTracking()
             where b.RootKind == DeleteRootKind.Item && b.RestoredAt == null && b.PurgedAt == null
             join i in db.Items.AsNoTracking() on b.RootId equals i.Id
@@ -35,17 +37,33 @@ public sealed class TrashService(PgpmDbContext db, SyncWriter writer, IHttpConte
             {
                 b.Id, b.RootId, i.Type, i.Title, b.DeletedAt, b.DeletedBy,
                 Name = db.Users.Where(u => u.Id == b.DeletedBy).Select(u => u.DisplayName).FirstOrDefault(),
-            };
-        var entries = (field, descending) switch
+            }).ToListAsync(ct);
+        var maps = await (
+            from b in db.DeleteBatches.AsNoTracking()
+            where b.RootKind == DeleteRootKind.Map && b.RestoredAt == null && b.PurgedAt == null
+            join m in db.Maps.AsNoTracking() on b.RootId equals m.Id
+            where m.Deleted && m.DeleteBatchId == b.Id
+                && (admin || m.OwnerUserId == me || (m.IsTemplate && configures)
+                    || db.MapShares.Any(s => s.MapId == m.Id && !s.Deleted && s.Access == ItemAccess.Manage && groups.Contains(s.GroupId)))
+                && (pattern == null || EF.Functions.ILike(m.Name, pattern, @"\"))
+            select new
+            {
+                b.Id, b.RootId, m.Kind, Title = m.Name, b.DeletedAt, b.DeletedBy,
+                Name = db.Users.Where(u => u.Id == b.DeletedBy).Select(u => u.DisplayName).FirstOrDefault(),
+            }).ToListAsync(ct);
+        var entries = items.Select(t => new TrashItem(t.Id, "item", t.RootId, Data.EnumText.Of(t.Type), t.Title, t.DeletedAt, t.DeletedBy, t.Name))
+            .Concat(maps.Select(t => new TrashItem(t.Id, "map", t.RootId, Data.EnumText.Of(t.Kind), t.Title, t.DeletedAt, t.DeletedBy, t.Name)));
+        var sorted = (field, descending) switch
         {
-            ("title", false) => found.OrderBy(t => t.Title).ThenByDescending(t => t.DeletedAt).ThenBy(t => t.Id),
-            ("title", true) => found.OrderByDescending(t => t.Title).ThenByDescending(t => t.DeletedAt).ThenBy(t => t.Id),
-            (_, false) => found.OrderBy(t => t.DeletedAt).ThenBy(t => t.Id),
-            _ => found.OrderByDescending(t => t.DeletedAt).ThenByDescending(t => t.Id),
+            ("title", false) => entries.OrderBy(t => t.Title, StringComparer.CurrentCultureIgnoreCase).ThenByDescending(t => t.DeletedAt).ThenBy(t => t.BatchId),
+            ("title", true) => entries.OrderByDescending(t => t.Title, StringComparer.CurrentCultureIgnoreCase).ThenByDescending(t => t.DeletedAt)
+                .ThenBy(t => t.BatchId),
+            (_, false) => entries.OrderBy(t => t.DeletedAt).ThenBy(t => t.BatchId),
+            _ => entries.OrderByDescending(t => t.DeletedAt).ThenByDescending(t => t.BatchId),
         };
-        var page = await Paging.PageAsync(entries, query, ct);
-        return new Paged<TrashItem>(page.Items.Select(t => new TrashItem(t.Id, "item", t.RootId, t.Type.ToString().ToLowerInvariant(), t.Title,
-            t.DeletedAt, t.DeletedBy, t.Name)).ToList(), page.Page, page.PageSize, page.TotalCount);
+        var all = sorted.ToList();
+        var (page, size) = Paging.Normalize(query);
+        return new Paged<TrashItem>(all.Skip((page - 1) * size).Take(size).ToList(), page, size, all.Count);
     }
 
     /// <summary>Un-deletes the batch's rows, parents first; 404 for a batch that isn't in the trash, 403 without the right to delete its root.</summary>
@@ -68,6 +86,7 @@ public sealed class TrashService(PgpmDbContext db, SyncWriter writer, IHttpConte
         var restored = 0;
         var skipped = 0;
         var reshared = new HashSet<Guid>();
+        var remapped = new HashSet<Guid>();
         foreach (var table in SyncTables.All)
         {
             foreach (var row in await table.InBatchAsync(db, batchId, ct))
@@ -84,21 +103,34 @@ public sealed class TrashService(PgpmDbContext db, SyncWriter writer, IHttpConte
                 {
                     reshared.Add(share.ItemId);
                 }
+                if (row is Maps.MapShareEntity mapShare)
+                {
+                    remapped.Add(mapShare.MapId);
+                }
             }
             // Saved per table: the children's parent checks see their parents restored.
             await db.SaveChangesAsync(ct);
         }
-        // Shares back (a removal undone): whoever got access again needs the item's rows.
+        // Shares back (a removal undone): whoever got access again needs the item's (the map's) rows.
         foreach (var itemId in reshared)
         {
             await write.Access.RestampAsync("items", itemId, ct);
         }
+        foreach (var mapId in remapped)
+        {
+            await write.Access.RestampAsync("maps", mapId, ct);
+        }
         batch.RestoredAt = Clock.UtcNow;
         batch.RestoredBy = viewer.UserId;
+        var outcome = $"{restored} row(s) restored" + (skipped > 0 ? $", {skipped} left in the trash" : "");
         if (root is ItemEntity item)
         {
-            AuditLog.Record(db, AuditEvents.TrashRestored, $"{ItemEntity.Prefix(item.Type)}-{item.Number} {item.Title}: {restored} row(s) restored"
-                + (skipped > 0 ? $", {skipped} left in the trash" : ""), AuditWho.From(accessor), AuditTarget.Item(item.Id, item.Title));
+            AuditLog.Record(db, AuditEvents.TrashRestored, $"{ItemEntity.Prefix(item.Type)}-{item.Number} {item.Title}: {outcome}", AuditWho.From(accessor),
+                AuditTarget.Item(item.Id, item.Title));
+        }
+        else if (root is Maps.MapEntity map)
+        {
+            AuditLog.Record(db, AuditEvents.TrashRestored, $"Map {map.Name}: {outcome}", AuditWho.From(accessor), AuditTarget.Map(map.Id, map.Name));
         }
         await db.SaveChangesAsync(ct);
         await write.CommitAsync(ct);
@@ -131,9 +163,14 @@ public sealed class TrashService(PgpmDbContext db, SyncWriter writer, IHttpConte
         }
         batch.PurgedAt = Clock.UtcNow;
         batch.PurgedBy = viewer.UserId;
-        var title = root is ItemEntity item ? $"{ItemEntity.Prefix(item.Type)}-{item.Number} {item.Title}" : $"{batch.RootTable} {batch.RootId}";
+        var title = root switch
+        {
+            ItemEntity item => $"{ItemEntity.Prefix(item.Type)}-{item.Number} {item.Title}",
+            Maps.MapEntity map => $"Map {map.Name}",
+            _ => $"{batch.RootTable} {batch.RootId}",
+        };
         AuditLog.Record(db, AuditEvents.TrashPurged, $"{title}: {removed.Count} row(s) deleted permanently", AuditWho.From(accessor),
-            root is ItemEntity i ? AuditTarget.Item(i.Id, i.Title) : null);
+            root switch { ItemEntity i => AuditTarget.Item(i.Id, i.Title), Maps.MapEntity m => AuditTarget.Map(m.Id, m.Name), _ => null });
         await db.SaveChangesAsync(ct);
         await SyncCounter.RaiseHorizonAsync(db, horizon, ct);
         // No seq is spent, but the live connections should look: those behind the horizon reset.

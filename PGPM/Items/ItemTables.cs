@@ -13,9 +13,10 @@ using PGPM.Sync;
 namespace PGPM.Items;
 
 /// <summary>
-/// <c>items</c> (docs/02 §6): visible with read access, patched with edit, deleted (to the Trash) with manage. Phase 2
-/// creates notes only; the other types' inserts are <c>not_supported</c> until phase 3. The server sets the number, the
-/// owner and <c>status_changed_at</c>; <c>access</c> is computed per user.
+/// <c>items</c> (docs/02 §6): visible with read access, patched with edit, deleted (to the Trash) with manage; created with
+/// the type's <i>Create</i> right. The server sets the number, the owner, <c>status_changed_at</c> and the origin's
+/// <c>converted_to_item_id</c>; <c>access</c> is computed per user. Ideas, leads and projects need a status of their type
+/// (the server fills in the default when none is sent), a project's one allowed by its template.
 /// </summary>
 public sealed partial class ItemsTable() : SyncTable<ItemEntity>("items")
 {
@@ -23,7 +24,7 @@ public sealed partial class ItemsTable() : SyncTable<ItemEntity>("items")
 
     public override IReadOnlySet<string> ServerOwned { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
-        "number", "ownerUserId", "statusChangedAt", "originItemId", "convertedToItemId",
+        "number", "ownerUserId", "statusChangedAt", "convertedToItemId",
     };
 
     /// <summary>docs/03 §11.5: not type, number, owner, origin, conversion, template.</summary>
@@ -34,8 +35,8 @@ public sealed partial class ItemsTable() : SyncTable<ItemEntity>("items")
         "projectStartDate", "projectEndDate",
     };
 
-    /// <summary>The types a client may create now (phase 3 adds ideas, leads and projects).</summary>
-    public static readonly IReadOnlySet<ItemType> Creatable = new HashSet<ItemType> { ItemType.Note };
+    /// <summary>The types a client may create.</summary>
+    public static readonly IReadOnlySet<ItemType> Creatable = new HashSet<ItemType> { ItemType.Note, ItemType.Idea, ItemType.Lead, ItemType.Project };
 
     protected override ItemEntity Create() => new();
 
@@ -82,9 +83,74 @@ public sealed partial class ItemsTable() : SyncTable<ItemEntity>("items")
     {
         row.OwnerUserId = w.Viewer.UserId;
         row.Number = await NextNumberAsync(w.Db, row.Type, ct);
+        if (row.StatusId is null && row.Type != ItemType.Note)
+        {
+            row.StatusId = await DefaultStatusAsync(w.Db, row.Type, row.ProjectTemplateId, ct);
+        }
         row.StatusChangedAt = row.StatusId is null ? null : Clock.UtcNow;
-        row.OriginItemId = null;
         row.ConvertedToItemId = null;
+    }
+
+    /// <summary>The template's default status, else the type's default (docs/01 §5).</summary>
+    private static async Task<Guid?> DefaultStatusAsync(PgpmDbContext db, ItemType type, Guid? templateId, CancellationToken ct)
+    {
+        if (type == ItemType.Project && templateId is { } t
+            && await db.ProjectTemplates.AsNoTracking().Where(p => p.Id == t).Select(p => p.DefaultStatusId).FirstOrDefaultAsync(ct) is { } fromTemplate)
+        {
+            return fromTemplate;
+        }
+        return await db.Statuses.AsNoTracking().Where(s => s.ItemType == type && s.IsDefault && !s.Deleted && !s.IsArchived)
+            .Select(s => (Guid?)s.Id).FirstOrDefaultAsync(ct);
+    }
+
+    /// <summary>A conversion (docs/01 §8): the origin, an idea or a lead the user can edit, is marked as converted to the project.</summary>
+    protected override async Task AfterInsertAsync(SyncWrite w, ItemEntity row, CancellationToken ct)
+    {
+        if (row.OriginItemId is { } originId && await w.Access.ItemAccessAsync(w.Viewer, originId, ct) >= ItemAccess.Edit
+            && await w.Db.Items.FirstOrDefaultAsync(i => i.Id == originId && !i.Deleted, ct) is { } origin)
+        {
+            origin.ConvertedToItemId = row.Id;
+        }
+    }
+
+    protected override async Task ValidateAsync(SyncWrite w, ItemEntity row, IReadOnlyCollection<string>? changed, ApiValidator v, CancellationToken ct)
+    {
+        if (row.StatusId is { } statusId && (changed is null || changed.Contains("statusId")))
+        {
+            var status = await w.Db.Statuses.AsNoTracking().FirstOrDefaultAsync(s => s.Id == statusId && !s.Deleted, ct);
+            if (status is null || status.ItemType != row.Type)
+            {
+                v.Add("statusId", $"A status of {row.Type.ToString().ToLowerInvariant()}s.");
+            }
+            else if (status.IsArchived)
+            {
+                v.Add("statusId", "The status is archived.");
+            }
+            else if (row.Type == ItemType.Project && row.ProjectTemplateId is { } templateId
+                && await Config.ConfigLookups.AllowedStatusesAsync(w.Db, templateId, ct) is { } allowed && !allowed.Contains(statusId))
+            {
+                v.Add("statusId", "The project's template doesn't allow this status.");
+            }
+        }
+        if (changed is null && row.ProjectTemplateId is { } template
+            && !await w.Db.ProjectTemplates.AnyAsync(p => p.Id == template && !p.Deleted && !p.IsArchived, ct))
+        {
+            v.Add("projectTemplateId", "No such template (or archived).");
+        }
+        if (row.ImageFileId is { } fileId && (changed is null || changed.Contains("imageFileId"))
+            && !await w.Db.Files.AnyAsync(f => f.Id == fileId && f.ItemId == row.Id && !f.Deleted && f.ContentType.StartsWith("image/"), ct))
+        {
+            v.Add("imageFileId", "An image file of this item.");
+        }
+        if (changed is null && row.OriginItemId is { } originId)
+        {
+            var origin = await w.Db.Items.AsNoTracking().Where(i => i.Id == originId && !i.Deleted).Select(i => (ItemType?)i.Type).FirstOrDefaultAsync(ct);
+            if (row.Type != ItemType.Project || origin is not (ItemType.Idea or ItemType.Lead)
+                || await w.Access.ItemAccessAsync(w.Viewer, originId, ct) < ItemAccess.Read)
+            {
+                v.Add("originItemId", "A project's origin is an idea or a lead you can read.");
+            }
+        }
     }
 
     /// <summary>The type's next display number (docs/02 §6 <c>number_counters</c>), in the push's transaction.</summary>

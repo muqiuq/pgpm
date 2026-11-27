@@ -580,6 +580,1176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config/statuses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["StatusRequest"];
+                    "text/json": components["schemas"]["StatusRequest"];
+                    "application/*+json": components["schemas"]["StatusRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StatusItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/statuses/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["StatusRequest"];
+                    "text/json": components["schemas"]["StatusRequest"];
+                    "application/*+json": components["schemas"]["StatusRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StatusItem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/statuses/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StatusItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/statuses/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StatusItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/statuses/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OrderRequest"];
+                    "text/json": components["schemas"]["OrderRequest"];
+                    "application/*+json": components["schemas"]["OrderRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StatusItem"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SectionRequest"];
+                    "text/json": components["schemas"]["SectionRequest"];
+                    "application/*+json": components["schemas"]["SectionRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SectionItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/sections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SectionRequest"];
+                    "text/json": components["schemas"]["SectionRequest"];
+                    "application/*+json": components["schemas"]["SectionRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SectionItem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/sections/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SectionItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/sections/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SectionItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/sections/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OrderRequest"];
+                    "text/json": components["schemas"]["OrderRequest"];
+                    "application/*+json": components["schemas"]["OrderRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SectionItem"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FieldRequest"];
+                    "text/json": components["schemas"]["FieldRequest"];
+                    "application/*+json": components["schemas"]["FieldRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FieldItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/fields/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FieldRequest"];
+                    "text/json": components["schemas"]["FieldRequest"];
+                    "application/*+json": components["schemas"]["FieldRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FieldItem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: {
+                    confirm?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/fields/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FieldItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/fields/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FieldItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/fields/{id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FieldUsage"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/fields/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OrderRequest"];
+                    "text/json": components["schemas"]["OrderRequest"];
+                    "application/*+json": components["schemas"]["OrderRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FieldItem"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TemplateRequest"];
+                    "text/json": components["schemas"]["TemplateRequest"];
+                    "application/*+json": components["schemas"]["TemplateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TemplateDetail"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TemplateRequest"];
+                    "text/json": components["schemas"]["TemplateRequest"];
+                    "application/*+json": components["schemas"]["TemplateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TemplateDetail"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/templates/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TemplateDetail"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/templates/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TemplateDetail"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/templates/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OrderRequest"];
+                    "text/json": components["schemas"]["OrderRequest"];
+                    "application/*+json": components["schemas"]["OrderRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TemplateDetail"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RoleRequest"];
+                    "text/json": components["schemas"]["RoleRequest"];
+                    "application/*+json": components["schemas"]["RoleRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RoleItem"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/roles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RoleRequest"];
+                    "text/json": components["schemas"]["RoleRequest"];
+                    "application/*+json": components["schemas"]["RoleRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RoleItem"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/maps/{id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ItemShareRequest"][];
+                    "text/json": components["schemas"]["ItemShareRequest"][];
+                    "application/*+json": components["schemas"]["ItemShareRequest"][];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ItemShareItem"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/maps/{id}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ItemOwnerRequest"];
+                    "text/json": components["schemas"]["ItemOwnerRequest"];
+                    "application/*+json": components["schemas"]["ItemOwnerRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/chunks/{n}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    n: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileChunkReceived"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FileCommitRequest"];
+                    "text/json": components["schemas"]["FileCommitRequest"];
+                    "application/*+json": components["schemas"]["FileCommitRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FileCommitted"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{id}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The file's bytes. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": string;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/groups": {
         parameters: {
             query?: never;
@@ -1188,6 +2358,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config/packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PackageInfo"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/packages/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PackageRequest"];
+                    "text/json": components["schemas"]["PackageRequest"];
+                    "application/*+json": components["schemas"]["PackageRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PackageDiff"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/packages/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PackageRequest"];
+                    "text/json": components["schemas"]["PackageRequest"];
+                    "application/*+json": components["schemas"]["PackageRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PackageApplyResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/config/packages/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    package?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["JsonObject"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync": {
         parameters: {
             query?: never;
@@ -1732,6 +3056,75 @@ export interface components {
             itemId?: null | string;
             target?: null | string;
         };
+        FieldItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sectionId: string;
+            key: string;
+            label: string;
+            helpText: null | string;
+            type: components["schemas"]["FieldType"];
+            config: components["schemas"]["JsonObject"];
+            required: boolean;
+            defaultValue: null | components["schemas"]["JsonNode"];
+            /** Format: int32 */
+            sortOrder: number;
+            isArchived: boolean;
+            /** Format: int32 */
+            rev: number;
+        };
+        FieldRequest: {
+            /** Format: uuid */
+            sectionId?: null | string;
+            key?: null | string;
+            label?: null | string;
+            helpText?: null | string;
+            type?: null | components["schemas"]["FieldType"];
+            config?: null | components["schemas"]["JsonObject"];
+            required?: null | boolean;
+            defaultValue?: null | components["schemas"]["JsonNode"];
+        };
+        /** @enum {unknown} */
+        FieldType: "text" | "textarea" | "markdown" | "number" | "date" | "datetime" | "bool" | "select" | "multiselect" | "person" | "url" | "email" | "rating" | "score";
+        FieldUsage: {
+            /** Format: uuid */
+            id: string;
+            key: string;
+            /** Format: int32 */
+            values: number;
+            /** Format: int32 */
+            items: number;
+            scores: string[];
+            /** Format: int32 */
+            templates: number;
+        };
+        FileChunkReceived: {
+            /** Format: int64 */
+            received: number;
+        };
+        FileCommitRequest: {
+            sha256?: null | string;
+            /** Format: int64 */
+            size?: null | number;
+        };
+        FileCommitted: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            sha256: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            contentType: string;
+            /** Format: int32 */
+            width: null | number;
+            /** Format: int32 */
+            height: null | number;
+            /** Format: int32 */
+            rev: number;
+            /** Format: int64 */
+            seq: number;
+        };
         GroupDetail: {
             /** Format: uuid */
             id: string;
@@ -1814,6 +3207,8 @@ export interface components {
             groupId?: null | string;
             access?: null | components["schemas"]["ItemAccess"];
         };
+        /** @enum {unknown} */
+        ItemType: "note" | "idea" | "lead" | "project";
         JsonNode: unknown;
         JsonObject: {
             [key: string]: unknown;
@@ -1847,6 +3242,71 @@ export interface components {
             objectId?: string;
             /** Format: uuid */
             tenantId?: null | string;
+        };
+        /** @enum {unknown} */
+        MilestoneKind: "milestone" | "gate";
+        OrderRequest: {
+            itemType?: null | components["schemas"]["ItemType"];
+            /** Format: uuid */
+            sectionId?: null | string;
+            ids?: null | string[];
+        };
+        PackageApplyResult: {
+            diff: components["schemas"]["PackageDiff"];
+            /** Format: int32 */
+            created: number;
+            /** Format: int32 */
+            updated: number;
+            /** Format: int32 */
+            skipped: number;
+        };
+        PackageDiff: {
+            name: string;
+            version: string;
+            entries: components["schemas"]["PackageDiffEntry"][];
+            counts: components["schemas"]["PackageDiffCounts"];
+            needsAdmin: boolean;
+            isAdmin: boolean;
+        };
+        PackageDiffCounts: {
+            /** Format: int32 */
+            create: number;
+            /** Format: int32 */
+            update: number;
+            /** Format: int32 */
+            unchanged: number;
+            /** Format: int32 */
+            conflict: number;
+        };
+        PackageDiffEntry: {
+            key: string;
+            entity: string;
+            name: string;
+            action: string;
+            adopted: boolean;
+            changed: string[];
+        };
+        PackageImportState: {
+            version: string;
+            /** Format: date-time */
+            importedAt: string;
+            /** Format: uuid */
+            importedBy: null | string;
+            importedByName: null | string;
+            title?: null | string;
+        };
+        PackageInfo: {
+            name: string;
+            title: string;
+            description: null | string;
+            version: string;
+            builtIn: boolean;
+            imported: null | components["schemas"]["PackageImportState"];
+        };
+        PackageRequest: {
+            package?: null | components["schemas"]["JsonObject"];
+            builtIn?: null | string;
+            overwrite?: null | string[];
         };
         PagedOfAuditEntryItem: {
             items: components["schemas"]["AuditEntryItem"][];
@@ -1898,6 +3358,59 @@ export interface components {
             level: components["schemas"]["Level"];
             allows: string;
         };
+        RoleItem: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: null | string;
+            /** Format: int32 */
+            sortOrder: number;
+            isArchived: boolean;
+            /** Format: int32 */
+            rev: number;
+        };
+        RoleRequest: {
+            name?: null | string;
+            description?: null | string;
+            /** Format: int32 */
+            sortOrder?: null | number;
+        };
+        /** @enum {unknown} */
+        SectionAccess: "view" | "edit";
+        SectionAccessItem: {
+            /** Format: uuid */
+            groupId: string;
+            groupName: string;
+            level: components["schemas"]["SectionAccess"];
+        };
+        SectionAccessRequest: {
+            /** Format: uuid */
+            groupId?: null | string;
+            level?: null | components["schemas"]["SectionAccess"];
+        };
+        SectionItem: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: null | string;
+            appliesTo: string[];
+            defaultFor: string[];
+            /** Format: int32 */
+            sortOrder: number;
+            collapsedByDefault: boolean;
+            isArchived: boolean;
+            access: components["schemas"]["SectionAccessItem"][];
+            /** Format: int32 */
+            rev: number;
+        };
+        SectionRequest: {
+            name?: null | string;
+            description?: null | string;
+            appliesTo?: null | string[];
+            defaultFor?: null | string[];
+            collapsedByDefault?: null | boolean;
+            access?: null | components["schemas"]["SectionAccessRequest"][];
+        };
         SessionFlags: {
             mustChangePassword: boolean;
             totpSetupRequired: boolean;
@@ -1912,6 +3425,35 @@ export interface components {
         SignInOptions: {
             microsoft: boolean;
             local: boolean;
+        };
+        /** @enum {unknown} */
+        StatusCategory: "open" | "active" | "closed";
+        StatusItem: {
+            /** Format: uuid */
+            id: string;
+            itemType: components["schemas"]["ItemType"];
+            name: string;
+            color: string;
+            icon: null | string;
+            category: components["schemas"]["StatusCategory"];
+            /** Format: int32 */
+            sortOrder: number;
+            isDefault: boolean;
+            /** Format: int32 */
+            maxDays: null | number;
+            isArchived: boolean;
+            /** Format: int32 */
+            rev: number;
+        };
+        StatusRequest: {
+            itemType?: null | components["schemas"]["ItemType"];
+            name?: null | string;
+            color?: null | string;
+            icon?: null | string;
+            category?: null | components["schemas"]["StatusCategory"];
+            /** Format: int32 */
+            maxDays?: null | number;
+            isDefault?: null | boolean;
         };
         SyncConflict: {
             /** Format: uuid */
@@ -2017,6 +3559,88 @@ export interface components {
         };
         /** @enum {unknown} */
         SyncStatus: "accepted" | "partial" | "conflict" | "rejected";
+        TemplateDetail: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: null | string;
+            color: null | string;
+            icon: null | string;
+            /** Format: uuid */
+            defaultStatusId: null | string;
+            statusIds: string[];
+            sectionIds: string[];
+            fieldDefaults: components["schemas"]["TemplateFieldDefaultItem"][];
+            defaultShares: components["schemas"]["TemplateShareItem"][];
+            milestones: components["schemas"]["TemplateMilestoneItem"][];
+            /** Format: int32 */
+            sortOrder: number;
+            isArchived: boolean;
+            /** Format: int32 */
+            rev: number;
+        };
+        TemplateFieldDefaultItem: {
+            /** Format: uuid */
+            fieldId: string;
+            value: null | components["schemas"]["JsonNode"];
+        };
+        TemplateFieldDefaultRequest: {
+            /** Format: uuid */
+            fieldId?: null | string;
+            value?: null | components["schemas"]["JsonNode"];
+        };
+        TemplateMilestoneItem: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["MilestoneKind"];
+            title: string;
+            description: null | string;
+            /** Format: int32 */
+            offsetDays: null | number;
+            dod: string[];
+            /** Format: uuid */
+            onGoStatusId: null | string;
+            /** Format: uuid */
+            onNoGoStatusId: null | string;
+            sortOrder: string;
+        };
+        TemplateMilestoneRequest: {
+            /** Format: uuid */
+            id?: null | string;
+            kind?: null | components["schemas"]["MilestoneKind"];
+            title?: null | string;
+            description?: null | string;
+            /** Format: int32 */
+            offsetDays?: null | number;
+            dod?: null | string[];
+            /** Format: uuid */
+            onGoStatusId?: null | string;
+            /** Format: uuid */
+            onNoGoStatusId?: null | string;
+        };
+        TemplateRequest: {
+            name?: null | string;
+            description?: null | string;
+            color?: null | string;
+            icon?: null | string;
+            /** Format: uuid */
+            defaultStatusId?: null | string;
+            statusIds?: null | string[];
+            sectionIds?: null | string[];
+            fieldDefaults?: null | components["schemas"]["TemplateFieldDefaultRequest"][];
+            defaultShares?: null | components["schemas"]["TemplateShareRequest"][];
+            milestones?: null | components["schemas"]["TemplateMilestoneRequest"][];
+        };
+        TemplateShareItem: {
+            /** Format: uuid */
+            groupId: string;
+            access: components["schemas"]["ItemAccess"];
+        };
+        TemplateShareRequest: {
+            /** Format: uuid */
+            groupId?: null | string;
+            access?: null | components["schemas"]["ItemAccess"];
+        };
         TemporaryPassword: {
             password: string;
             /** Format: date-time */

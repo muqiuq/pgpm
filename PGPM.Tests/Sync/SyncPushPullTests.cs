@@ -242,7 +242,7 @@ public sealed class SyncPushPullTests
         var codes = answer.Arr("results").Select(r => r.Str("code") ?? r.Str("status")).ToList();
         CollectionAssert.AreEqual(new[]
         {
-            "not_supported", "validation_failed", "validation_failed", "missing_access", "not_patchable", "not_patchable", "not_supported",
+            "missing_right", "validation_failed", "validation_failed", "missing_access", "not_patchable", "not_patchable", "not_supported",
             "missing_access", "not_supported", "missing_right", "validation_failed", "accepted",
         }, codes, string.Join(", ", codes));
         Assert.IsNotNull(answer.Arr("results")[1]!["errors"]!["id"]);

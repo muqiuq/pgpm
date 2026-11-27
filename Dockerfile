@@ -27,6 +27,8 @@ COPY PGPM.Lib/PGPM.Lib.csproj PGPM.Lib/packages.lock.json PGPM.Lib/
 RUN dotnet restore PGPM/PGPM.csproj --locked-mode
 COPY PGPM/ PGPM/
 COPY PGPM.Lib/ PGPM.Lib/
+# The configuration packages' schema, embedded into the app with the built-in packages (docs/03 §17).
+COPY spec/config-package.schema.json spec/
 COPY --from=web /web/dist PGPM/wwwroot/
 # The restore brought everything the publish needs; the publish, where the analyzers and source generators run, gets
 # no network either.

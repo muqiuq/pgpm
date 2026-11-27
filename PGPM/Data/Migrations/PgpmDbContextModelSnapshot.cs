@@ -21,6 +21,7 @@ namespace PGPM.Data.Migrations
                 .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("PGPM.Audit.AuditLogEntity", b =>
@@ -357,6 +358,943 @@ namespace PGPM.Data.Migrations
                     b.ToTable("user_groups", (string)null);
                 });
 
+            modelBuilder.Entity("PGPM.Config.AssignmentRoleEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_archived");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_assignment_roles");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_assignment_roles_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_assignment_roles_seq");
+
+                    b.ToTable("assignment_roles", (string)null);
+                });
+
+            modelBuilder.Entity("PGPM.Config.ConfigKeyEntity", b =>
+                {
+                    b.Property<string>("Entity")
+                        .HasColumnType("text")
+                        .HasColumnName("entity");
+
+                    b.Property<string>("Key")
+                        .HasColumnType("text")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Hash")
+                        .HasColumnType("text")
+                        .HasColumnName("hash");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Package")
+                        .HasColumnType("text")
+                        .HasColumnName("package");
+
+                    b.HasKey("Entity", "Key")
+                        .HasName("pk_config_keys");
+
+                    b.HasIndex("Id")
+                        .HasDatabaseName("ix_config_keys_id");
+
+                    b.ToTable("config_keys", (string)null);
+                });
+
+            modelBuilder.Entity("PGPM.Config.FieldDefinitionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Config")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("config");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("DefaultValue")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("default_value");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<string>("HelpText")
+                        .HasColumnType("text")
+                        .HasColumnName("help_text");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_archived");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("label");
+
+                    b.Property<bool>("Required")
+                        .HasColumnType("boolean")
+                        .HasColumnName("required");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("section_id");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_field_definitions");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_field_definitions_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("Key")
+                        .IsUnique()
+                        .HasDatabaseName("ix_field_definitions_key")
+                        .HasFilter("NOT deleted");
+
+                    b.HasIndex("SectionId")
+                        .HasDatabaseName("ix_field_definitions_section_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_field_definitions_seq");
+
+                    b.ToTable("field_definitions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_field_definitions_key", "key ~ '^[a-z][a-z0-9_]{1,62}$'");
+
+                            t.HasCheckConstraint("ck_field_definitions_score", "type <> 'score' OR default_value IS NULL");
+
+                            t.HasCheckConstraint("ck_field_definitions_type", "type IN ('text', 'textarea', 'markdown', 'number', 'date', 'datetime', 'bool', 'select', 'multiselect', 'person', 'url', 'email', 'rating', 'score')");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Config.ProjectTemplateEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Color")
+                        .HasColumnType("text")
+                        .HasColumnName("color");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("DefaultShares")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("default_shares");
+
+                    b.Property<Guid?>("DefaultStatusId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_status_id");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Icon")
+                        .HasColumnType("text")
+                        .HasColumnName("icon");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_archived");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_project_templates");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_project_templates_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_project_templates_seq");
+
+                    b.ToTable("project_templates", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_project_templates_name", "char_length(name) BETWEEN 1 AND 100");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Config.SavedViewEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Definition")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("definition");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsShared")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_shared");
+
+                    b.Property<string>("ItemType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("item_type");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_saved_views");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_saved_views_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("OwnerUserId")
+                        .HasDatabaseName("ix_saved_views_owner_user_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_saved_views_seq");
+
+                    b.ToTable("saved_views", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_saved_views_item_type", "item_type IN ('note', 'idea', 'lead', 'project', 'gate')");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Config.SectionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.PrimitiveCollection<List<string>>("AppliesTo")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("applies_to");
+
+                    b.Property<bool>("CollapsedByDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("collapsed_by_default");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.PrimitiveCollection<List<string>>("DefaultFor")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("default_for");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_archived");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sections");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_sections_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sections_seq");
+
+                    b.ToTable("sections", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_sections_applies_to", "cardinality(applies_to) > 0 AND applies_to <@ ARRAY['idea', 'project']::text[] AND default_for <@ applies_to");
+
+                            t.HasCheckConstraint("ck_sections_name", "char_length(name) BETWEEN 1 AND 100");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Config.SectionGroupEntity", b =>
+                {
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("section_id");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("group_id");
+
+                    b.Property<string>("Access")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("access");
+
+                    b.HasKey("SectionId", "GroupId")
+                        .HasName("pk_section_groups");
+
+                    b.HasIndex("GroupId")
+                        .HasDatabaseName("ix_section_groups_group_id");
+
+                    b.ToTable("section_groups", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_section_groups_access", "access IN ('view', 'edit')");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Config.StatusEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("category");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("color");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<string>("Icon")
+                        .HasColumnType("text")
+                        .HasColumnName("icon");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_archived");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<string>("ItemType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("item_type");
+
+                    b.Property<int?>("MaxDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_days");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_statuses");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_statuses_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("ItemType")
+                        .IsUnique()
+                        .HasDatabaseName("ix_statuses_default")
+                        .HasFilter("is_default AND NOT deleted");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_statuses_seq");
+
+                    b.HasIndex("ItemType", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_statuses_item_type_name")
+                        .HasFilter("NOT is_archived AND NOT deleted");
+
+                    b.ToTable("statuses", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_statuses_category", "category IN ('open', 'active', 'closed')");
+
+                            t.HasCheckConstraint("ck_statuses_item_type", "item_type IN ('idea', 'lead', 'project')");
+
+                            t.HasCheckConstraint("ck_statuses_max_days", "max_days IS NULL OR max_days > 0");
+
+                            t.HasCheckConstraint("ck_statuses_name", "char_length(name) BETWEEN 1 AND 100");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Config.TemplateFieldDefaultEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<Guid>("FieldId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("field_id");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<Guid>("TemplateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("template_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id")
+                        .HasName("pk_template_field_defaults");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_template_field_defaults_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("FieldId")
+                        .HasDatabaseName("ix_template_field_defaults_field_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_template_field_defaults_seq");
+
+                    b.HasIndex("TemplateId", "FieldId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_template_field_defaults_template_id_field_id")
+                        .HasFilter("NOT deleted");
+
+                    b.ToTable("template_field_defaults", (string)null);
+                });
+
+            modelBuilder.Entity("PGPM.Config.TemplateMilestoneEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Dod")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("dod");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<int?>("OffsetDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("offset_days");
+
+                    b.Property<Guid?>("OnGoStatusId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("on_go_status_id");
+
+                    b.Property<Guid?>("OnNoGoStatusId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("on_no_go_status_id");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<string>("SortOrder")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sort_order")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("TemplateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("template_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_template_milestones");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_template_milestones_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_template_milestones_seq");
+
+                    b.HasIndex("TemplateId")
+                        .HasDatabaseName("ix_template_milestones_template_id");
+
+                    b.ToTable("template_milestones", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_template_milestones_kind", "kind IN ('milestone', 'gate')");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Config.TemplateSectionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("section_id");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<Guid>("TemplateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("template_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_template_sections");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_template_sections_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("SectionId")
+                        .HasDatabaseName("ix_template_sections_section_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_template_sections_seq");
+
+                    b.HasIndex("TemplateId", "SectionId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_template_sections_template_id_section_id")
+                        .HasFilter("NOT deleted");
+
+                    b.ToTable("template_sections", (string)null);
+                });
+
+            modelBuilder.Entity("PGPM.Config.TemplateStatusEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<Guid>("StatusId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("status_id");
+
+                    b.Property<Guid>("TemplateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("template_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_template_statuses");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_template_statuses_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_template_statuses_seq");
+
+                    b.HasIndex("StatusId")
+                        .HasDatabaseName("ix_template_statuses_status_id");
+
+                    b.HasIndex("TemplateId", "StatusId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_template_statuses_template_id_status_id")
+                        .HasFilter("NOT deleted");
+
+                    b.ToTable("template_statuses", (string)null);
+                });
+
             modelBuilder.Entity("PGPM.Data.KeyValueEntity", b =>
                 {
                     b.Property<string>("Key")
@@ -376,6 +1314,431 @@ namespace PGPM.Data.Migrations
                         .HasName("pk_key_values");
 
                     b.ToTable("key_values", (string)null);
+                });
+
+            modelBuilder.Entity("PGPM.Files.FileEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("file_name");
+
+                    b.Property<int?>("Height")
+                        .HasColumnType("integer")
+                        .HasColumnName("height");
+
+                    b.Property<Guid?>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<Guid?>("MapId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("map_id");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("purpose");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sha256");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StoragePath")
+                        .HasColumnType("text")
+                        .HasColumnName("storage_path");
+
+                    b.Property<byte[]>("Thumbnail")
+                        .HasColumnType("bytea")
+                        .HasColumnName("thumbnail");
+
+                    b.Property<DateTime?>("UnreferencedSince")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("unreferenced_since");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<int?>("Width")
+                        .HasColumnType("integer")
+                        .HasColumnName("width");
+
+                    b.HasKey("Id")
+                        .HasName("pk_files");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_files_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_files_item_id");
+
+                    b.HasIndex("MapId")
+                        .HasDatabaseName("ix_files_map_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_files_seq");
+
+                    b.HasIndex("Sha256")
+                        .HasDatabaseName("ix_files_sha256");
+
+                    b.HasIndex("StoragePath")
+                        .HasDatabaseName("ix_files_storage_path");
+
+                    b.ToTable("files", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_files_owner", "num_nonnulls(item_id, map_id) = 1");
+
+                            t.HasCheckConstraint("ck_files_purpose", "purpose IN ('attachment', 'cover', 'map_image', 'embedded')");
+
+                            t.HasCheckConstraint("ck_files_size", "size_bytes > 0");
+
+                            t.HasCheckConstraint("ck_files_status", "status IN ('pending', 'available')");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Files.FileUploadEntity", b =>
+                {
+                    b.Property<Guid>("FileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("file_id");
+
+                    b.Property<int>("NextChunk")
+                        .HasColumnType("integer")
+                        .HasColumnName("next_chunk");
+
+                    b.Property<long>("ReceivedBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("received_bytes");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("TempPath")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("temp_path");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("FileId")
+                        .HasName("pk_file_uploads");
+
+                    b.HasIndex("StartedAt")
+                        .HasDatabaseName("ix_file_uploads_started_at");
+
+                    b.ToTable("file_uploads", (string)null);
+                });
+
+            modelBuilder.Entity("PGPM.Items.AssignmentEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<Guid?>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<Guid?>("MilestoneId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("milestone_id");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("person_id");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<string>("Role")
+                        .HasColumnType("text")
+                        .HasColumnName("role");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<string>("SortOrder")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sort_order")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_assignments");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_assignments_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("PersonId")
+                        .HasDatabaseName("ix_assignments_person_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_assignments_seq");
+
+                    b.HasIndex("ItemId", "PersonId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_assignments_item_id_person_id")
+                        .HasFilter("NOT deleted AND item_id IS NOT NULL");
+
+                    b.HasIndex("MilestoneId", "PersonId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_assignments_milestone_id_person_id")
+                        .HasFilter("NOT deleted AND milestone_id IS NOT NULL");
+
+                    b.ToTable("assignments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_assignments_parent", "num_nonnulls(item_id, milestone_id) = 1");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Items.DodItemEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<Guid>("MilestoneId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("milestone_id");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<string>("SortOrder")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sort_order")
+                        .UseCollation("C");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<DateTime?>("StateChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("state_changed_at");
+
+                    b.Property<Guid?>("StateChangedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("state_changed_by");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_dod_items");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_dod_items_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("MilestoneId")
+                        .HasDatabaseName("ix_dod_items_milestone_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_dod_items_seq");
+
+                    b.ToTable("dod_items", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_dod_items_na_note", "state <> 'na' OR char_length(btrim(coalesce(note, ''))) > 0");
+
+                            t.HasCheckConstraint("ck_dod_items_state", "state IN ('open', 'done', 'na')");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Items.FieldValueEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<Guid>("FieldId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("field_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id")
+                        .HasName("pk_field_values");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_field_values_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("FieldId")
+                        .HasDatabaseName("ix_field_values_field_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_field_values_seq");
+
+                    b.HasIndex("ItemId", "FieldId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_field_values_item_id_field_id")
+                        .HasFilter("NOT deleted");
+
+                    b.ToTable("field_values", (string)null);
                 });
 
             modelBuilder.Entity("PGPM.Items.ItemEntity", b =>
@@ -539,6 +1902,12 @@ namespace PGPM.Data.Migrations
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Tags"), "gin");
 
+                    b.HasIndex("Title")
+                        .HasDatabaseName("ix_items_title_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Title"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Title"), new[] { "gin_trgm_ops" });
+
                     b.HasIndex("Type", "Deleted")
                         .HasDatabaseName("ix_items_type_deleted");
 
@@ -552,6 +1921,158 @@ namespace PGPM.Data.Migrations
 
                             t.HasCheckConstraint("ck_items_type", "type IN ('note', 'idea', 'lead', 'project')");
                         });
+                });
+
+            modelBuilder.Entity("PGPM.Items.ItemLinkEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<Guid>("FromItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("from_item_id");
+
+                    b.Property<string>("Relation")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("relation");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<Guid>("ToItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("to_item_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_item_links");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_item_links_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_item_links_seq");
+
+                    b.HasIndex("ToItemId")
+                        .HasDatabaseName("ix_item_links_to_item_id");
+
+                    b.HasIndex("FromItemId", "ToItemId", "Relation")
+                        .IsUnique()
+                        .HasDatabaseName("ix_item_links_from_item_id_to_item_id_relation")
+                        .HasFilter("NOT deleted");
+
+                    b.ToTable("item_links", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_item_links_relation", "relation IN ('contributes_to', 'learning_of', 'depends_on', 'related')");
+
+                            t.HasCheckConstraint("ck_item_links_self", "from_item_id <> to_item_id");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Items.ItemSectionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("section_id");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_item_sections");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_item_sections_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("SectionId")
+                        .HasDatabaseName("ix_item_sections_section_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_item_sections_seq");
+
+                    b.HasIndex("ItemId", "SectionId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_item_sections_item_id_section_id")
+                        .HasFilter("NOT deleted");
+
+                    b.ToTable("item_sections", (string)null);
                 });
 
             modelBuilder.Entity("PGPM.Items.ItemShareEntity", b =>
@@ -632,6 +2153,136 @@ namespace PGPM.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("PGPM.Items.MilestoneEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Color")
+                        .HasColumnType("text")
+                        .HasColumnName("color");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("Decision")
+                        .HasColumnType("text")
+                        .HasColumnName("decision");
+
+                    b.Property<string>("DecisionNote")
+                        .HasColumnType("text")
+                        .HasColumnName("decision_note");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("due_date");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid?>("OnGoStatusId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("on_go_status_id");
+
+                    b.Property<Guid?>("OnNoGoStatusId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("on_no_go_status_id");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<string>("SortOrder")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sort_order")
+                        .UseCollation("C");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_milestones");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_milestones_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_milestones_item_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_milestones_seq");
+
+                    b.ToTable("milestones", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_milestones_decision", "decision IS NULL OR (kind = 'gate' AND decision IN ('pending', 'go', 'no_go', 'iterate', 'pivot', 'park'))");
+
+                            t.HasCheckConstraint("ck_milestones_kind", "kind IN ('milestone', 'gate')");
+
+                            t.HasCheckConstraint("ck_milestones_status", "status IN ('planned', 'in_progress', 'done', 'cancelled')");
+
+                            t.HasCheckConstraint("ck_milestones_title", "char_length(title) BETWEEN 1 AND 300");
+                        });
+                });
+
             modelBuilder.Entity("PGPM.Items.NumberCounterEntity", b =>
                 {
                     b.Property<string>("Type")
@@ -646,6 +2297,423 @@ namespace PGPM.Data.Migrations
                         .HasName("pk_number_counters");
 
                     b.ToTable("number_counters", (string)null);
+                });
+
+            modelBuilder.Entity("PGPM.Maps.MapElementEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Config")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("config");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<Guid?>("EndElementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("end_element_id");
+
+                    b.Property<Guid?>("FileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("file_id");
+
+                    b.Property<double>("Height")
+                        .HasColumnType("double precision")
+                        .HasColumnName("height");
+
+                    b.Property<Guid?>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("LayerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("layer_id");
+
+                    b.Property<Guid>("MapId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("map_id");
+
+                    b.Property<Guid?>("MilestoneId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("milestone_id");
+
+                    b.Property<string>("Points")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("points");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<Guid?>("StartElementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("start_element_id");
+
+                    b.Property<string>("Style")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("style");
+
+                    b.Property<string>("Text")
+                        .HasColumnType("text")
+                        .HasColumnName("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<double>("Width")
+                        .HasColumnType("double precision")
+                        .HasColumnName("width");
+
+                    b.Property<double>("X")
+                        .HasColumnType("double precision")
+                        .HasColumnName("x");
+
+                    b.Property<double>("Y")
+                        .HasColumnType("double precision")
+                        .HasColumnName("y");
+
+                    b.Property<string>("Z")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("z")
+                        .UseCollation("C");
+
+                    b.HasKey("Id")
+                        .HasName("pk_map_elements");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_map_elements_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("FileId")
+                        .HasDatabaseName("ix_map_elements_file_id");
+
+                    b.HasIndex("ItemId")
+                        .HasDatabaseName("ix_map_elements_item_id");
+
+                    b.HasIndex("LayerId")
+                        .HasDatabaseName("ix_map_elements_layer_id");
+
+                    b.HasIndex("MapId")
+                        .HasDatabaseName("ix_map_elements_map_id");
+
+                    b.HasIndex("MilestoneId")
+                        .HasDatabaseName("ix_map_elements_milestone_id");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_map_elements_project_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_map_elements_seq");
+
+                    b.ToTable("map_elements", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_map_elements_kind", "kind IN ('item', 'milestone', 'timeline', 'rect', 'ellipse', 'line', 'text', 'image')");
+
+                            t.HasCheckConstraint("ck_map_elements_position", "x BETWEEN -1000000 AND 1000000 AND y BETWEEN -1000000 AND 1000000 AND width > 0 AND height > 0");
+
+                            t.HasCheckConstraint("ck_map_elements_refs", "(kind = 'item') = (item_id IS NOT NULL) AND (kind = 'milestone') = (milestone_id IS NOT NULL) AND (kind = 'timeline') = (project_id IS NOT NULL) AND (kind = 'image') = (file_id IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Maps.MapEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("DefaultView")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("default_view");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsTemplate")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_template");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Matrix")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("matrix");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<byte[]>("Preview")
+                        .HasColumnType("bytea")
+                        .HasColumnName("preview");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<string>("Settings")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("settings");
+
+                    b.Property<Guid?>("TemplateSourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("template_source_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_maps");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_maps_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("OwnerUserId")
+                        .HasDatabaseName("ix_maps_owner_user_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_maps_seq");
+
+                    b.ToTable("maps", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_maps_kind", "kind IN ('canvas', 'matrix')");
+
+                            t.HasCheckConstraint("ck_maps_matrix", "kind = 'matrix' OR matrix IS NULL");
+
+                            t.HasCheckConstraint("ck_maps_name", "char_length(name) BETWEEN 1 AND 200");
+                        });
+                });
+
+            modelBuilder.Entity("PGPM.Maps.MapLayerEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_locked");
+
+                    b.Property<bool>("IsVisible")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_visible");
+
+                    b.Property<Guid>("MapId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("map_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<string>("SortOrder")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sort_order")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_map_layers");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_map_layers_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("MapId")
+                        .HasDatabaseName("ix_map_layers_map_id");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_map_layers_seq");
+
+                    b.ToTable("map_layers", (string)null);
+                });
+
+            modelBuilder.Entity("PGPM.Maps.MapShareEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Access")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("access");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DeleteBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("delete_batch_id");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("deleted");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("group_id");
+
+                    b.Property<Guid>("MapId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("map_id");
+
+                    b.Property<int>("Rev")
+                        .HasColumnType("integer")
+                        .HasColumnName("rev");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_map_shares");
+
+                    b.HasIndex("DeleteBatchId")
+                        .HasDatabaseName("ix_map_shares_delete_batch_id")
+                        .HasFilter("delete_batch_id IS NOT NULL");
+
+                    b.HasIndex("Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_map_shares_seq");
+
+                    b.HasIndex("GroupId", "MapId")
+                        .HasDatabaseName("ix_map_shares_group_id_map_id")
+                        .HasFilter("NOT deleted");
+
+                    b.HasIndex("MapId", "GroupId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_map_shares_map_id_group_id")
+                        .HasFilter("NOT deleted");
+
+                    b.ToTable("map_shares", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_map_shares_access", "access IN ('read', 'edit', 'manage')");
+                        });
                 });
 
             modelBuilder.Entity("PGPM.Persons.PersonEntity", b =>
@@ -1224,6 +3292,202 @@ namespace PGPM.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("PGPM.Config.FieldDefinitionEntity", b =>
+                {
+                    b.HasOne("PGPM.Config.SectionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_field_definitions_sections_section_id");
+                });
+
+            modelBuilder.Entity("PGPM.Config.SectionGroupEntity", b =>
+                {
+                    b.HasOne("PGPM.Auth.GroupEntity", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_section_groups_groups_group_id");
+
+                    b.HasOne("PGPM.Config.SectionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_section_groups_sections_section_id");
+                });
+
+            modelBuilder.Entity("PGPM.Config.TemplateFieldDefaultEntity", b =>
+                {
+                    b.HasOne("PGPM.Config.FieldDefinitionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("FieldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_template_field_defaults_field_definitions_field_id");
+
+                    b.HasOne("PGPM.Config.ProjectTemplateEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_template_field_defaults_project_templates_template_id");
+                });
+
+            modelBuilder.Entity("PGPM.Config.TemplateMilestoneEntity", b =>
+                {
+                    b.HasOne("PGPM.Config.ProjectTemplateEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_template_milestones_project_templates_template_id");
+                });
+
+            modelBuilder.Entity("PGPM.Config.TemplateSectionEntity", b =>
+                {
+                    b.HasOne("PGPM.Config.SectionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_template_sections_sections_section_id");
+
+                    b.HasOne("PGPM.Config.ProjectTemplateEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_template_sections_project_templates_template_id");
+                });
+
+            modelBuilder.Entity("PGPM.Config.TemplateStatusEntity", b =>
+                {
+                    b.HasOne("PGPM.Config.StatusEntity", null)
+                        .WithMany()
+                        .HasForeignKey("StatusId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_template_statuses_statuses_status_id");
+
+                    b.HasOne("PGPM.Config.ProjectTemplateEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_template_statuses_project_templates_template_id");
+                });
+
+            modelBuilder.Entity("PGPM.Files.FileEntity", b =>
+                {
+                    b.HasOne("PGPM.Items.ItemEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_files_items_item_id");
+
+                    b.HasOne("PGPM.Maps.MapEntity", null)
+                        .WithMany()
+                        .HasForeignKey("MapId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_files_maps_map_id");
+                });
+
+            modelBuilder.Entity("PGPM.Files.FileUploadEntity", b =>
+                {
+                    b.HasOne("PGPM.Files.FileEntity", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_file_uploads_files_file_id");
+                });
+
+            modelBuilder.Entity("PGPM.Items.AssignmentEntity", b =>
+                {
+                    b.HasOne("PGPM.Items.ItemEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_assignments_items_item_id");
+
+                    b.HasOne("PGPM.Items.MilestoneEntity", null)
+                        .WithMany()
+                        .HasForeignKey("MilestoneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_assignments_milestones_milestone_id");
+
+                    b.HasOne("PGPM.Persons.PersonEntity", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_assignments_persons_person_id");
+                });
+
+            modelBuilder.Entity("PGPM.Items.DodItemEntity", b =>
+                {
+                    b.HasOne("PGPM.Items.MilestoneEntity", null)
+                        .WithMany()
+                        .HasForeignKey("MilestoneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_dod_items_milestones_milestone_id");
+                });
+
+            modelBuilder.Entity("PGPM.Items.FieldValueEntity", b =>
+                {
+                    b.HasOne("PGPM.Config.FieldDefinitionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("FieldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_field_values_field_definitions_field_id");
+
+                    b.HasOne("PGPM.Items.ItemEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_field_values_items_item_id");
+                });
+
+            modelBuilder.Entity("PGPM.Items.ItemLinkEntity", b =>
+                {
+                    b.HasOne("PGPM.Items.ItemEntity", null)
+                        .WithMany()
+                        .HasForeignKey("FromItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_links_items_from_item_id");
+
+                    b.HasOne("PGPM.Items.ItemEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ToItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_links_items_to_item_id");
+                });
+
+            modelBuilder.Entity("PGPM.Items.ItemSectionEntity", b =>
+                {
+                    b.HasOne("PGPM.Items.ItemEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_sections_items_item_id");
+
+                    b.HasOne("PGPM.Config.SectionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_sections_sections_section_id");
+                });
+
             modelBuilder.Entity("PGPM.Items.ItemShareEntity", b =>
                 {
                     b.HasOne("PGPM.Auth.GroupEntity", null)
@@ -1239,6 +3503,84 @@ namespace PGPM.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_item_shares_items_item_id");
+                });
+
+            modelBuilder.Entity("PGPM.Items.MilestoneEntity", b =>
+                {
+                    b.HasOne("PGPM.Items.ItemEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_milestones_items_item_id");
+                });
+
+            modelBuilder.Entity("PGPM.Maps.MapElementEntity", b =>
+                {
+                    b.HasOne("PGPM.Files.FileEntity", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_map_elements_files_file_id");
+
+                    b.HasOne("PGPM.Items.ItemEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_map_elements_items_item_id");
+
+                    b.HasOne("PGPM.Maps.MapLayerEntity", null)
+                        .WithMany()
+                        .HasForeignKey("LayerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_map_elements_map_layers_layer_id");
+
+                    b.HasOne("PGPM.Maps.MapEntity", null)
+                        .WithMany()
+                        .HasForeignKey("MapId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_map_elements_maps_map_id");
+
+                    b.HasOne("PGPM.Items.MilestoneEntity", null)
+                        .WithMany()
+                        .HasForeignKey("MilestoneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_map_elements_milestones_milestone_id");
+
+                    b.HasOne("PGPM.Items.ItemEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_map_elements_items_project_id");
+                });
+
+            modelBuilder.Entity("PGPM.Maps.MapLayerEntity", b =>
+                {
+                    b.HasOne("PGPM.Maps.MapEntity", null)
+                        .WithMany()
+                        .HasForeignKey("MapId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_map_layers_maps_map_id");
+                });
+
+            modelBuilder.Entity("PGPM.Maps.MapShareEntity", b =>
+                {
+                    b.HasOne("PGPM.Auth.GroupEntity", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_map_shares_groups_group_id");
+
+                    b.HasOne("PGPM.Maps.MapEntity", null)
+                        .WithMany()
+                        .HasForeignKey("MapId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_map_shares_maps_map_id");
                 });
 
             modelBuilder.Entity("PGPM.Persons.PersonEntity", b =>

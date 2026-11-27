@@ -490,6 +490,7 @@
         "type": "Project",
         "dependencies": {
           "EFCore.NamingConventions": "[10.0.1, )",
+          "Markdig": "[1.6.0, )",
           "Microsoft.AspNetCore.Authentication.OpenIdConnect": "[10.0.15, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.15, )",
           "Microsoft.EntityFrameworkCore": "[10.0.15, )",
@@ -510,6 +511,12 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.1, 11.0.0)",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.1"
         }
+      },
+      "Markdig": {
+        "type": "CentralTransitive",
+        "requested": "[1.6.0, )",
+        "resolved": "1.6.0",
+        "contentHash": "rJEpDfPM8wrfXUgkNejjg2bJN9bciy44uVyRwKUI+92CnSmbaLeJTLPYcCdvgM4RFsKrhs8d2H2hO78yZpMl3g=="
       },
       "Microsoft.AspNetCore.Authentication.OpenIdConnect": {
         "type": "CentralTransitive",

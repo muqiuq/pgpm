@@ -103,6 +103,49 @@ public static class WireJson
         }
     }
 
+    /// <summary>
+    /// A JSON number's value, whatever the node holds (a parsed element, or an int, a double … set in code); false for
+    /// anything else and for numbers beyond decimal.
+    /// </summary>
+    public static bool TryDecimal(JsonNode? node, out decimal value)
+    {
+        value = 0;
+        if (node is not JsonValue v || v.GetValueKind() != JsonValueKind.Number)
+        {
+            return false;
+        }
+        if (v.TryGetValue(out value))
+        {
+            return true;
+        }
+        if (v.TryGetValue<long>(out var l))
+        {
+            value = l;
+            return true;
+        }
+        if (v.TryGetValue<int>(out var i))
+        {
+            value = i;
+            return true;
+        }
+        if (v.TryGetValue<double>(out var d) && double.IsFinite(d) && Math.Abs(d) < 7.9e28)
+        {
+            value = (decimal)d;
+            return true;
+        }
+        if (v.TryGetValue<float>(out var f) && float.IsFinite(f))
+        {
+            value = (decimal)f;
+            return true;
+        }
+        if (v.TryGetValue<short>(out var sh))
+        {
+            value = sh;
+            return true;
+        }
+        return decimal.TryParse(v.ToJsonString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value);
+    }
+
     /// <summary>"OwnerUserId" → "ownerUserId".</summary>
     public static string KeyOf(string propertyName) => JsonNamingPolicy.CamelCase.ConvertName(propertyName);
 }
@@ -146,7 +189,7 @@ public sealed class UtcMicrosecondsJsonConverter : JsonConverter<DateTime>
     }
 }
 
-/// <summary>Enums as lower-case strings, read ignoring case; numbers and undefined names are refused.</summary>
+/// <summary>Enums as lower-case strings (<see cref="Data.EnumText"/>: <c>no_go</c>), read ignoring case; numbers and undefined names are refused.</summary>
 public sealed class LowerCaseEnumJsonConverterFactory : JsonConverterFactory
 {
     public override bool CanConvert(Type typeToConvert) => typeToConvert.IsEnum;
@@ -159,14 +202,14 @@ public sealed class LowerCaseEnumJsonConverterFactory : JsonConverterFactory
         public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             var text = reader.TokenType == JsonTokenType.String ? reader.GetString() : null;
-            if (text is { Length: > 0 } && !char.IsDigit(text[0]) && text[0] != '-' && Enum.TryParse<T>(text, true, out var value) && Enum.IsDefined(value))
+            if (Data.EnumText.TryParse<T>(text, out var value))
             {
                 return value;
             }
-            throw new JsonException($"One of: {string.Join(", ", Enum.GetNames<T>().Select(n => n.ToLowerInvariant()))}.");
+            throw new JsonException($"One of: {string.Join(", ", Data.EnumText.All<T>())}.");
         }
 
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
-            writer.WriteStringValue(value.ToString().ToLowerInvariant());
+            writer.WriteStringValue(Data.EnumText.Of(value));
     }
 }

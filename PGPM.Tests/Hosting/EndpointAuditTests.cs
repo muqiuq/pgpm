@@ -91,10 +91,45 @@ public sealed class EndpointAuditTests
         ["GET /api/v1/history"] = "signed-in",
         ["POST /api/v1/editing"] = "signed-in",
         ["DELETE /api/v1/editing"] = "signed-in",
+        // Phases 3–5: map sharing and files decide by the object's access; the configuration needs Configuration: Manage.
+        ["PUT /api/v1/maps/{id:guid}/shares"] = "signed-in",
+        ["POST /api/v1/maps/{id:guid}/owner"] = "signed-in",
+        ["PUT /api/v1/files/{id:guid}/chunks/{n:int}"] = "signed-in",
+        ["POST /api/v1/files/{id:guid}/commit"] = "signed-in",
+        ["GET /api/v1/files/{id:guid}/{name}"] = "signed-in",
+        ["POST /api/v1/config/statuses"] = "Configuration:Manage",
+        ["PUT /api/v1/config/statuses/{id:guid}"] = "Configuration:Manage",
+        ["POST /api/v1/config/statuses/{id:guid}/archive"] = "Configuration:Manage",
+        ["POST /api/v1/config/statuses/{id:guid}/unarchive"] = "Configuration:Manage",
+        ["PUT /api/v1/config/statuses/order"] = "Configuration:Manage",
+        ["POST /api/v1/config/sections"] = "Configuration:Manage",
+        ["PUT /api/v1/config/sections/{id:guid}"] = "Configuration:Manage",
+        ["POST /api/v1/config/sections/{id:guid}/archive"] = "Configuration:Manage",
+        ["POST /api/v1/config/sections/{id:guid}/unarchive"] = "Configuration:Manage",
+        ["PUT /api/v1/config/sections/order"] = "Configuration:Manage",
+        ["POST /api/v1/config/fields"] = "Configuration:Manage",
+        ["PUT /api/v1/config/fields/{id:guid}"] = "Configuration:Manage",
+        ["POST /api/v1/config/fields/{id:guid}/archive"] = "Configuration:Manage",
+        ["POST /api/v1/config/fields/{id:guid}/unarchive"] = "Configuration:Manage",
+        ["PUT /api/v1/config/fields/order"] = "Configuration:Manage",
+        ["POST /api/v1/config/templates"] = "Configuration:Manage",
+        ["PUT /api/v1/config/templates/{id:guid}"] = "Configuration:Manage",
+        ["POST /api/v1/config/templates/{id:guid}/archive"] = "Configuration:Manage",
+        ["POST /api/v1/config/templates/{id:guid}/unarchive"] = "Configuration:Manage",
+        ["PUT /api/v1/config/templates/order"] = "Configuration:Manage",
+        ["GET /api/v1/config/fields/{id:guid}/usage"] = "Configuration:Manage",
+        ["DELETE /api/v1/config/fields/{id:guid}"] = "Configuration:Manage",
+        ["POST /api/v1/config/roles"] = "Configuration:Manage",
+        ["PUT /api/v1/config/roles/{id:guid}"] = "Configuration:Manage",
+        ["DELETE /api/v1/config/roles/{id:guid}"] = "Configuration:Manage",
+        ["GET /api/v1/config/packages"] = "Configuration:Manage",
+        ["POST /api/v1/config/packages/dry-run"] = "Configuration:Manage",
+        ["POST /api/v1/config/packages/apply"] = "Configuration:Manage",
+        ["GET /api/v1/config/packages/export"] = "Configuration:Manage",
     };
 
     /// <summary>Writes that need no right because the object's access decides (docs/03 §6.3): manage for sharing, edit for presence.</summary>
-    private static readonly string[] ObjectAccessWrites = ["/api/v1/sync", "/api/v1/items/", "/api/v1/trash/", "/api/v1/editing"];
+    private static readonly string[] ObjectAccessWrites = ["/api/v1/sync", "/api/v1/items/", "/api/v1/trash/", "/api/v1/editing", "/api/v1/maps/", "/api/v1/files/"];
 
     private sealed record EndpointInfo(string Key, string Method, string Pattern, RouteEndpoint Endpoint);
 

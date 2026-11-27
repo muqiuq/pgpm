@@ -1,5 +1,8 @@
 using PGPM.Auth;
+using PGPM.Config;
+using PGPM.Files;
 using PGPM.Items;
+using PGPM.Maps;
 using PGPM.Persons;
 using PGPM.Settings;
 using PGPM.Sharing;
@@ -26,7 +29,7 @@ public sealed class GroupsTable() : SyncTable<GroupEntity>("groups")
 /// <summary>
 /// Every synced table, in dependency order: parents before children (a restore un-deletes in this order, a purge deletes
 /// in the reverse). The pull reads them all, and a test asserts that every <see cref="ISyncedEntity"/> is here (PLM
-/// pitfall: a table missing from the cursor). Phase 3 adds statuses, assignments, item links, files … – one descriptor each.
+/// pitfall: a table missing from the cursor). The wire lists the tables of a page in this order.
 /// </summary>
 public static class SyncTables
 {
@@ -34,8 +37,32 @@ public static class SyncTables
     [
         new GroupsTable(),
         new PersonsTable(),
+        // Configuration (docs/02 §7) [S, ro], saved views [S].
+        new StatusesTable(),
+        new SectionsTable(),
+        new FieldDefinitionsTable(),
+        new ProjectTemplatesTable(),
+        new TemplateStatusesTable(),
+        new TemplateSectionsTable(),
+        new TemplateFieldDefaultsTable(),
+        new TemplateMilestonesTable(),
+        new AssignmentRolesTable(),
+        new SavedViewsTable(),
+        // Items and what hangs below them (docs/02 §6–§8).
         new ItemsTable(),
         new ItemSharesTable(),
+        new MapsTable(),
+        new MapSharesTable(),
+        new FilesTable(),
+        new ItemSectionsTable(),
+        new FieldValuesTable(),
+        new MilestonesTable(),
+        new DodItemsTable(),
+        new AssignmentsTable(),
+        new ItemLinksTable(),
+        // Maps (docs/02 §9).
+        new MapLayersTable(),
+        new MapElementsTable(),
         new UserSettingsTable(),
     ];
 

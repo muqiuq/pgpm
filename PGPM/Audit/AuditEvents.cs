@@ -61,6 +61,19 @@ public static class AuditEvents
     // The Trash.
     public const string TrashRestored = "trash.restored";
     public const string TrashPurged = "trash.purged";
+
+    // Maps: sharing and ownership.
+    public const string MapSharesChanged = "map.shares_changed";
+    public const string MapOwnerChanged = "map.owner_changed";
+
+    // Configuration (statuses, sections, fields, templates, roles) and configuration packages.
+    public const string ConfigCreated = "config.created";
+    public const string ConfigUpdated = "config.updated";
+    public const string ConfigArchived = "config.archived";
+    public const string ConfigUnarchived = "config.unarchived";
+    public const string ConfigReordered = "config.reordered";
+    public const string ConfigDeleted = "config.deleted";
+    public const string PackageImported = "config.package_imported";
 }
 
 /// <summary>The types of subject an entry can be about (<c>audit_log.subject_type</c>).</summary>
@@ -70,6 +83,8 @@ public static class AuditSubjects
     public const string Group = "group";
     public const string Person = "person";
     public const string Item = "item";
+    public const string Map = "map";
+    public const string Config = "config";
 }
 
 /// <summary>The colour of an event's tag.</summary>
@@ -113,6 +128,9 @@ public static class AuditCatalog
             AuditEvents.GroupMembersChanged, AuditEvents.GroupDeleted, AuditEvents.MembershipAdded, AuditEvents.MembershipRemoved);
         Add(AuditSubjects.Person, AuditEvents.PersonCreated, AuditEvents.PersonLinked);
         Add(AuditSubjects.Item, AuditEvents.ItemSharesChanged, AuditEvents.ItemOwnerChanged, AuditEvents.TrashRestored, AuditEvents.TrashPurged);
+        Add(AuditSubjects.Map, AuditEvents.MapSharesChanged, AuditEvents.MapOwnerChanged);
+        Add(AuditSubjects.Config, AuditEvents.ConfigCreated, AuditEvents.ConfigUpdated, AuditEvents.ConfigArchived, AuditEvents.ConfigUnarchived,
+            AuditEvents.ConfigReordered, AuditEvents.ConfigDeleted, AuditEvents.PackageImported);
     }
 
     public static IReadOnlyList<AuditEventInfo> All => Entries;

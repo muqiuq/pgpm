@@ -2,6 +2,7 @@ using System.Reflection;
 using PGPM.Api;
 using PGPM.Audit;
 using PGPM.Auth;
+using PGPM.Config;
 using PGPM.Data;
 using PGPM.Hosting;
 using PGPM.Sync;
@@ -30,7 +31,7 @@ public partial class Program
         // The build writes the OpenAPI document by starting the host without a database (GetDocument.Insider).
         var documentBuild = Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
 
-        // Each feature registers itself (docs/03 §3.1). Later phases add AddFiles, AddPgpmMcp, …
+        // Each feature registers itself (docs/03 §3.1). Phase 6 adds AddPgpmMcp.
         builder.Services.AddPgpmData(builder.Configuration);
         builder.Services.AddPgpmApi();
         builder.Services.AddPgpmOpenApi();
@@ -38,12 +39,14 @@ public partial class Program
         builder.Services.AddAudit();
         builder.Services.AddPgpmHosting(builder.Configuration);
         builder.Services.AddSync(builder.Configuration);
+        builder.Services.AddContent(builder.Configuration);
 
         // First: every other hosted service starts on a migrated database. The live hub is no background task: it runs in
         // the tests too.
         if (!documentBuild)
         {
             builder.Services.AddHostedService<DatabaseMigrationService>();
+            builder.Services.AddPackageSeeder();
             builder.Services.AddLiveSyncHub();
         }
 
@@ -51,6 +54,7 @@ public partial class Program
         if (!documentBuild && builder.Configuration.GetValue("BackgroundTasks:Enabled", true))
         {
             builder.Services.AddSyncTasks();
+            builder.Services.AddFileTasks();
         }
 
         // Console only: in a container that is `docker compose logs`, rotated by the log driver.

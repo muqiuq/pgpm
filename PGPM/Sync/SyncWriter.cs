@@ -15,7 +15,7 @@ namespace PGPM.Sync;
 /// Opens write units on synced rows (docs/03 §11.5, PLM's SyncService.PushAsync): the sync push, the sharing and owner
 /// endpoints, restore and purge, later MCP tools and the directory job all write through a <see cref="SyncWrite"/>.
 /// </summary>
-public sealed class SyncWriter(PgpmDbContext db)
+public sealed class SyncWriter(PgpmDbContext db, IServiceProvider services)
 {
     /// <summary>
     /// One transaction holding the counter's lock (taken first, before anything is read), for <paramref name="viewer"/>'s
@@ -33,7 +33,7 @@ public sealed class SyncWriter(PgpmDbContext db)
             await transaction.DisposeAsync();
             throw;
         }
-        return new SyncWrite(db, transaction, viewer, source, correlationId);
+        return new SyncWrite(db, transaction, viewer, source, correlationId, services);
     }
 }
 
@@ -57,9 +57,11 @@ public sealed class SyncWrite : IAsyncDisposable
     private readonly string? correlationId;
     private readonly Dictionary<Guid, string?> names = [];
 
-    internal SyncWrite(PgpmDbContext db, IDbContextTransaction transaction, Viewer viewer, ChangeSource source, string? correlationId)
+    internal SyncWrite(PgpmDbContext db, IDbContextTransaction transaction, Viewer viewer, ChangeSource source, string? correlationId,
+        IServiceProvider services)
     {
         Db = db;
+        Services = services;
         this.transaction = transaction;
         Viewer = viewer;
         Source = source;
@@ -68,6 +70,9 @@ public sealed class SyncWrite : IAsyncDisposable
     }
 
     public PgpmDbContext Db { get; }
+
+    /// <summary>The request's services (options the tables' rules read, e.g. Files:*).</summary>
+    public IServiceProvider Services { get; }
 
     public Viewer Viewer { get; }
 
@@ -177,7 +182,8 @@ public sealed class SyncWrite : IAsyncDisposable
             return;
         }
         using var _ = ChangeContext.Use(Context());
-        Log(table, id, table.ItemIdOf(row), ChangeActions.ConflictResolved, new JsonObject { ["field"] = field, ["resolution"] = resolution.Resolution });
+        Log(table, id, table.ItemIdOf(Db, row), ChangeActions.ConflictResolved, new JsonObject { ["field"] = field, ["resolution"] = resolution.Resolution },
+            table.MapIdOf(Db, row));
         await Db.SaveChangesAsync(ct);
         Db.ChangeTracker.Clear();
     }
@@ -185,7 +191,7 @@ public sealed class SyncWrite : IAsyncDisposable
     public void AddConflict(SyncConflict conflict) => conflicts.Add(conflict);
 
     /// <summary>A change-log entry the interceptor can't infer (share, conflict, conflict_resolved), saved with the next save.</summary>
-    public void Log(SyncTable table, Guid entityId, Guid? itemId, string action, JsonNode changes)
+    public void Log(SyncTable table, Guid entityId, Guid? itemId, string action, JsonNode changes, Guid? mapId = null)
     {
         var who = ChangeContext.Current;
         Db.ChangeLog.Add(new ChangeLogEntity
@@ -196,6 +202,7 @@ public sealed class SyncWrite : IAsyncDisposable
             Entity = table.Name,
             EntityId = entityId,
             ItemId = itemId,
+            MapId = mapId,
             Action = action,
             Changes = changes.ToJsonString(WireJson.Options),
             ClientChangedAt = who.ClientChangedAt,

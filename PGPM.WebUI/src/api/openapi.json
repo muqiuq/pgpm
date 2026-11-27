@@ -486,6 +486,1192 @@
         }
       }
     },
+    "/api/v1/config/statuses": {
+      "post": {
+        "tags": [
+          "ConfigStatuses"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/statuses/{id}": {
+      "put": {
+        "tags": [
+          "ConfigStatuses"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/statuses/{id}/archive": {
+      "post": {
+        "tags": [
+          "ConfigStatuses"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/statuses/{id}/unarchive": {
+      "post": {
+        "tags": [
+          "ConfigStatuses"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/statuses/order": {
+      "put": {
+        "tags": [
+          "ConfigStatuses"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StatusItem"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/sections": {
+      "post": {
+        "tags": [
+          "ConfigSections"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/sections/{id}": {
+      "put": {
+        "tags": [
+          "ConfigSections"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/sections/{id}/archive": {
+      "post": {
+        "tags": [
+          "ConfigSections"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/sections/{id}/unarchive": {
+      "post": {
+        "tags": [
+          "ConfigSections"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectionItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/sections/order": {
+      "put": {
+        "tags": [
+          "ConfigSections"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SectionItem"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/fields": {
+      "post": {
+        "tags": [
+          "ConfigFields"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FieldRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FieldRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/FieldRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/fields/{id}": {
+      "put": {
+        "tags": [
+          "ConfigFields"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FieldRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FieldRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/FieldRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldItem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ConfigFields"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/fields/{id}/archive": {
+      "post": {
+        "tags": [
+          "ConfigFields"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/fields/{id}/unarchive": {
+      "post": {
+        "tags": [
+          "ConfigFields"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/fields/{id}/usage": {
+      "get": {
+        "tags": [
+          "ConfigFields"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldUsage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/fields/order": {
+      "put": {
+        "tags": [
+          "ConfigFields"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FieldItem"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/templates": {
+      "post": {
+        "tags": [
+          "ConfigTemplates"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/templates/{id}": {
+      "put": {
+        "tags": [
+          "ConfigTemplates"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/templates/{id}/archive": {
+      "post": {
+        "tags": [
+          "ConfigTemplates"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/templates/{id}/unarchive": {
+      "post": {
+        "tags": [
+          "ConfigTemplates"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/templates/order": {
+      "put": {
+        "tags": [
+          "ConfigTemplates"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TemplateDetail"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/roles": {
+      "post": {
+        "tags": [
+          "ConfigRoles"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/roles/{id}": {
+      "put": {
+        "tags": [
+          "ConfigRoles"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleItem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ConfigRoles"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/maps/{id}/shares": {
+      "put": {
+        "tags": [
+          "Maps"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ItemShareRequest"
+                }
+              }
+            },
+            "text/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ItemShareRequest"
+                }
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ItemShareRequest"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ItemShareItem"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/maps/{id}/owner": {
+      "post": {
+        "tags": [
+          "Maps"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemOwnerRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemOwnerRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemOwnerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": { }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/{id}/chunks/{n}": {
+      "put": {
+        "tags": [
+          "Files"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileChunkReceived"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/{id}/commit": {
+      "post": {
+        "tags": [
+          "Files"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileCommitRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileCommitRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileCommitted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/{id}/{name}": {
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file's bytes.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/groups": {
       "get": {
         "tags": [
@@ -1125,6 +2311,134 @@
             "description": "OK",
             "content": {
               "application/json": { }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/packages": {
+      "get": {
+        "tags": [
+          "Packages"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PackageInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/packages/dry-run": {
+      "post": {
+        "tags": [
+          "Packages"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackageRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackageRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageDiff"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/packages/apply": {
+      "post": {
+        "tags": [
+          "Packages"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackageRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackageRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageApplyResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/packages/export": {
+      "get": {
+        "tags": [
+          "Packages"
+        ],
+        "parameters": [
+          {
+            "name": "package",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
             }
           }
         }
@@ -2036,6 +3350,282 @@
           }
         }
       },
+      "FieldItem": {
+        "required": [
+          "id",
+          "sectionId",
+          "key",
+          "label",
+          "helpText",
+          "type",
+          "config",
+          "required",
+          "defaultValue",
+          "sortOrder",
+          "isArchived",
+          "rev"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sectionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "helpText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/FieldType"
+          },
+          "config": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "defaultValue": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isArchived": {
+            "type": "boolean"
+          },
+          "rev": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "FieldRequest": {
+        "type": "object",
+        "properties": {
+          "sectionId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "key": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "label": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "helpText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FieldType"
+              }
+            ]
+          },
+          "config": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ]
+          },
+          "required": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "defaultValue": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          }
+        }
+      },
+      "FieldType": {
+        "enum": [
+          "text",
+          "textarea",
+          "markdown",
+          "number",
+          "date",
+          "datetime",
+          "bool",
+          "select",
+          "multiselect",
+          "person",
+          "url",
+          "email",
+          "rating",
+          "score"
+        ]
+      },
+      "FieldUsage": {
+        "required": [
+          "id",
+          "key",
+          "values",
+          "items",
+          "scores",
+          "templates"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "values": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "scores": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "templates": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "FileChunkReceived": {
+        "required": [
+          "received"
+        ],
+        "type": "object",
+        "properties": {
+          "received": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "FileCommitRequest": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "size": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "FileCommitted": {
+        "required": [
+          "id",
+          "status",
+          "sha256",
+          "sizeBytes",
+          "contentType",
+          "width",
+          "height",
+          "rev",
+          "seq"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "width": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "height": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "rev": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "GroupDetail": {
         "required": [
           "id",
@@ -2342,6 +3932,14 @@
           }
         }
       },
+      "ItemType": {
+        "enum": [
+          "note",
+          "idea",
+          "lead",
+          "project"
+        ]
+      },
       "JsonNode": { },
       "JsonObject": {
         "type": "object",
@@ -2460,6 +4058,273 @@
               "string"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "MilestoneKind": {
+        "enum": [
+          "milestone",
+          "gate"
+        ]
+      },
+      "OrderRequest": {
+        "type": "object",
+        "properties": {
+          "itemType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ItemType"
+              }
+            ]
+          },
+          "sectionId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "ids": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "PackageApplyResult": {
+        "required": [
+          "diff",
+          "created",
+          "updated",
+          "skipped"
+        ],
+        "type": "object",
+        "properties": {
+          "diff": {
+            "$ref": "#/components/schemas/PackageDiff"
+          },
+          "created": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "skipped": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "PackageDiff": {
+        "required": [
+          "name",
+          "version",
+          "entries",
+          "counts",
+          "needsAdmin",
+          "isAdmin"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackageDiffEntry"
+            }
+          },
+          "counts": {
+            "$ref": "#/components/schemas/PackageDiffCounts"
+          },
+          "needsAdmin": {
+            "type": "boolean"
+          },
+          "isAdmin": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PackageDiffCounts": {
+        "required": [
+          "create",
+          "update",
+          "unchanged",
+          "conflict"
+        ],
+        "type": "object",
+        "properties": {
+          "create": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "update": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unchanged": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conflict": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "PackageDiffEntry": {
+        "required": [
+          "key",
+          "entity",
+          "name",
+          "action",
+          "adopted",
+          "changed"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "entity": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "adopted": {
+            "type": "boolean"
+          },
+          "changed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PackageImportState": {
+        "required": [
+          "version",
+          "importedAt",
+          "importedBy",
+          "importedByName"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "importedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "importedBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "importedByName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "PackageInfo": {
+        "required": [
+          "name",
+          "title",
+          "description",
+          "version",
+          "builtIn",
+          "imported"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "builtIn": {
+            "type": "boolean"
+          },
+          "imported": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PackageImportState"
+              }
+            ]
+          }
+        }
+      },
+      "PackageRequest": {
+        "type": "object",
+        "properties": {
+          "package": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ]
+          },
+          "builtIn": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "overwrite": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -2632,6 +4497,227 @@
           }
         }
       },
+      "RoleItem": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "sortOrder",
+          "isArchived",
+          "rev"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isArchived": {
+            "type": "boolean"
+          },
+          "rev": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "RoleRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sortOrder": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "SectionAccess": {
+        "enum": [
+          "view",
+          "edit"
+        ]
+      },
+      "SectionAccessItem": {
+        "required": [
+          "groupId",
+          "groupName",
+          "level"
+        ],
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupName": {
+            "type": "string"
+          },
+          "level": {
+            "$ref": "#/components/schemas/SectionAccess"
+          }
+        }
+      },
+      "SectionAccessRequest": {
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "level": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SectionAccess"
+              }
+            ]
+          }
+        }
+      },
+      "SectionItem": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "appliesTo",
+          "defaultFor",
+          "sortOrder",
+          "collapsedByDefault",
+          "isArchived",
+          "access",
+          "rev"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appliesTo": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "defaultFor": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "collapsedByDefault": {
+            "type": "boolean"
+          },
+          "isArchived": {
+            "type": "boolean"
+          },
+          "access": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SectionAccessItem"
+            }
+          },
+          "rev": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SectionRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "appliesTo": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "defaultFor": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "collapsedByDefault": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "access": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SectionAccessRequest"
+            }
+          }
+        }
+      },
       "SessionFlags": {
         "required": [
           "mustChangePassword",
@@ -2686,6 +4772,130 @@
           },
           "local": {
             "type": "boolean"
+          }
+        }
+      },
+      "StatusCategory": {
+        "enum": [
+          "open",
+          "active",
+          "closed"
+        ]
+      },
+      "StatusItem": {
+        "required": [
+          "id",
+          "itemType",
+          "name",
+          "color",
+          "icon",
+          "category",
+          "sortOrder",
+          "isDefault",
+          "maxDays",
+          "isArchived",
+          "rev"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "itemType": {
+            "$ref": "#/components/schemas/ItemType"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "category": {
+            "$ref": "#/components/schemas/StatusCategory"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "maxDays": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "isArchived": {
+            "type": "boolean"
+          },
+          "rev": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "StatusRequest": {
+        "type": "object",
+        "properties": {
+          "itemType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ItemType"
+              }
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "category": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StatusCategory"
+              }
+            ]
+          },
+          "maxDays": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "isDefault": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -3096,6 +5306,394 @@
           "rejected"
         ]
       },
+      "TemplateDetail": {
+        "required": [
+          "id",
+          "name",
+          "description",
+          "color",
+          "icon",
+          "defaultStatusId",
+          "statusIds",
+          "sectionIds",
+          "fieldDefaults",
+          "defaultShares",
+          "milestones",
+          "sortOrder",
+          "isArchived",
+          "rev"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultStatusId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "statusIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "sectionIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "fieldDefaults": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateFieldDefaultItem"
+            }
+          },
+          "defaultShares": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateShareItem"
+            }
+          },
+          "milestones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateMilestoneItem"
+            }
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isArchived": {
+            "type": "boolean"
+          },
+          "rev": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "TemplateFieldDefaultItem": {
+        "required": [
+          "fieldId",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "fieldId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          }
+        }
+      },
+      "TemplateFieldDefaultRequest": {
+        "type": "object",
+        "properties": {
+          "fieldId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          }
+        }
+      },
+      "TemplateMilestoneItem": {
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "description",
+          "offsetDays",
+          "dod",
+          "onGoStatusId",
+          "onNoGoStatusId",
+          "sortOrder"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MilestoneKind"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "offsetDays": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "dod": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "onGoStatusId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "onNoGoStatusId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "sortOrder": {
+            "type": "string"
+          }
+        }
+      },
+      "TemplateMilestoneRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MilestoneKind"
+              }
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "offsetDays": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "dod": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "onGoStatusId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "onNoGoStatusId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "TemplateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultStatusId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "statusIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "sectionIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "fieldDefaults": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TemplateFieldDefaultRequest"
+            }
+          },
+          "defaultShares": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TemplateShareRequest"
+            }
+          },
+          "milestones": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TemplateMilestoneRequest"
+            }
+          }
+        }
+      },
+      "TemplateShareItem": {
+        "required": [
+          "groupId",
+          "access"
+        ],
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "access": {
+            "$ref": "#/components/schemas/ItemAccess"
+          }
+        }
+      },
+      "TemplateShareRequest": {
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "access": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ItemAccess"
+              }
+            ]
+          }
+        }
+      },
       "TemporaryPassword": {
         "required": [
           "password",
@@ -3423,6 +6021,27 @@
       "name": "Auth"
     },
     {
+      "name": "ConfigStatuses"
+    },
+    {
+      "name": "ConfigSections"
+    },
+    {
+      "name": "ConfigFields"
+    },
+    {
+      "name": "ConfigTemplates"
+    },
+    {
+      "name": "ConfigRoles"
+    },
+    {
+      "name": "Maps"
+    },
+    {
+      "name": "Files"
+    },
+    {
       "name": "Groups"
     },
     {
@@ -3442,6 +6061,9 @@
     },
     {
       "name": "Editing"
+    },
+    {
+      "name": "Packages"
     },
     {
       "name": "Sync"
