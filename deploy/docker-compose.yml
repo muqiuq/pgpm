@@ -1,12 +1,11 @@
-# PGPM's production stack (docs/03 §2.4, as PNMTD's). Local changes go into docker-compose.override.yml (gitignored),
-# so `git pull` can replace this file.
+# PGPM's production stack (deploy/README.md, docs/admin-guide.md; as PNMTD's). Local changes go into
+# docker-compose.override.yml (gitignored), so `git pull` can replace this file.
 #
-#   cp .env.example .env    # then set PGPM_DB_PASSWORD, Auth__InitialAdmin__Password and PublicUrl
-#   docker compose up -d
+#   ./init.sh --url https://pgpm.example.com && docker compose up -d && ./info.sh
 #
 # The repository's start.sh is the debugging setup; this file only ever runs a published image. TLS ends at a reverse
 # proxy in front of it, which must pass WebSocket upgrades (Upgrade/Connection headers) and allow idle connections of
-# 60 s or more (the live sync channel, docs/03 §3.1).
+# 60 s or more (the live sync channel on /api/v1/sync/live; deploy/README.md has Caddy and nginx examples).
 name: pgpm
 
 services:
@@ -18,7 +17,7 @@ services:
       POSTGRES_DB: pgpm
       POSTGRES_PASSWORD: "${PGPM_DB_PASSWORD:?PGPM_DB_PASSWORD is not set in .env}"
     volumes:
-      # A new PostgreSQL major is a backup, a new image here, a restore — never just a new tag.
+      # A new PostgreSQL major is ./backup.sh, a new image here, ./restore.sh — never just a new tag.
       - pgpm-pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -q -h 127.0.0.1 -U pgpm -d pgpm"]
@@ -31,7 +30,7 @@ services:
       options: { max-size: "10m", max-file: "3" }
 
   pgpm:
-    image: ${PGPM_IMAGE:-uisach/pgpm}:${PGPM_IMAGE_TAG:-v0.1.0}
+    image: ${PGPM_IMAGE:-uisach/pgpm}:${PGPM_IMAGE_TAG:-v1.0.0}
     restart: unless-stopped
     depends_on:
       db:
@@ -54,10 +53,9 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - pgpm-keys:/var/lib/pgpm/keys               # sessions and 2FA secrets (Data Protection): back it up
-      # Attachments (docs/03 §10): a folder on this host, not a volume, owned by the app's user (uid 1654, 0750):
-      #   mkdir -p files && sudo chown 1654:1654 files && chmod 0750 files
-      # PGPM_FILES_DIR in .env moves it. Back it up with the database.
+      - pgpm-keys:/var/lib/pgpm/keys               # sessions and 2FA secrets (Data Protection): in ./backup.sh's archive
+      # Attachments (docs/03 §10): a folder on this host, not a volume, owned by the app's user (uid 1654, 0750); ./init.sh
+      # creates it. PGPM_FILES_DIR in .env moves it (./ or / first). In ./backup.sh's archive with the database.
       - ${PGPM_FILES_DIR:-./files}:/var/lib/pgpm/files
     healthcheck:                                   # here as well: Podman's OCI images drop HEALTHCHECK
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
